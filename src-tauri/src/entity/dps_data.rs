@@ -36,6 +36,9 @@ pub struct DpsData {
     /// Instance id from the party roster (0 = not in a party instance). The
     /// frontend maps it to a dungeon name + difficulty.
     pub dungeon_id: i32,
+    /// `DataStorage::party_generation`: changes when the party's members do.
+    #[serde(default)]
+    pub party_generation: u64,
 }
 
 impl DpsData {
@@ -54,6 +57,7 @@ impl DpsData {
             target_is_boss: false,
             target_mob_code: 0,
             dungeon_id: 0,
+            party_generation: 0,
         }
     }
 }

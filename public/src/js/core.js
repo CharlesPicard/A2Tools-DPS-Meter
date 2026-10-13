@@ -1219,6 +1219,7 @@ class DpsApp {
       targetIsBoss,
       dungeonId,
       targetMobCode,
+      partyGeneration,
     } = this.buildRowsFromPayload(raw);
     // Boss mode with no boss engaged: say what it is waiting for. The rows of
     // the last fight can still be on screen (the meter keeps them), so this
@@ -1295,6 +1296,24 @@ class DpsApp {
       this.resetPending = false;
     }
     const isOutOfCombat = this.isOutOfCombatState();
+    // Someone joined or left, or the party ended: the rows kept from the last
+    // fight name the old party, so they give way to what the backend sends.
+    // An empty update then clears the meter (the party ended, its fights
+    // flushed) instead of being ignored below.
+    const partyChanged = this._lastPartyGeneration != null && partyGeneration !== this._lastPartyGeneration;
+    this._lastPartyGeneration = partyGeneration;
+    if (partyChanged && rows.length === 0) {
+      // None kept: the next rows (yours, a new party's) are taken as they come.
+      this.lastSnapshot = null;
+      this._barsTargetLabel = null;
+      this._lastRenderedListSignature = "";
+      this._lastRenderedRowsSummary = null;
+      this.meterUI?.onResetMeterUi?.();
+      return;
+    }
+    if (partyChanged && isOutOfCombat) {
+      this.lastSnapshot = rows;
+    }
     // 빈값은 ui 안덮어씀
     let rowsToRender = rows;
     const listReasons = [];
@@ -1437,6 +1456,7 @@ class DpsApp {
       : -1;
     const targetIsBoss = payload?.targetIsBoss === true;
     const targetMobCode = Math.trunc(Number(payload?.targetMobCode)) || 0;
+    const partyGeneration = Math.trunc(Number(payload?.partyGeneration)) || 0;
 
     return {
       rows,
@@ -1451,6 +1471,7 @@ class DpsApp {
       targetIsBoss,
       dungeonId,
       targetMobCode,
+      partyGeneration,
     };
   }
 

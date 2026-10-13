@@ -434,6 +434,9 @@ struct Inner {
     /// Bumped whenever `nickname_storage` changes, so the meter redraws a
     /// name that arrives after the last hit (see `names_generation`).
     names_generation: u64,
+    /// Changes when the party's members change, or it ends (see
+    /// `party_generation`).
+    party_generation: u64,
     pending_nicknames: HashMap<i32, String>,
     permanent_nicknames: HashMap<i32, String>,
     summon_storage: HashMap<i32, i32>,
@@ -599,6 +602,7 @@ impl DataStorage {
                 actor_jobs: HashMap::new(),
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
+                party_generation: 0,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
                 summon_storage: HashMap::new(),
@@ -1453,6 +1457,9 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.party_roster_at_ms = now_ms();
         inner.party_placeholders_hidden = false;
+        // The meter's rows name the party: someone joining between fights
+        // must show without waiting for a hit (see `names_generation`).
+        inner.names_generation += 1;
 
         // Leaving, being kicked, or the party disbanding all show up the same way:
         // the next complete roster has you on your own. Going from a real party
@@ -1479,6 +1486,7 @@ impl DataStorage {
             self.run_before_reset();
             let mut inner = self.inner.write();
             inner.party_members.clear();
+            inner.party_generation += 1;
             inner.roster_dungeon_id = 0;
             inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
             drop(inner);
@@ -1487,6 +1495,11 @@ impl DataStorage {
             return;
         }
 
+        let joined = members.iter().any(|(name, _)| !inner.party_members.contains_key(name));
+        let left = complete && inner.party_members.keys().any(|name| !members.iter().any(|(n, _)| n == name));
+        if joined || left {
+            inner.party_generation += 1;
+        }
         if complete {
             inner.party_members.clear();
         }
@@ -1547,7 +1560,9 @@ impl DataStorage {
     /// The player reset the meter: stop showing party members who have not
     /// fought, until the game sends the next roster.
     pub fn hide_party_placeholders(&self) {
-        self.inner.write().party_placeholders_hidden = true;
+        let mut inner = self.inner.write();
+        inner.party_placeholders_hidden = true;
+        inner.names_generation += 1;
     }
 
     /// Record a power-scalar reading for an actor. See `Inner::actor_power_scalars`.
@@ -1897,7 +1912,15 @@ impl DataStorage {
         inner.names_generation += 1;
     }
 
-    /// Changes whenever a name is bound, replaced or dropped.
+    /// Changes when someone joins or leaves the party, or it ends: the meter
+    /// then drops the rows it kept from the last fight, which name the old
+    /// party. Not with every roster; the game resends it on each map load.
+    pub fn party_generation(&self) -> u64 {
+        self.inner.read().party_generation
+    }
+
+    /// Changes whenever a name is bound, replaced or dropped, and with each
+    /// party roster (the meter's rows for members who haven't fought).
     pub fn names_generation(&self) -> u64 {
         self.inner.read().names_generation
     }
