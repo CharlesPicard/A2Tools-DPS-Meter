@@ -1480,18 +1480,8 @@ impl DataStorage {
                 inner.party_members.len(),
                 members.len()
             );
-            // Save the party's fights while the roster and instance still say
-            // whose they are; the hook reads this storage, so no lock is held.
             drop(inner);
-            self.run_before_reset();
-            let mut inner = self.inner.write();
-            inner.party_members.clear();
-            inner.party_generation += 1;
-            inner.roster_dungeon_id = 0;
-            inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
-            drop(inner);
-            self.flush_combat_only();
-            self.combat_reset_requested.store(true, Ordering::Relaxed);
+            self.end_party();
             return;
         }
 
@@ -1507,6 +1497,33 @@ impl DataStorage {
             inner.party_members.insert(name, member);
         }
         bind_roster_names_by_class(&mut inner);
+    }
+
+    /// You are no longer in a party: drop the roster rows and ask for a
+    /// combat reset, so the meter stops showing teammates who are no longer
+    /// with you. The fights so far are saved first.
+    fn end_party(&self) {
+        // Save the party's fights while the roster and instance still say
+        // whose they are; the hook reads this storage, so no lock is held.
+        self.run_before_reset();
+        let mut inner = self.inner.write();
+        inner.party_members.clear();
+        inner.party_generation += 1;
+        inner.roster_dungeon_id = 0;
+        inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
+        drop(inner);
+        self.flush_combat_only();
+        self.combat_reset_requested.store(true, Ordering::Relaxed);
+    }
+
+    /// The game said you are no longer in a party (`13 92`): you left, were
+    /// kicked, or it disbanded. An open-world party never sends a `02 97`
+    /// roster (that is the dungeon finder's), so this is the only sign it
+    /// ended; for a dungeon party it comes alongside the roster that has you
+    /// on your own.
+    pub fn note_party_left(&self) {
+        tracing::info!("Party left — clearing party rows");
+        self.end_party();
     }
 
     /// A zone load named the map it loads (`21 36`). The map, once known, is
