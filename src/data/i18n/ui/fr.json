@@ -373,6 +373,7 @@
       "options": {
         "combatPower": "Puissance de combat",
         "gearScore": "Score d'équipement",
+        "both": "Les deux",
         "off": "Désactivé"
       }
     },

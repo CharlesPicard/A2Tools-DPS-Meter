@@ -378,6 +378,7 @@
       "options": {
         "combatPower": "전투력",
         "gearScore": "장비 점수",
+        "both": "둘 다",
         "off": "끄기"
       }
     },

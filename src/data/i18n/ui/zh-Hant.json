@@ -378,6 +378,7 @@
       "options": {
         "combatPower": "戰鬥力",
         "gearScore": "裝備分數",
+        "both": "兩者",
         "off": "關閉"
       }
     },

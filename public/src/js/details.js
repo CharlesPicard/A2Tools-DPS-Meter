@@ -634,10 +634,10 @@ const createDetailsUI = ({
       }
       // Hovering the name shows the other figure: gear score beside combat
       // power, combat power beside gear score.
-      // With the figure off, no tooltip either.
+      // With the figure off, or both shown, no tooltip either.
       const shownStat = getPartyStat?.();
       const otherStat = shownStat === "gearScore" ? "combatPower" : "gearScore";
-      const otherValue = shownStat === "off" ? 0 : Number(actorRow?.[otherStat]) || 0;
+      const otherValue = shownStat === "off" || shownStat === "both" ? 0 : Number(actorRow?.[otherStat]) || 0;
       if (otherValue > 0) {
         const otherLabel = labelText(`settings.partyStat.options.${otherStat}`,
           otherStat === "gearScore" ? "Gear score" : "Combat power");

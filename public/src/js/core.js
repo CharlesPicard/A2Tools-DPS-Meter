@@ -5,7 +5,7 @@ const SETTING_CHOICES = {
   updateRateMs: { allowed: ["100", "200", "250", "500"], fallback: "200" },
   trainSelectionMode: { allowed: ["all", "highestDamage"], fallback: "all" },
   // The figure beside each player's name, in the meter and in Details.
-  partyStat: { allowed: ["combatPower", "gearScore", "off"], fallback: "combatPower" },
+  partyStat: { allowed: ["combatPower", "gearScore", "both", "off"], fallback: "combatPower" },
   // A pattern over the meter's bars: a supporter's perk (applyBarTexture).
   barTexture: { allowed: ["none", "flames", "crystal", "glacier", "feathers", "wing", "storm", "nebula", "galaxy", "aura"], fallback: "none" },
 };
@@ -3449,6 +3449,7 @@ class DpsApp {
     const partyStatOptions = [
       { value: "combatPower", label: this.i18n?.t("settings.partyStat.options.combatPower", "Combat power") },
       { value: "gearScore", label: this.i18n?.t("settings.partyStat.options.gearScore", "Gear score") },
+      { value: "both", label: this.i18n?.t("settings.partyStat.options.both", "Both") },
       { value: "off", label: this.i18n?.t("settings.partyStat.options.off", "Off") },
     ];
 
@@ -5056,7 +5057,10 @@ class DpsApp {
   // Settings' bar preview shows the same figure beside each name, or none.
   syncPreviewPartyStat() {
     for (const el of document.querySelectorAll(".barPreviewList .combatPower")) {
-      const text = this.partyStat === "gearScore" ? el.dataset.gearScore : el.dataset.combatPower;
+      const text =
+        this.partyStat === "gearScore" ? el.dataset.gearScore
+        : this.partyStat === "both" ? `${el.dataset.combatPower} · ${el.dataset.gearScore}`
+        : el.dataset.combatPower;
       el.textContent = this.partyStat === "off" ? "" : text || "";
       el.hidden = this.partyStat === "off";
     }
