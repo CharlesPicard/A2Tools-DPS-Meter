@@ -39,7 +39,8 @@ jobs:
       - name: Build dependencies
         run: |
           pacman -Syu --noconfirm --needed git rust nodejs npm pkgconf \
-            webkit2gtk-4.1 gtk3 libpcap libcap hicolor-icon-theme \n            gst-plugins-base gst-plugins-good
+            webkit2gtk-4.1 gtk3 libpcap libcap hicolor-icon-theme \
+            gst-plugins-base gst-plugins-good
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
