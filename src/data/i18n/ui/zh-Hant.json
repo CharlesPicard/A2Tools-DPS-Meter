@@ -608,5 +608,13 @@
     "ask": "A2Tools DPS Meter 需要 Npcap 來讀取遊戲的網路流量，但 Npcap 未安裝或無法使用。\n\n現在安裝嗎？本工具會從 npcap.com 下載 Npcap 安裝程式並開啟它。Npcap 安裝完成後，本工具會自動開始擷取。\n\n選擇「否」可自行從 https://npcap.com/#download 安裝。",
     "downloadFailed": "無法下載 Npcap 安裝程式（{error}）。\n\n請自行從 https://npcap.com/#download 安裝，然後重新開啟本工具。",
     "stillMissing": "Npcap 仍然無法使用。如果安裝程式在完成前被關閉，請從 https://npcap.com/#download 安裝 Npcap，然後重新開啟本工具。"
+  },
+  "pluginUpdatePrompt": {
+    "title": "A2Tools - 外掛程式更新",
+    "one": "有一個外掛程式更新可用：",
+    "many": "有外掛程式更新可用：",
+    "alsoAsks": "新版本還要求：",
+    "updateNow": "現在更新嗎？",
+    "failed": "無法更新："
   }
 }
