@@ -24,6 +24,30 @@ const textureOffsetFor = (id) => {
   return (hash >>> 0) % 720;
 };
 
+// Whether a bar colour is bright (gold, yellow, pale): a supporter's gold name
+// gets a firmer edge there (styles.css .onBright). The colour is the bar's
+// --bar as the theme resolves it, read through a canvas so any CSS colour
+// works; remembered per colour.
+const brightBars = new Map();
+let colorProbe = null;
+const isBrightColor = (value) => {
+  const key = String(value || "").trim();
+  if (!key) return false;
+  if (brightBars.has(key)) return brightBars.get(key);
+  let bright = false;
+  try {
+    colorProbe ||= document.createElement("canvas").getContext("2d");
+    colorProbe.fillStyle = "#000";
+    colorProbe.fillStyle = key;
+    colorProbe.fillRect(0, 0, 1, 1);
+    const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+    const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    bright = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.3;
+  } catch {}
+  brightBars.set(key, bright);
+  return bright;
+};
+
 const createMeterUI = ({
   elList,
   dpsFormatter,
@@ -367,6 +391,16 @@ const createMeterUI = ({
         if (classColor) view.rowEl.style.setProperty("--class-fill", classColor);
         else view.rowEl.style.removeProperty("--class-fill");
         view.lastClassColor = classColor;
+      }
+      // A supporter's name on a bright bar: a firmer edge. Looked at again only
+      // when what decides the bar's colour changes (theme, class, own row).
+      const barKey = isSupporter
+        ? `${document.documentElement.dataset.theme || ""}|${row.job || ""}|${!!row.isUser}`
+        : "";
+      if (view.lastBarKey !== barKey) {
+        view.lastBarKey = barKey;
+        const bright = !!barKey && isBrightColor(getComputedStyle(view.fillEl).getPropertyValue("--bar"));
+        view.nameEl.classList.toggle("onBright", bright);
       }
 
       if (row.job && row.job !== "Unknown") {
