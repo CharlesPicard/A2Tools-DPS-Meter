@@ -104,9 +104,10 @@ const createMeterUI = ({
     supporterBadgeEl.style.display = "none";
     supporterBadgeEl.setAttribute("aria-hidden", "true");
     supporterBadgeEl.innerHTML =
-      '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" ' +
-      'aria-hidden="true"><path d="M3 7l4.2 3L12 4l4.8 6L21 7l-1.8 10H4.8L3 7z"/>' +
-      '</svg>';
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="rgba(28,16,0,0.9)" ' +
+      'stroke-width="1.3" stroke-linejoin="round" paint-order="stroke" aria-hidden="true">' +
+      '<path d="M3 9l4.6 3.4L12 6l4.4 6.4L21 9l-1.9 8.6H4.9z"/><rect x="4.6" y="18.6" width="14.8" height="2.4" rx="0.6"/>' +
+      '<circle cx="3" cy="8.4" r="1.7"/><circle cx="12" cy="5" r="1.9"/><circle cx="21" cy="8.4" r="1.7"/></svg>';
 
     // Party combat power, shown beside the name. Hidden unless the party roster
     // packet supplied a value for this player.

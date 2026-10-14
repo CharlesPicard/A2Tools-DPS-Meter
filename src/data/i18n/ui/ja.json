@@ -113,8 +113,11 @@
       "multiHitDamage": "多段ヒットのダメージ",
       "multiHitHits": "多段ヒット",
       "maxHp": "最大HP",
+      "damageReceived": "被ダメージ",
       "deaths": "死亡回数",
-      "peakDps": "最大DPS（5秒）"
+      "avgDps": "平均DPS",
+      "peakDps": "最大DPS",
+      "peakDpsTip": "戦闘中の任意の5秒間で最も高いDPS"
     },
     "titleFor": "対象",
     "titleVs": "対",
@@ -497,6 +500,7 @@
       "permStorage": "このPCに自身のデータを保存する",
       "permNotify": "自身のウィンドウに短いメッセージを表示する",
       "permWindow": "ゲームのフォーカスを奪わずに、自身のウィンドウを表示・非表示にする",
+      "permBossTimers": "a2tools.app でプレイヤーが共有するフィールドボスのタイマーを読む",
       "permCharacter": "キャラクターの名前・サーバー・クラス・レベルを見る",
       "permDecoder": "自分のゲームデータを読む: {name}",
       "permNone": "ウィンドウを表示する以外のことはしません"

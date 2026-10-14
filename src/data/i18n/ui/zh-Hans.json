@@ -113,8 +113,11 @@
       "maxHp": "最大HP",
       "hits": "命中次数",
       "selfHealing": "自我治疗",
+      "damageReceived": "承受伤害",
       "deaths": "死亡次数",
-      "peakDps": "峰值 DPS（5 秒）"
+      "avgDps": "平均 DPS",
+      "peakDps": "峰值 DPS",
+      "peakDpsTip": "战斗中任意 5 秒内的最高 DPS"
     },
     "titleFor": "针对",
     "titleVs": "vs",
@@ -504,6 +507,7 @@
       "permStorage": "在此电脑上保存自己的数据",
       "permNotify": "在自己的窗口中显示简短消息",
       "permWindow": "显示和隐藏自己的窗口，不会抢走游戏的焦点",
+      "permBossTimers": "读取玩家通过 a2tools.app 分享的野外首领计时",
       "permCharacter": "查看你角色的名称、服务器、职业和等级",
       "permDecoder": "读取你自己的游戏数据：{name}",
       "permNone": "除显示窗口外不做其他事"

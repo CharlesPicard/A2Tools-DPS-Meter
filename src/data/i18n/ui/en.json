@@ -118,8 +118,11 @@
       "multiHitDamage": "Multi-Hit Damage",
       "multiHitHits": "Multi-Hits",
       "maxHp": "Max HP",
+      "damageReceived": "Damage Taken",
       "deaths": "Deaths",
-      "peakDps": "Peak DPS (5 s)"
+      "avgDps": "Avg DPS",
+      "peakDps": "Peak DPS",
+      "peakDpsTip": "The highest DPS over any 5 seconds of the fight"
     },
     "titleFor": "for",
     "titleVs": "vs",
@@ -509,6 +512,7 @@
       "permStorage": "Save its own data on this computer",
       "permNotify": "Show short messages in its window",
       "permWindow": "Show and hide its own window, without taking focus from the game",
+      "permBossTimers": "Read the field boss timers players share through a2tools.app",
       "permCharacter": "See your character's name, server, class and level",
       "permDecoder": "Read your own game data: {name}",
       "permNone": "Nothing beyond showing its window"

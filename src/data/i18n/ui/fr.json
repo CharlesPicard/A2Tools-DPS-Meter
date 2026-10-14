@@ -113,8 +113,11 @@
       "multiHitDamage": "Dégâts des coups multiples",
       "multiHitHits": "Coups multiples",
       "maxHp": "PV max.",
+      "damageReceived": "Dégâts subis",
       "deaths": "Morts",
-      "peakDps": "DPS max (5 s)"
+      "avgDps": "DPS moyen",
+      "peakDps": "DPS max",
+      "peakDpsTip": "Le DPS le plus élevé sur 5 secondes du combat"
     },
     "titleFor": "pour",
     "titleVs": "contre",
@@ -497,6 +500,7 @@
       "permStorage": "Enregistrer ses propres données sur cet ordinateur",
       "permNotify": "Afficher de courts messages dans sa fenêtre",
       "permWindow": "Afficher et masquer sa propre fenêtre, sans retirer le focus au jeu",
+      "permBossTimers": "Lire les minuteurs des boss de terrain partagés par les joueurs via a2tools.app",
       "permCharacter": "Voir le nom, le serveur, la classe et le niveau de votre personnage",
       "permDecoder": "Lire vos propres données de jeu : {name}",
       "permNone": "Rien d'autre qu'afficher sa fenêtre"

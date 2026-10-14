@@ -179,7 +179,12 @@ const createDetailsUI = ({
     const tierBadge = tier
       ? ` <span class="difficultyBadge difficulty-${tier.key}">${escape(tier.label)}</span>`
       : "";
-    detailsFightTitleEl.innerHTML = `${fightVs} <span class="fightTitleBossName">${bossName}</span>${placeHtml}${tierBadge}${suffix}`;
+    // How long the fight took (everyone's combat time), once known.
+    const time = (lastUnfilteredDetails || lastDetails)?.combatTime;
+    const timeHtml = time
+      ? ` <span class="fightTitleTime" title="${escape(labelText("details.stats.combatTime", "Combat Time"))}">${escape(time)}</span>`
+      : "";
+    detailsFightTitleEl.innerHTML = `${fightVs} <span class="fightTitleBossName">${bossName}</span>${placeHtml}${tierBadge}${timeHtml}${suffix}`;
   };
 
   // Deaths in the fight: the selected players' (the fight's own details are
@@ -190,6 +195,16 @@ const createDetailsUI = ({
       ? new Set(selectedAttackerIds.map(Number))
       : null;
     return formatCount(ids ? d.deaths.filter((x) => ids.has(Number(x?.actorId))).length : d.deaths.length);
+  };
+
+  // Damage taken in the fight: the selected players', or the whole party's.
+  const damageTaken = (d) => {
+    const ids = d !== lastUnfilteredDetails && Array.isArray(selectedAttackerIds) && selectedAttackerIds.length
+      ? selectedAttackerIds
+      : [...detailsActors.keys()];
+    if (!detailsActors.size) return "-";
+    const sum = ids.reduce((total, id) => total + (Number(detailsActors.get(Number(id))?.damageReceived) || 0), 0);
+    return formatDamageCompact(sum);
   };
 
   // Every hit's time (ms into the fight) and its share of the skill's
@@ -223,6 +238,15 @@ const createDetailsUI = ({
     const span = hits.length ? hits[hits.length - 1].ts - hits[0].ts : 0;
     return best / (Math.min(BURST_WINDOW_MS, Math.max(1000, span)) / 1000);
   };
+  // Damage over the whole fight's time (everyone's, also for a selected
+  // player, as the meter counts it).
+  const avgDps = (d) => {
+    const ms = Number(lastUnfilteredDetails?.battleTimeMs) || Number(d?.battleTimeMs) || 0;
+    const dmg = Number(d?.totalDmg) || 0;
+    if (ms <= 0 || dmg <= 0) return "-";
+    return `${formatDamageCompact(dmg / (Math.max(ms, 1000) / 1000))}${labelText("meter.dpsSuffix", "/s")}`;
+  };
+
   const peakDps = (d) => {
     const hits = hitsOf(d?.skills);
     return hits.length ? `${formatDamageCompact(peakOf(hits))}${labelText("meter.dpsSuffix", "/s")}` : "-";
@@ -257,8 +281,15 @@ const createDetailsUI = ({
       getValue: (d) => formatDamageCompact(d?.totalDmg),
     },
     { key: "details.stats.contribution", fallback: "Contribution", getValue: (d) => pctText(d?.contributionPct) },
-    { key: "details.stats.peakDps", fallback: "Peak DPS (5 s)", getValue: (d) => peakDps(d) },
-    { key: "details.stats.combatTime", fallback: "Combat Time", getValue: (d) => d?.combatTime ?? "-" },
+    { key: "details.stats.avgDps", fallback: "Avg DPS", getValue: (d) => avgDps(d) },
+    {
+      key: "details.stats.peakDps",
+      fallback: "Peak DPS",
+      tip: ["details.stats.peakDpsTip", "The highest DPS over any 5 seconds of the fight"],
+      getValue: (d) => peakDps(d),
+    },
+    { key: "details.stats.damageReceived", fallback: "Damage Taken", getValue: (d) => damageTaken(d) },
+    { key: "details.stats.deaths", fallback: "Deaths", getValue: (d) => deathCount(d) },
     { key: "details.skills.hits", fallback: "Hits", getValue: (d) => formatCount(d?.totalHits) },
     { key: "details.stats.multiHitHits", fallback: "Multi-Hits", getValue: (d) => pctText(d?.multiHitPct) },
     {
@@ -271,7 +302,6 @@ const createDetailsUI = ({
     { key: "details.stats.doubleRate", fallback: "Double Rate", getValue: (d) => pctText(d?.totalDoublePct) },
     { key: "details.stats.parryRate", fallback: "Parry Rate", getValue: (d) => pctText(d?.totalParryPct) },
     { key: "details.stats.regen", fallback: "Regen", getValue: (d) => formatDamageCompact(d?.totalRegen) },
-    { key: "details.stats.deaths", fallback: "Deaths", getValue: (d) => deathCount(d) },
   ];
 
   // Stats shown when the DMG/HEAL toggle is on HEAL. Fewer, healing-relevant rows;
@@ -279,7 +309,8 @@ const createDetailsUI = ({
   const HEAL_STATUS = [
     { key: "details.stats.totalHealing", fallback: "Total Healing", getValue: (d) => formatDamageCompact(d?.totalHeal) },
     { key: "details.stats.hps", fallback: "HPS", getValue: (d) => d?.healPerSecText ?? "-" },
-    { key: "details.stats.combatTime", fallback: "Combat Time", getValue: (d) => d?.combatTime ?? "-" },
+    { key: "details.stats.damageReceived", fallback: "Damage Taken", getValue: (d) => damageTaken(d) },
+    { key: "details.stats.deaths", fallback: "Deaths", getValue: (d) => deathCount(d) },
     { key: "details.stats.healTicks", fallback: "Heal Ticks", getValue: (d) => formatCount(d?.healTicks) },
     { key: "details.stats.hotTicks", fallback: "HoT Ticks", getValue: (d) => formatCount(d?.healHotTicks) },
     { key: "details.stats.healSkills", fallback: "Skills", getValue: (d) => formatCount(d?.healSkillCount) },
@@ -457,7 +488,7 @@ const createDetailsUI = ({
       case "details.stats.partyHeal":
         return formatDamageCompact(data.totalPartyHeal);
       case "details.stats.damageReceived":
-        return formatDamageCompact(data.totalDamageReceived);
+        return damageTaken(data);
       case "details.stats.empty":
         return "";
       case "details.stats.combatTime":
@@ -470,7 +501,7 @@ const createDetailsUI = ({
   const COMPACT_STAT_KEYS = new Set([
     "details.stats.totalDamage",
     "details.stats.contribution",
-    "details.stats.combatTime",
+    "details.stats.avgDps",
     "details.skills.hits",
     "details.stats.critRate",
   ]);
@@ -478,8 +509,8 @@ const createDetailsUI = ({
   const renderStats = (details, { compact = false } = {}) => {
     const statusList = detailsMode === "heal" ? HEAL_STATUS : STATUS;
     const hasPlayerSelected = Array.isArray(selectedAttackerIds) && selectedAttackerIds.length > 0;
-    // No player/total split in heal mode — show the healing values directly.
-    const showSplit = detailsMode !== "heal" && hasPlayerSelected && !compact && lastUnfilteredDetails && lastUnfilteredDetails !== details;
+    // A selected player's value beside everyone's, in both modes.
+    const showSplit = hasPlayerSelected && !compact && lastUnfilteredDetails && lastUnfilteredDetails !== details;
     // Resolve the selected player's class colour for the X value
     const playerColor = showSplit && selectedAttackerIds.length === 1
       ? getJobColor(getActorJob(selectedAttackerIds[0]))
@@ -496,6 +527,7 @@ const createDetailsUI = ({
 
       // Label may differ between DMG and HEAL stat sets — keep it in sync.
       slot.labelEl.textContent = labelText(def.key, def.fallback);
+      slot.labelEl.title = def.tip ? labelText(...def.tip) : "";
 
       slot.valueEl.innerHTML = "";
       slot.valueEl.style.display = "";
@@ -505,8 +537,10 @@ const createDetailsUI = ({
       slot.valueEl.style.alignItems = "";
 
       if (showSplit && statKey !== "details.stats.empty") {
-        const playerVal = resolveStatValue(statKey, details);
-        const totalVal = resolveStatValue(statKey, lastUnfilteredDetails);
+        // Heal stats are read straight off their definitions.
+        const valueOf = (d) => (detailsMode === "heal" ? def.getValue(d) : resolveStatValue(statKey, d));
+        const playerVal = valueOf(details);
+        const totalVal = valueOf(lastUnfilteredDetails);
         slot.valueEl.style.display = "flex";
         slot.valueEl.style.gap = "3px";
         slot.valueEl.style.justifyContent = "flex-end";
@@ -706,7 +740,7 @@ const createDetailsUI = ({
           .replace("{active}", ftlTime(activeMs / 1000))
           .replace("{total}", ftlTime(btMs / 1000)));
       }
-      if (peakText) tip.push(`${labelText("details.stats.peakDps", "Peak DPS (5 s)")}: ${peakText}`);
+      if (peakText) tip.push(`${labelText("details.stats.peakDps", "Peak DPS")}: ${peakText}`);
       if (tip.length) dpsEl.title = tip.join("\n");
 
       const dmgEl = document.createElement("span");
@@ -741,7 +775,7 @@ const createDetailsUI = ({
       }
       contentEl.appendChild(nameWrapEl);
 
-      // Same star the meter rows use, so a supporter is marked the same way
+      // Same crown the meter rows use, so a supporter is marked the same way
       // wherever their name appears rather than only on the live overlay.
       if (actorRow?.isSupporter) {
         const badgeEl = document.createElement("span");
@@ -749,9 +783,10 @@ const createDetailsUI = ({
         badgeEl.style.display = "inline-flex";
         badgeEl.setAttribute("aria-hidden", "true");
         badgeEl.innerHTML =
-          '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" ' +
-          'aria-hidden="true"><path d="M3 7l4.2 3L12 4l4.8 6L21 7l-1.8 10H4.8L3 7z"/>' +
-          '</svg>';
+          '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="rgba(28,16,0,0.9)" ' +
+          'stroke-width="1.3" stroke-linejoin="round" paint-order="stroke" aria-hidden="true">' +
+          '<path d="M3 9l4.6 3.4L12 6l4.4 6.4L21 9l-1.9 8.6H4.9z"/><rect x="4.6" y="18.6" width="14.8" height="2.4" rx="0.6"/>' +
+          '<circle cx="3" cy="8.4" r="1.7"/><circle cx="12" cy="5" r="1.9"/><circle cx="21" cy="8.4" r="1.7"/></svg>';
         contentEl.appendChild(badgeEl);
       }
       contentEl.appendChild(dpsEl);
