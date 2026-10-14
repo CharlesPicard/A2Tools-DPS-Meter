@@ -215,7 +215,7 @@ impl DpsCalculator {
         dps_data.dungeon_id = self.data_storage.current_dungeon_id();
 
         // Decide target
-        let (target_ids, target_name, tracking_id) = self.decide_target(&combat_data, &nickname_data, &summon_data);
+        let (target_ids, target_name, tracking_id) = self.decide_target(&combat_data, &summon_data);
         dps_data.target_name = target_name;
         dps_data.target_mode = self.target_selection_mode.id().to_string();
         self.current_target = tracking_id;
@@ -631,7 +631,6 @@ impl DpsCalculator {
     fn decide_target(
         &mut self,
         combat_data: &HashMap<i32, TargetCombatData>,
-        nickname_data: &HashMap<i32, String>,
         summon_data: &HashMap<i32, i32>,
     ) -> (HashSet<i32>, String, i32) {
         let mob_data = self.data_storage.get_mob_data();
@@ -680,38 +679,18 @@ impl DpsCalculator {
                 {
                     let name = self.resolve_target_name(best);
                     (HashSet::from([best]), name, best)
-                } else if self.data_storage.current_dungeon_id() > 0 {
-                    // No boss yet in a dungeon: show nothing. Every mob in an
-                    // instance is on the way to a boss, so the fallback below
-                    // put the first trash pull of each run on the meter.
-                    (HashSet::new(), String::new(), 0)
                 } else {
-                    // No boss: the mob with the most damage that you or your
-                    // party hit, and nothing until the meter knows who you
-                    // are. Any mob within range used to count then, and in
-                    // the open world that put strangers fighting their own
-                    // mobs on your meter (2026-10-04: one player, then
-                    // another, each alone on a mob you never touched), and
-                    // still did for the seconds after opening the meter or
-                    // entering a zone, before you were identified.
-                    let ours = self.resolve_local_ids(summon_data).map(|mut ids| {
-                        let party = self.data_storage.get_party_members();
-                        ids.extend(nickname_data.iter()
-                            .filter(|(_, name)| party.contains_key(name.as_str()))
-                            .map(|(&id, _)| id));
-                        ids
-                    });
-                    let best = ours.as_ref().and_then(|ids| combat_data.iter()
-                        .filter(|(_, td)| td.actors.keys()
-                            .any(|&a| ids.contains(&summon_resolver::resolve(a, summon_data))))
-                        .max_by_key(|(_, td)| td.total_damage));
-                    match best {
-                        Some((&id, _)) => {
-                            let name = self.resolve_target_name(id);
-                            (HashSet::from([id]), name, id)
-                        }
-                        None => (HashSet::new(), String::new(), 0),
-                    }
+                    // No boss: show nothing ("Waiting for a boss"). Boss mode
+                    // used to fall back to the mob you or your party hit
+                    // hardest outside a dungeon, and "outside a dungeon"
+                    // includes any instance the meter cannot place: one it
+                    // was opened inside (no map load seen), or one that is not
+                    // a party dungeon. On 2026-10-14 that put Grandios's
+                    // spirit adds on the meter before the boss was hit, and
+                    // after leaving, every open-world mob the player one-shot
+                    // (Mutated Dratonas, mobs whose spawn was never seen).
+                    // Single non-boss targets are what Target mode is for.
+                    (HashSet::new(), String::new(), 0)
                 }
             }
             TargetSelectionMode::AllTargets => {
@@ -1909,6 +1888,7 @@ mod tests {
         storage.set_local_player_id(Some(2259));
         storage.append_damage(hit(2259, 50_000, 1_000));
         let mut calc = meter(&storage);
+        calc.set_target_selection_mode("lastHitByMe");
         let shown = calc.get_dps();
         assert_eq!(shown.detail_target_ids, vec![50_000]);
         assert!(!calc.get_target_details(50_000, Some(&[2259])).skills.is_empty());
@@ -2034,31 +2014,28 @@ mod tests {
         assert!(calc.is_our_fight(&combat[&60_000]));
     }
 
+    /// Boss mode shows bosses only: never a trash mob, in the open world or
+    /// in an instance the meter cannot place (2026-10-14: Grandios's spirit
+    /// adds before the boss was hit, the meter having been opened inside the
+    /// instance; open-world mobs one-shot after leaving).
     #[test]
-    fn boss_mode_shows_your_trash_mob_in_the_open_world_only() {
+    fn boss_mode_never_shows_a_trash_mob() {
         let open_world = Arc::new(DataStorage::new());
         open_world.set_local_player_id(Some(2259));
         open_world.append_damage(hit(2259, 50_000, 1_000));
-        // A stranger alone on a bigger fight of their own stays off the meter.
         for t in 0..5 {
             open_world.append_damage(hit(11_345, 60_000, 1_000 + t));
         }
         let shown = meter(&open_world).get_dps();
-        assert_eq!(shown.target_id, 50_000);
-        assert_eq!(shown.map.keys().copied().collect::<Vec<_>>(), vec![2259]);
+        assert_eq!(shown.target_id, 0, "your own trash mob is not a boss");
+        assert!(shown.map.is_empty());
 
-        // Before you are identified (a meter just opened, a new zone), no
-        // mob is anyone's: a stranger's fight is not put up in your place.
         let unknown = Arc::new(DataStorage::new());
         unknown.append_damage(hit(2259, 50_000, 1_000));
-        for t in 0..5 {
-            unknown.append_damage(hit(11_345, 60_000, 1_000 + t));
-        }
         let shown = meter(&unknown).get_dps();
         assert_eq!(shown.target_id, 0);
         assert!(shown.map.is_empty());
 
-        // In a dungeon, a mob that is not a boss is not shown at all.
         let dungeon = Arc::new(DataStorage::new());
         dungeon.set_local_player_id(Some(2259));
         dungeon.set_current_dungeon(600_011);
@@ -2066,6 +2043,14 @@ mod tests {
         let shown = meter(&dungeon).get_dps();
         assert_eq!(shown.target_id, 0);
         assert!(shown.map.is_empty());
+
+        // Your trash mob next to your boss: the boss, whichever was hit last.
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(7983));
+        let mut calc = boss_meter(&storage);
+        storage.append_damage(hit(7983, 44_090, 1_000));
+        storage.append_damage(hit(7983, 51_473, 2_000));
+        assert_eq!(calc.get_dps().target_id, 44_090);
     }
 
     /// A Boss-mode meter over `storage`, with 2100708 a boss (open world)
@@ -2081,8 +2066,8 @@ mod tests {
 
     /// A world boss strangers fought out of your sight (2026-10-08: eight
     /// players never spawned near you, so eight `#id` rows) is not put on
-    /// your meter in Boss mode, nor kept there for hours after; your own
-    /// trash mob is. Once you hit the boss it is yours, with everyone on it.
+    /// your meter in Boss mode, nor kept there for hours after. Once you hit
+    /// the boss it is yours, with everyone on it.
     #[test]
     fn boss_mode_shows_a_boss_only_once_you_or_your_party_hit_it() {
         let storage = Arc::new(DataStorage::new());
@@ -2093,8 +2078,8 @@ mod tests {
             storage.append_damage(hit(stranger, 44_090, 2_000 + i as i64));
         }
         let shown = calc.get_dps();
-        assert_eq!(shown.target_id, 51_473, "your mob, not a stranger's boss");
-        assert_eq!(shown.map.keys().copied().collect::<Vec<_>>(), vec![7983]);
+        assert_eq!(shown.target_id, 0, "not a stranger's boss, nor your trash mob");
+        assert!(shown.map.is_empty());
 
         // Only strangers on the boss and nothing of yours: nothing at all.
         let alone = Arc::new(DataStorage::new());
