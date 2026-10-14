@@ -1504,7 +1504,6 @@ impl StreamProcessor {
                 Some(v) => v,
                 None => break,
             };
-            let mut after_first_offset = offset;
             let mut second_value = match try_read_varint(packet, &mut offset) {
                 Some(v) => v,
                 None => break,
@@ -1525,29 +1524,26 @@ impl StreamProcessor {
             // `note_power_scalar` records it for; see
             // `DpsCalculator::infer_summon_owners`.
             if first_value == 0 {
-                let after_second_offset = offset;
                 if let Some(third) = try_read_varint(packet, &mut offset) {
                     first_value = second_value;
-                    after_first_offset = after_second_offset;
                     second_value = third;
                 }
             }
 
-            let first_is_damage = should_treat_first_value_as_damage(first_value, second_value, and_result, damage_type as i32);
-
-            // When the damage is in `second_value`, `first_value` is the actor's
-            // power scalar (see above). Recorded per actor so a summon whose spawn
-            // packet never arrived can still be tied to its owner.
-            if !first_is_damage && (1_000..=200_000).contains(&first_value) {
+            // The damage is always the second value, crits included: the first
+            // is the actor's power scalar (see above). A crit was once read
+            // value-first when the first number looked like damage and the
+            // second was small, but that was the scalar every time a small hit
+            // (a DoT tick) crit: 2,182 of 2,206 such reads across 20 captures
+            // were the attacker's own scalar (issue #58).
+            //
+            // Recorded per actor so a summon whose spawn packet never arrived
+            // can still be tied to its owner.
+            if (1_000..=200_000).contains(&first_value) {
                 self.data_storage.note_power_scalar(actor_value, first_value);
             }
 
-            let mut final_damage = if first_is_damage {
-                offset = after_first_offset;
-                first_value
-            } else {
-                second_value
-            };
+            let mut final_damage = second_value;
 
             // The tail after the value, checked against the game's own Damage
             // Analyzer record of the same fight (2026-10-04): layout 4 carries
@@ -1992,13 +1988,6 @@ fn decode_spec_flags(raw: i32) -> [bool; 5] {
         suffix /= 10;
     }
     result
-}
-
-fn should_treat_first_value_as_damage(first_value: i32, second_value: i32, and_result: i32, damage_type: i32) -> bool {
-    if !(1_000..=99_999_999).contains(&first_value) { return false; }
-    if !(0..=25).contains(&second_value) { return false; }
-    if first_value > 5_000_000 { return false; }
-    and_result == 6 && damage_type == 3
 }
 
 /// The tail of a damage record after its value, when it has the shape the
