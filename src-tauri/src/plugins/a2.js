@@ -30,6 +30,8 @@
 //                                              { state, upSince, nextSpawn, reportedAt, confirmed } } }
 //                                              or null
 //   a2.window.show() / a2.window.hide()        its own window, shown on top without taking focus
+//   a2.window.fit(height) / a2.window.fit()    the window fitted to that much content (an alert),
+//                                              then back to its size (meter 2.0.65 on)
 //                                              (permission "window", plugin API 2)
 //   a2.ready()                                 call once the handlers are set
 //
@@ -79,6 +81,7 @@
     window: Object.freeze({
       show: () => call("window.show", []),
       hide: () => call("window.hide", []),
+      fit: (height) => call("window.fit", [height ?? null]),
     }),
     ready: () => call("ready", []),
   });

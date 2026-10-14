@@ -33,6 +33,8 @@ use decoder::{Decoder, DecoderSpec};
 pub const DEV_MODE_KEY: &str = "dpsMeter.pluginDevMode";
 /// The folders loaded in developer mode, a JSON array of paths.
 pub const DEV_FOLDERS_KEY: &str = "dpsMeter.devPlugins";
+/// The plugin window's title bar above the plugin's own page, in CSS px.
+const PLUGIN_BAR_HEIGHT: f64 = 30.0;
 /// How often plugins' "game" event (is AION2 open) is looked at.
 const GAME_CHECK: Duration = Duration::from_secs(5);
 /// The scheme plugin files are served from (`http://a2plugin.localhost/` on
@@ -1055,6 +1057,35 @@ pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visibl
         crate::platform::window::hide_without_focus(&window);
     }
     remember_window(&app, &id, Some(if visible { "shown" } else { "hidden" }));
+    Ok(())
+}
+
+/// The window fitted to `height` of content (CSS px), for something brief
+/// like an alert, or back to the size it had (`None`). Its title bar stays.
+/// The size before the first fit is kept until the restore.
+#[tauri::command]
+pub fn plugin_window_fit(app: tauri::AppHandle, window: tauri::WebviewWindow, height: Option<f64>) -> Result<(), String> {
+    static BEFORE: std::sync::OnceLock<Mutex<HashMap<String, tauri::PhysicalSize<u32>>>> = std::sync::OnceLock::new();
+    let id = window_plugin(&window)?;
+    require(&app, &id, "window")?;
+    let before = BEFORE.get_or_init(Mutex::default);
+    match height {
+        Some(h) => {
+            let h = h.clamp(40.0, 1200.0);
+            let scale = window.scale_factor().map_err(|e| e.to_string())?;
+            let now = window.inner_size().map_err(|e| e.to_string())?;
+            before.lock().unwrap_or_else(|p| p.into_inner()).entry(id).or_insert(now);
+            let width = now.to_logical::<f64>(scale).width;
+            let _ = window.set_min_size(Some(tauri::LogicalSize::new(240.0, (h + PLUGIN_BAR_HEIGHT).min(230.0))));
+            window.set_size(tauri::LogicalSize::new(width, h + PLUGIN_BAR_HEIGHT)).map_err(|e| e.to_string())?;
+        }
+        None => {
+            if let Some(size) = before.lock().unwrap_or_else(|p| p.into_inner()).remove(&id) {
+                window.set_size(size).map_err(|e| e.to_string())?;
+                let _ = window.set_min_size(Some(tauri::LogicalSize::new(240.0, 230.0_f64.min(size.height as f64))));
+            }
+        }
+    }
     Ok(())
 }
 

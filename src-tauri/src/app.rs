@@ -3186,6 +3186,7 @@ pub fn run() {
             crate::plugins::plugin_uninstall,
             crate::plugins::plugin_debug_frame,
             crate::plugins::plugin_window,
+            crate::plugins::plugin_window_fit,
             crate::plugins::plugin_close,
             crate::plugins::plugin_open,
             crate::plugins::plugin_set_enabled,
