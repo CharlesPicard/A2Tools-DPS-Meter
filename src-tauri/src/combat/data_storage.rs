@@ -27,6 +27,9 @@ const ZONE_RESET_DEBOUNCE_MS: i64 = 4_000;
 /// How long party members who have not fought stay on the meter after the
 /// last roster. See `DataStorage::party_placeholders_wanted`.
 const PARTY_PLACEHOLDER_MS: i64 = 10 * 60 * 1000;
+/// A "no longer in a party" record this soon after the party ended is about
+/// that same party. See `DataStorage::note_party_left`.
+const PARTY_LEFT_AFTER_END_MS: i64 = 10 * 1000;
 /// "Has not happened" for the times below. Not 0: a replayed slice's clock
 /// starts before 0 (the lead-in runs at negative offsets from the pull), so
 /// a 0 there read as "a moment ago" and suppressed every zone reset in the
@@ -437,6 +440,9 @@ struct Inner {
     /// Changes when the party's members change, or it ends (see
     /// `party_generation`).
     party_generation: u64,
+    /// When the party last ended (`end_party`), clock ms; `NEVER_MS` if it
+    /// has not.
+    party_ended_at_ms: i64,
     pending_nicknames: HashMap<i32, String>,
     permanent_nicknames: HashMap<i32, String>,
     summon_storage: HashMap<i32, i32>,
@@ -603,6 +609,7 @@ impl DataStorage {
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
                 party_generation: 0,
+            party_ended_at_ms: NEVER_MS,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
                 summon_storage: HashMap::new(),
@@ -1509,6 +1516,7 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.party_members.clear();
         inner.party_generation += 1;
+        inner.party_ended_at_ms = now_ms();
         inner.roster_dungeon_id = 0;
         inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
         drop(inner);
@@ -1516,12 +1524,17 @@ impl DataStorage {
         self.combat_reset_requested.store(true, Ordering::Relaxed);
     }
 
-    /// The game said you are no longer in a party (`13 92`): you left, were
-    /// kicked, or it disbanded. An open-world party never sends a `02 97`
-    /// roster (that is the dungeon finder's), so this is the only sign it
-    /// ended; for a dungeon party it comes alongside the roster that has you
-    /// on your own.
+    /// The game said you are no longer in a party: `13 92` for an open-world
+    /// party, `1d 97` for a dungeon or raid party (the finder's, whose roster
+    /// is `02 97`). You left, were kicked, or it disbanded. An open-world
+    /// party sends no roster at all, and leaving a raid others are still in
+    /// sends none that has you on your own, so this is the only sign. When
+    /// the roster has just ended the party (`1d 97` came 3 s after it at
+    /// 00:58 on 2026-10-14), it is not ended again.
     pub fn note_party_left(&self) {
+        if now_ms().saturating_sub(self.inner.read().party_ended_at_ms) < PARTY_LEFT_AFTER_END_MS {
+            return;
+        }
         tracing::info!("Party left — clearing party rows");
         self.end_party();
     }

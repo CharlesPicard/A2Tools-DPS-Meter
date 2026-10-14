@@ -308,19 +308,24 @@ impl StreamProcessor {
         }
     }
 
-    // ===== PARTY LEFT (13 92) =====
+    // ===== PARTY LEFT (13 92, 1D 97) =====
 
-    /// `<len> 13 92 00 00`: you are no longer in a party. Seen on leaving an
-    /// open-world party at 23:39:12 and 23:43:42 on 2026-10-13 (the second
-    /// after `1f 92 03`, the last member having gone at 23:43:12), and in no
-    /// other capture.
+    /// `<len> 13 92 00 00` (an open-world party) or `<len> 1D 97 00 00` (a
+    /// dungeon or raid party): you are no longer in a party.
+    ///
+    /// `13 92` was on leaving an open-world party at 23:39:12 and 23:43:42 on
+    /// 2026-10-13 (the second after `1f 92 03`, the last member having gone
+    /// at 23:43:12). `1d 97` was on leaving a dungeon party at 00:34:56 and
+    /// 00:58:58 and a raid at 03:18:39 on 2026-10-14 (followed by `1b 97` and
+    /// the party's key). Neither was in any other capture.
     fn parse_party_left_packet(&self, packet: &[u8]) {
         let length_info = read_varint(packet, 0);
         if length_info.length <= 0 {
             return;
         }
         let offset = length_info.length as usize;
-        if packet.get(offset..) == Some(&[0x13, 0x92, 0x00, 0x00][..]) {
+        let record = packet.get(offset..);
+        if record == Some(&[0x13, 0x92, 0x00, 0x00][..]) || record == Some(&[0x1D, 0x97, 0x00, 0x00][..]) {
             self.data_storage.note_party_left();
         }
     }
@@ -3545,6 +3550,30 @@ mod tests {
 
         p.parse_perfect_packet(&[0x07, 0x1f, 0x92, 0x03]);
         p.parse_perfect_packet(&[0x08, 0x13, 0x92, 0x00, 0x00]);
+        assert!(storage.get_party_members().is_empty());
+        assert!(storage.party_generation() > generation);
+        assert!(storage.take_combat_reset_requested());
+
+        // The same party's `1d 97` a moment later doesn't end it again.
+        let generation = storage.party_generation();
+        p.set_override_timestamp(Some(4_000));
+        p.parse_perfect_packet(&[0x08, 0x1d, 0x97, 0x00, 0x00]);
+        assert_eq!(storage.party_generation(), generation);
+        assert!(!storage.take_combat_reset_requested());
+    }
+
+    /// Leaving a raid others are still in (2026-10-14, 03:18:39): the roster
+    /// went from four to three, then `1d 97 00 00` and `1b 97` with the
+    /// party's key, and no roster with you on your own.
+    #[test]
+    fn leaving_a_raid_clears_it() {
+        use crate::combat::data_storage::PartyMember;
+        let (storage, mut p) = processor();
+        let member = |slot| PartyMember { slot, ..Default::default() };
+        let names = ["Casamonstros", "Flechitas", "Nullception"];
+        storage.set_party_roster(names.iter().zip(1..).map(|(n, s)| (n.to_string(), member(s))).collect(), true);
+        let generation = storage.party_generation();
+        p.parse_perfect_packet(&[0x08, 0x1d, 0x97, 0x00, 0x00]);
         assert!(storage.get_party_members().is_empty());
         assert!(storage.party_generation() > generation);
         assert!(storage.take_combat_reset_requested());
