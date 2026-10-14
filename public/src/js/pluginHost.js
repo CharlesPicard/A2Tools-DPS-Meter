@@ -70,12 +70,14 @@
       if (!allowed("window")) throw new Error('the plugin lacks the "window" permission');
       return invoke("plugin_window", { visible: true });
     },
-    // Fit the window to a height of content (an alert, say), or put its size
-    // back (no height).
+    // Fit the window to a height of content (an alert, say), its title bar
+    // hidden meanwhile; or put its size and title bar back (no height).
     "window.fit": ([height]) => {
       if (!allowed("window")) throw new Error('the plugin lacks the "window" permission');
       const h = Number(height);
-      return invoke("plugin_window_fit", { height: Number.isFinite(h) && h > 0 ? h : null });
+      const fitted = Number.isFinite(h) && h > 0;
+      document.body.classList.toggle("pluginFitted", fitted);
+      return invoke("plugin_window_fit", { height: fitted ? h : null });
     },
     "window.hide": () => {
       if (!allowed("window")) throw new Error('the plugin lacks the "window" permission');

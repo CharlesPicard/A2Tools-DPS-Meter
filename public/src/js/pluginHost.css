@@ -82,6 +82,15 @@ body {
   flex: 1 1 auto;
   min-height: 0;
 }
+/* Fitted to an alert (a2.window.fit): the plugin's content alone. */
+body.pluginFitted .pluginBar {
+  display: none;
+}
+/* ...and no panel around it: only what the plugin draws shows. */
+body.pluginFitted {
+  background: transparent;
+  border-color: transparent;
+}
 .pluginStage iframe {
   display: block;
   width: 100%;
