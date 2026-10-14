@@ -540,12 +540,12 @@
     }
   },
   "battleTime": {
-    "analysing": "Отслеживание данных...",
+    "analysing": "Мониторинг",
     "ttkTooltip": "Ожидаемая длительность всего боя с боссом по его оставшемуся здоровью и урону группы",
     "idle": "Ожидание",
-    "notRunning": "AION2 не запущен",
-    "suspended": "Приложение приостановлено",
-    "waitingBoss": "Ожидание босса"
+    "notRunning": "AION2 закрыт",
+    "suspended": "Пауза",
+    "waitingBoss": "Нет босса"
   },
   "meter": {
     "identifyingPlayer": "#{id}",
@@ -568,7 +568,7 @@
   },
   "connection": {
     "auto": "Авто",
-    "detecting": "Определение подключения AION2...",
+    "detecting": "Подключение...",
     "loopback": "Локальная петля"
   },
   "target": {

@@ -542,11 +542,11 @@
     }
   },
   "battleTime": {
-    "analysing": "正在監控資料...",
+    "analysing": "監控中",
     "ttkTooltip": "依首領剩餘生命值和隊伍傷害估算的整場戰鬥時長",
     "idle": "閒置",
-    "notRunning": "AION2 not running",
-    "suspended": "應用程式已暫停",
+    "notRunning": "AION2 未執行",
+    "suspended": "已暫停",
     "waitingBoss": "等待首領"
   },
   "meter": {
@@ -570,7 +570,7 @@
   },
   "connection": {
     "auto": "自動",
-    "detecting": "Detecting AION2 connection...",
+    "detecting": "連線中...",
     "loopback": "本地回環"
   },
   "target": {

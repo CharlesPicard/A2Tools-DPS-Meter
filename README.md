@@ -115,7 +115,7 @@ Two things still leave the computer, and only these: skill and buff icons, loade
 
 ## FAQ
 
-**Q: The meter shows "Detecting AION2 connection..."**
+**Q: The meter shows "Connecting..."**
 A: Make sure AION 2 is running and the app has administrator privileges. If using a VPN or ping reducer, the app will detect the loopback adapter automatically.
 
 **Q: My name doesn't appear on the meter**

@@ -547,12 +547,12 @@
     }
   },
   "battleTime": {
-    "analysing": "Monitoring data...",
+    "analysing": "Monitoring",
     "ttkTooltip": "Estimated length of the whole boss fight, from its remaining HP and the party's damage",
     "idle": "Idle",
-    "notRunning": "AION2 not running",
-    "suspended": "App suspended",
-    "waitingBoss": "Waiting for a boss"
+    "notRunning": "AION2 closed",
+    "suspended": "Suspended",
+    "waitingBoss": "No boss yet"
   },
   "meter": {
     "identifyingPlayer": "#{id}",
@@ -575,7 +575,7 @@
   },
   "connection": {
     "auto": "Auto",
-    "detecting": "Detecting AION2 connection...",
+    "detecting": "Connecting...",
     "loopback": "Local Loopback"
   },
   "target": {

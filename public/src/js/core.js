@@ -419,22 +419,22 @@ class DpsApp {
 
     const getBattleTimeStatusText = () => {
       if (this._captureSuspended) {
-        return this.i18n?.t?.("battleTime.suspended", "App suspended") ?? "App suspended";
+        return this.i18n?.t?.("battleTime.suspended", "Suspended") ?? "Suspended";
       }
       if (!this.aionRunning) {
-        const text = this.i18n?.t("battleTime.notRunning", "AION2 not running") ?? "AION2 not running";
+        const text = this.i18n?.t("battleTime.notRunning", "AION2 closed") ?? "AION2 closed";
         return withBacklog(text);
       }
       if (this.isDetectingPort) {
-        const text = this.i18n?.t("connection.detecting", "Detecting AION2 connection...") ??
-          "Detecting AION2 connection...";
+        const text = this.i18n?.t("connection.detecting", "Connecting...") ??
+          "Connecting...";
         return withBacklog(text);
       }
       if (this.battleTime?.getState?.() === "state-idle") {
         const text = this.i18n?.t("battleTime.idle", "Idle") ?? "Idle";
         return withBacklog(text);
       }
-      const text = this.i18n?.t("battleTime.analysing", "Monitoring data...") ?? "Monitoring data...";
+      const text = this.i18n?.t("battleTime.analysing", "Monitoring") ?? "Monitoring";
       return withBacklog(text);
     };
 
@@ -738,7 +738,7 @@ class DpsApp {
     } else if (running && this.isDetectingPort) {
       // The port locks a moment after the game is seen, and nothing else may
       // ask again: in Boss mode no row appears until a boss is hit, so
-      // "Detecting AION2 connection..." stayed up. Ask on each poll until it locks.
+      // "Connecting..." stayed up. Ask on each poll until it locks.
       this.refreshConnectionInfo({ skipSettingsRefresh: true });
     }
     if (!running) return;
@@ -843,10 +843,10 @@ class DpsApp {
     if (this.analysisStatusEl) {
       if (this._captureSuspended) {
         this.analysisStatusEl.textContent =
-          this.i18n?.t?.("battleTime.suspended", "App suspended") ?? "App suspended";
+          this.i18n?.t?.("battleTime.suspended", "Suspended") ?? "Suspended";
       } else {
         this.analysisStatusEl.textContent =
-          this.i18n?.t("battleTime.analysing", "Monitoring data...") ?? "Monitoring data...";
+          this.i18n?.t("battleTime.analysing", "Monitoring") ?? "Monitoring";
       }
       this.analysisStatusEl.style.display = "";
     }
@@ -4856,7 +4856,7 @@ class DpsApp {
       );
       this._lastTargetSelection = this.targetSelection;
     }
-    // Leaving Boss mode drops "Waiting for a boss" at once, rather than on
+    // Leaving Boss mode drops "No boss yet" at once, rather than on
     // the next update from the backend.
     if (this.targetSelection !== "bossTargets" && this._waitingForBoss) {
       this._waitingForBoss = false;
@@ -5508,7 +5508,7 @@ class DpsApp {
     const port = hasPort
       ? String(info.port)
       : this.isDetectingPort
-        ? this.i18n?.t("connection.detecting", "Detecting AION2 connection...")
+        ? this.i18n?.t("connection.detecting", "Connecting...")
         : this.i18n?.t("connection.auto", "Auto");
     this.lockedIp.textContent = ip;
     this.lockedPort.textContent = port;
@@ -5677,20 +5677,20 @@ class DpsApp {
     if (!this.battleTimeRoot || !this.analysisStatusEl) return;
     if (!this.aionRunning) {
       this.applyConnectionStatusOverride(
-        this.i18n?.t("battleTime.notRunning", "AION2 not running") ?? "AION2 not running"
+        this.i18n?.t("battleTime.notRunning", "AION2 closed") ?? "AION2 closed"
       );
       return;
     }
     if (this.isDetectingPort) {
       this.applyConnectionStatusOverride(
-        this.i18n?.t("connection.detecting", "Detecting AION2 connection...") ??
-          "Detecting AION2 connection..."
+        this.i18n?.t("connection.detecting", "Connecting...") ??
+          "Connecting..."
       );
       return;
     }
     if (this._waitingForBoss && this.targetSelection === "bossTargets" && !this._captureSuspended) {
       this.applyConnectionStatusOverride(
-        this.i18n?.t("battleTime.waitingBoss", "Waiting for a boss") ?? "Waiting for a boss"
+        this.i18n?.t("battleTime.waitingBoss", "No boss yet") ?? "No boss yet"
       );
       return;
     }
@@ -5720,11 +5720,11 @@ class DpsApp {
     }
     if (this._captureSuspended) {
       this.analysisStatusEl.textContent =
-        this.i18n?.t?.("battleTime.suspended", "App suspended") ?? "App suspended";
+        this.i18n?.t?.("battleTime.suspended", "Suspended") ?? "Suspended";
     } else {
       this.analysisStatusEl.textContent =
-        this.i18n?.t("battleTime.analysing", "Ready - monitoring combat...") ??
-        "Ready - monitoring combat...";
+        this.i18n?.t("battleTime.analysing", "Monitoring") ??
+        "Monitoring";
     }
     this.analysisStatusEl.style.removeProperty("display");
   }
@@ -6539,12 +6539,12 @@ class DpsApp {
     const el = this.analysisStatusEl || document.querySelector(".battleTime .analysisStatus");
     if (!el) return;
     if (this._captureSuspended) {
-      el.textContent = this.i18n?.t?.("battleTime.suspended", "App suspended") ?? "App suspended";
+      el.textContent = this.i18n?.t?.("battleTime.suspended", "Suspended") ?? "Suspended";
       el.style.display = "";
       // Ensure the battle time bar is visible so the message shows
       if (this.battleTimeRoot) this.battleTimeRoot.classList.add("isVisible");
     } else {
-      el.textContent = this.i18n?.t?.("battleTime.analysing", "Monitoring data...") ?? "Monitoring data...";
+      el.textContent = this.i18n?.t?.("battleTime.analysing", "Monitoring") ?? "Monitoring";
     }
   }
 
