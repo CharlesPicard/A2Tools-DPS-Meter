@@ -373,6 +373,7 @@
       "options": {
         "combatPower": "戦闘力",
         "gearScore": "装備スコア",
+        "both": "両方",
         "off": "オフ"
       }
     },

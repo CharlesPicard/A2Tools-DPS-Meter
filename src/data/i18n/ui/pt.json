@@ -373,6 +373,7 @@
       "options": {
         "combatPower": "Poder de combate",
         "gearScore": "Pontuação de equipamento",
+        "both": "Ambos",
         "off": "Desativado"
       }
     },

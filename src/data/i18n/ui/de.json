@@ -373,6 +373,7 @@
       "options": {
         "combatPower": "Kampfkraft",
         "gearScore": "Ausrüstungswert",
+        "both": "Beides",
         "off": "Aus"
       }
     },

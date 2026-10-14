@@ -1,18 +1,20 @@
 // The figure beside a player's name, in the meter and in Details: combat
 // power in thousands the way players quote it ("889k"; below 500 the raw
-// number, since "0k" says nothing) or gear score in full. Empty when the party
-// roster never named the player: only your own party's members are on it.
-// Shared with details.js, which loads after this file.
+// number, since "0k" says nothing), gear score in full, or both ("889k ·
+// 2,410"). Empty when the party roster never named the player: only your own
+// party's members are on it. Shared with details.js, which loads after this
+// file.
 const partyStatText = (row, stat) => {
   if (stat === "off") return "";
-  if (stat === "gearScore") {
-    const gearScore = Number(row?.gearScore) || 0;
-    return gearScore > 0 ? gearScore.toLocaleString() : "";
-  }
+  const gearScore = Number(row?.gearScore) || 0;
+  const gearScoreText = gearScore > 0 ? gearScore.toLocaleString() : "";
+  if (stat === "gearScore") return gearScoreText;
   const combatPower = Number(row?.combatPower) || 0;
-  if (combatPower <= 0) return "";
   const thousands = Math.round(combatPower / 1000);
-  return thousands > 0 ? `${thousands.toLocaleString()}k` : combatPower.toLocaleString();
+  const combatPowerText =
+    combatPower <= 0 ? "" : thousands > 0 ? `${thousands.toLocaleString()}k` : combatPower.toLocaleString();
+  if (stat === "both") return [combatPowerText, gearScoreText].filter(Boolean).join(" · ");
+  return combatPowerText;
 };
 
 // A row's texture offset, 0-719px, the same every time for the same id.
