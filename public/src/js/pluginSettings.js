@@ -231,7 +231,8 @@
         if (!p.reviewed) {
           const tag = document.createElement("span");
           tag.className = "pluginUnreviewedTag";
-          tag.textContent = t("settings.plugins.unreviewed", "Unreviewed");
+          tag.textContent = t("settings.plugins.unreviewed", "Dev");
+          tag.title = t("settings.plugins.hint", "Plugins loaded here are not reviewed. Only load plugins you trust.");
           title.push(" ", tag);
         }
         const buttons = [];

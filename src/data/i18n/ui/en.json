@@ -502,7 +502,7 @@
       "installing": "Installing…",
       "installDone": "{name} {version} is installed.",
       "updatesAvailable": "Updates available: {list}",
-      "unreviewed": "Unreviewed",
+      "unreviewed": "Dev",
       "by": "by {author}",
       "consentTitle": "Install {name}?",
       "consentUpdateTitle": "Update {name}?",

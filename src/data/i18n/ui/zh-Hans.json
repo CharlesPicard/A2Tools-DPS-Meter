@@ -497,7 +497,7 @@
       "installing": "正在安装…",
       "installDone": "{name} {version} 已安装。",
       "updatesAvailable": "有可用更新：{list}",
-      "unreviewed": "未审核",
+      "unreviewed": "开发",
       "by": "作者：{author}",
       "consentTitle": "安装 {name}？",
       "consentUpdateTitle": "更新 {name}？",

@@ -495,7 +495,7 @@
       "installing": "Установка…",
       "installDone": "{name} {version} установлен.",
       "updatesAvailable": "Доступны обновления: {list}",
-      "unreviewed": "Не проверен",
+      "unreviewed": "Разраб.",
       "by": "автор: {author}",
       "consentTitle": "Установить {name}?",
       "consentUpdateTitle": "Обновить {name}?",

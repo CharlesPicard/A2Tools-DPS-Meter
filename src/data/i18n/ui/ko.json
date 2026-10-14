@@ -497,7 +497,7 @@
       "installing": "설치 중…",
       "installDone": "{name} {version}이(가) 설치되었습니다.",
       "updatesAvailable": "업데이트 가능: {list}",
-      "unreviewed": "검토되지 않음",
+      "unreviewed": "개발",
       "by": "제작: {author}",
       "consentTitle": "{name}을(를) 설치할까요?",
       "consentUpdateTitle": "{name}을(를) 업데이트할까요?",

@@ -168,8 +168,6 @@
     manifest = hello.manifest;
     document.title = manifest.name;
     document.querySelector(".pluginName").textContent = `${manifest.name} ${manifest.version}`;
-    // Reviewed plugins come from the signed catalog; anything else is a developer folder.
-    document.querySelector(".pluginBadge").hidden = !!hello.reviewed;
     deliver("language", hello.language || "en");
     deliver("compact", panel.compact);
     if (hello.character) deliver("character", hello.character);

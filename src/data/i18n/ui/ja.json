@@ -490,7 +490,7 @@
       "installing": "インストール中…",
       "installDone": "{name} {version} をインストールしました。",
       "updatesAvailable": "アップデートがあります: {list}",
-      "unreviewed": "未審査",
+      "unreviewed": "開発",
       "by": "作成: {author}",
       "consentTitle": "{name} をインストールしますか？",
       "consentUpdateTitle": "{name} を更新しますか？",

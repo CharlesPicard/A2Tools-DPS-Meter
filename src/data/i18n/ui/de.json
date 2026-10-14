@@ -490,7 +490,7 @@
       "installing": "Wird installiert…",
       "installDone": "{name} {version} ist installiert.",
       "updatesAvailable": "Updates verfügbar: {list}",
-      "unreviewed": "Ungeprüft",
+      "unreviewed": "Dev",
       "by": "von {author}",
       "consentTitle": "{name} installieren?",
       "consentUpdateTitle": "{name} aktualisieren?",
