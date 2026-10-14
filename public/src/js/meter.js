@@ -133,6 +133,13 @@ const createMeterUI = ({
       '<path d="M3 9l4.6 3.4L12 6l4.4 6.4L21 9l-1.9 8.6H4.9z"/><rect x="4.6" y="18.6" width="14.8" height="2.4" rx="0.6"/>' +
       '<circle cx="3" cy="8.4" r="1.7"/><circle cx="12" cy="5" r="1.9"/><circle cx="21" cy="8.4" r="1.7"/></svg>';
 
+    // A party member who runs A2Tools too (party_presence.rs): a small tag.
+    const a2toolsBadgeEl = document.createElement("span");
+    a2toolsBadgeEl.className = "a2toolsBadge";
+    a2toolsBadgeEl.style.display = "none";
+    a2toolsBadgeEl.textContent = "A2";
+    a2toolsBadgeEl.title = window.i18n?.t?.("meter.a2toolsUser", "Uses A2Tools") ?? "Uses A2Tools";
+
     // Party combat power, shown beside the name. Hidden unless the party roster
     // packet supplied a value for this player.
     const combatPowerEl = document.createElement("span");
@@ -152,6 +159,7 @@ const createMeterUI = ({
     contentEl.appendChild(classIconEl);
     contentEl.appendChild(nameEl);
     contentEl.appendChild(supporterBadgeEl);
+    contentEl.appendChild(a2toolsBadgeEl);
     contentEl.appendChild(combatPowerEl);
     contentEl.appendChild(dpsContainer);
     rowEl.appendChild(fillTrackEl);
@@ -163,6 +171,7 @@ const createMeterUI = ({
       prevContribClass: "",
       nameEl,
       supporterBadgeEl,
+      a2toolsBadgeEl,
       combatPowerEl,
       rankEl,
       dpsContainer,
@@ -366,6 +375,12 @@ const createMeterUI = ({
         view.rowEl.classList.toggle("isSupporterRow", isSupporter);
         view.supporterBadgeEl.style.display = isSupporter ? "inline-flex" : "none";
         view.lastIsSupporter = isSupporter;
+      }
+
+      const usesA2tools = !!row.usesA2tools && !row.isUser;
+      if (view.lastUsesA2tools !== usesA2tools) {
+        view.a2toolsBadgeEl.style.display = usesA2tools ? "inline-flex" : "none";
+        view.lastUsesA2tools = usesA2tools;
       }
 
       if (view.lastIsCjk !== isCjk) {

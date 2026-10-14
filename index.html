@@ -1040,6 +1040,13 @@
                 </div>
                 <div class="settingsGroupBody shareBossTimersRow">
                   <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.partyPresence" title="Party members who also use A2Tools see a small A2 tag beside your name, and you see theirs. Anyone in your party using A2Tools can see it, so they'll know you use a third-party meter. Only hashes of character names and servers are sent." data-i18n-title="settings.tips.partyPresence">Show A2Tools users in my party</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="partyPresenceCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
                     <span class="settingsToggleLabel settingsLabel" data-i18n="settings.shareBossTimers" title="Shares field boss timers with other players through a2tools.app (and its partner Aion 2 Timers): the bosses on your map when you open it, and the field bosses you see killed, and their HP each time it drops by a tenth. Only the server, the bosses, their times and HP are sent." data-i18n-title="settings.tips.shareBossTimers">Share field boss timers</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="shareBossTimersCheckbox" />
@@ -1324,6 +1331,19 @@
         </label>
         <div class="discordPromoHint" data-i18n="discordPromo.hint">Uses the Discord app on this PC; no account needed. You can change this any time in Settings.</div>
         <button class="discordPromoDone" type="button" data-i18n="discordPromo.done">Done</button>
+      </div>
+    </div>
+    <div class="discordPromo partyPromo" id="partyPromo" aria-hidden="true">
+      <div class="discordPromoCard" role="dialog" aria-modal="true" aria-labelledby="partyPromoTitle">
+        <button class="discordPromoClose partyPromoClose" type="button" data-i18n-aria-label="discordPromo.close" aria-label="Close">×</button>
+        <div class="discordPromoTitle" id="partyPromoTitle" data-i18n="partyPromo.title">New: see A2Tools users in your party</div>
+        <div class="discordPromoText" data-i18n="partyPromo.text">Party members who also use A2Tools get a small A2 tag beside their name, and you get one beside yours on their meter.</div>
+        <label class="discordPromoToggle">
+          <input type="checkbox" class="partyPromoCheckbox" checked />
+          <span data-i18n="settings.partyPresence">Show A2Tools users in my party</span>
+        </label>
+        <div class="discordPromoHint" data-i18n="partyPromo.hint">Anyone in your party who uses A2Tools will be able to see that you use a third-party meter. Only hashes of character names and servers are sent. You can change this any time in Settings.</div>
+        <button class="discordPromoDone partyPromoDone" type="button" data-i18n="discordPromo.done">Done</button>
       </div>
     </div>
     <div class="discordPromo accountPromo" id="accountPromo" aria-hidden="true">

@@ -2597,6 +2597,28 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
     var(--player-name-shadow, var(--text-shadow));
 }
 
+/* A party member who runs A2Tools too (party_presence.rs): a small "A2" tag
+   after the name, in the meter's cyan, quieter than the supporter crown. */
+.a2toolsBadge {
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  margin-left: -3px;
+  padding: 0 3px;
+  height: 12px;
+  border-radius: 3px;
+  border: 1px solid rgba(110, 215, 255, 0.75);
+  background: rgba(10, 30, 45, 0.55);
+  color: #8fe3ff;
+  font: 700 8.5px/1 var(--hud-tech, sans-serif);
+  letter-spacing: 0.02em;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.8);
+}
+.meter.slim .a2toolsBadge {
+  height: 10px;
+  font-size: 7.5px;
+}
+
 /* The supporter badge — a gold crown beside the name, outlined dark so it
    stays clear on a bar texture.
    Deliberately an icon and not a "PATRON" pill: the slim layouts run an 11.5px

@@ -577,6 +577,13 @@ impl DpsCalculator {
             };
             row.is_supporter = roster.contains(name, dbid, server);
         }
+        // Party members who also run A2Tools (party_presence.rs).
+        let users = self.data_storage.a2tools_users();
+        if !users.is_empty() {
+            for row in dps_data.map.values_mut() {
+                row.uses_a2tools = users.contains(row.nickname.trim());
+            }
+        }
     }
 
     /// The server a name-and-server supporter roster checks `name` on, when no

@@ -261,6 +261,7 @@
     "playerLimit": {
       "label": "Máx. jugadores mostrados"
     },
+    "partyPresence": "Mostrar usuarios de A2Tools en mi grupo",
     "shareBossTimers": "Compartir temporizadores de jefes de campo",
     "debugLogging": "Registro de depuración",
     "quit": "Salir",
@@ -447,6 +448,7 @@
       "trainingMode": "En modo entrenamiento, qué muñecos muestra la ventana de detalles: todos juntos o solo el que más golpeas.",
       "allTargetsWindow": "En el modo Todos los objetivos, el medidor suma cada objetivo golpeado dentro de este tiempo antes del último golpe.",
       "updateRate": "Cada cuánto se actualizan los números del medidor. Más rápido muestra los golpes antes pero usa más CPU.",
+      "partyPresence": "Los miembros del grupo que también usan A2Tools ven una pequeña etiqueta A2 junto a tu nombre, y tú ves la suya. Cualquiera del grupo que use A2Tools puede verla, así que sabrá que usas un medidor de terceros. Solo se envían hashes de nombres de personaje y servidores.",
       "shareBossTimers": "Comparte los temporizadores de jefes de campo con otros jugadores a través de a2tools.app (y su socio Aion 2 Timers): los jefes de tu mapa al abrirlo y los jefes de campo que ves morir, y sus PV cada vez que bajan una décima parte. Solo se envían el servidor, los jefes, sus horas y PV.",
       "debugLogging": "Escribe un registro de diagnóstico que el desarrollador puede usar para encontrar problemas.",
       "saveRawPackets": "Graba el tráfico bruto del juego para informes de errores. El registro de depuración se activa con él.",
@@ -542,6 +544,7 @@
   },
   "meter": {
     "identifyingPlayer": "#{id}",
+    "a2toolsUser": "Usa A2Tools",
     "dpsSuffix": "/s"
   },
   "skills": {
@@ -599,6 +602,11 @@
     "tierExpedition": "Expedición",
     "tierConquestNormal": "Conquista (normal)",
     "tierConquestHard": "Conquista (difícil)"
+  },
+  "partyPromo": {
+    "title": "Novedad: ve a los usuarios de A2Tools de tu grupo",
+    "text": "Los miembros del grupo que también usan A2Tools tienen una pequeña etiqueta A2 junto a su nombre, y tú una junto al tuyo en su medidor.",
+    "hint": "Cualquiera de tu grupo que use A2Tools podrá ver que usas un medidor de terceros. Solo se envían hashes de nombres de personaje y servidores. Puedes cambiarlo cuando quieras en los ajustes."
   },
   "discordPromo": {
     "title": "Nuevo: actividad en Discord",

@@ -261,6 +261,7 @@
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
+    "partyPresence": "Afficher les utilisateurs d'A2Tools de mon groupe",
     "shareBossTimers": "Partager les minuteurs des boss de terrain",
     "debugLogging": "Journal de débogage",
     "quit": "Quitter",
@@ -447,6 +448,7 @@
       "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
       "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
       "updateRate": "À quelle fréquence les chiffres du compteur se rafraîchissent. Plus rapide affiche les coups plus tôt mais utilise plus de CPU.",
+      "partyPresence": "Les membres du groupe qui utilisent aussi A2Tools voient une petite étiquette A2 à côté de votre nom, et vous voyez la leur. Tout membre du groupe utilisant A2Tools peut la voir et saura donc que vous utilisez un meter tiers. Seuls des hachages des noms de personnages et des serveurs sont envoyés.",
       "shareBossTimers": "Partage les minuteurs des boss de terrain avec les autres joueurs via a2tools.app (et son partenaire Aion 2 Timers) : les boss de votre carte quand vous l'ouvrez, et les boss de terrain que vous voyez tués, et leurs PV à chaque dixième perdu. Seuls le serveur, les boss, leurs heures et PV sont envoyés.",
       "debugLogging": "Écrit un journal de diagnostic que le développeur peut utiliser pour trouver les problèmes.",
       "saveRawPackets": "Enregistre le trafic brut du jeu pour les rapports de bug. Le journal de débogage s'active avec.",
@@ -542,6 +544,7 @@
   },
   "meter": {
     "identifyingPlayer": "#{id}",
+    "a2toolsUser": "Utilise A2Tools",
     "dpsSuffix": "/s"
   },
   "skills": {
@@ -599,6 +602,11 @@
     "tierExpedition": "Expédition",
     "tierConquestNormal": "Conquête (normal)",
     "tierConquestHard": "Conquête (difficile)"
+  },
+  "partyPromo": {
+    "title": "Nouveau : voir les utilisateurs d'A2Tools de votre groupe",
+    "text": "Les membres du groupe qui utilisent aussi A2Tools ont une petite étiquette A2 à côté de leur nom, et vous en avez une à côté du vôtre sur leur meter.",
+    "hint": "Tout membre de votre groupe utilisant A2Tools pourra voir que vous utilisez un meter tiers. Seuls des hachages des noms de personnages et des serveurs sont envoyés. Vous pouvez changer cela à tout moment dans les réglages."
   },
   "discordPromo": {
     "title": "Nouveau : activité Discord",

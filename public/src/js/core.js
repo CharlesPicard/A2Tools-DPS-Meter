@@ -111,6 +111,8 @@ class DpsApp {
       autoUpload: "dpsMeter.autoUpload",
       discordActivity: "dpsMeter.discordActivity",
       discordPromoShown: "dpsMeter.discordPromoShown",
+      partyPresence: "dpsMeter.partyPresence",
+      partyPromoShown: "dpsMeter.partyPromoShown",
       accountPromoShown: "dpsMeter.accountPromoShown",
       windowOpacity: "dpsMeter.windowOpacity",
       bossNameSize: "dpsMeter.bossNameSize",
@@ -1537,6 +1539,8 @@ class DpsApp {
         // Resolved in Rust against a downloaded roster; the frontend only
         // renders it. Cosmetic only — it must not reach sorting or bar colour.
         isSupporter: !!(isObj && value.isSupporter) && this.showSupporterColors !== false,
+        // A party member who runs A2Tools too (party_presence.rs).
+        usesA2tools: !!(isObj && value.usesA2tools),
       });
     }
 
@@ -2488,6 +2492,7 @@ class DpsApp {
     this.bossLogsCheckbox = document.querySelector(".bossLogsCheckbox");
     this.debugLoggingCheckbox = document.querySelector(".debugLoggingCheckbox");
     this.shareBossTimersCheckbox = document.querySelector(".shareBossTimersCheckbox");
+    this.partyPresenceCheckbox = document.querySelector(".partyPresenceCheckbox");
     this.showPingCheckbox = document.querySelector(".showPingCheckbox");
     this.saveRawPacketsCheckbox = document.querySelector(".saveRawPacketsCheckbox");
     this.sendLogsBtn = document.querySelector(".sendLogsBtn");
@@ -2710,6 +2715,14 @@ class DpsApp {
         window.javaBridge?.setBossLogsEnabled?.(isChecked);
       });
     }
+    // A2Tools users in the party see each other (party_presence.rs): on
+    // unless turned off.
+    if (this.partyPresenceCheckbox) {
+      this.partyPresenceCheckbox.checked = this.safeGetSetting(this.storageKeys.partyPresence) !== "false";
+      this.partyPresenceCheckbox.addEventListener("change", (event) => {
+        this.safeSetSetting(this.storageKeys.partyPresence, event.target?.checked ? "true" : "false");
+      });
+    }
     // Field boss timers from the player's map, shared through a2tools.app
     // (boss_report.rs): on unless turned off.
     if (this.shareBossTimersCheckbox) {
@@ -2921,7 +2934,7 @@ class DpsApp {
         if (window.a2Build?.online === false) return;   // nothing to offer
         // At most one offer per launch: the account one waits for a launch
         // where the Discord one does not open.
-        if (!(ok && this.maybeShowDiscordPromo())) this.maybeShowAccountPromo();
+        if (!(ok && this.maybeShowDiscordPromo()) && !this.maybeShowPartyPromo()) this.maybeShowAccountPromo();
       });
 
     this.initStreamOverlaySettings();
@@ -6329,6 +6342,49 @@ class DpsApp {
 
   invalidateStreamOverlaySettings() {
     this._streamOverlaySettings?.invalidate();
+  }
+
+  // A one-time popup about showing A2Tools users in the party to each other,
+  // ticked: shown once to everyone, on a new install and after the update
+  // that brings it. Done keeps the tick's answer; ×, Escape or a click
+  // outside keep it on (it says so, and Settings changes it).
+  maybeShowPartyPromo() {
+    const promo = document.querySelector("#partyPromo");
+    if (!promo) return false;
+    if (this.safeGetSetting(this.storageKeys.partyPromoShown) === "true") return false;
+    const checkbox = promo.querySelector(".partyPromoCheckbox");
+    let answered = false;
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        answer(this.safeGetSetting(this.storageKeys.partyPresence) !== "false");
+      }
+    };
+    const answer = (enabled) => {
+      if (answered) return;
+      answered = true;
+      this.safeSetSetting(this.storageKeys.partyPresence, String(enabled));
+      this.safeSetSetting(this.storageKeys.partyPromoShown, "true");
+      const settingsCheckbox = document.querySelector(".partyPresenceCheckbox");
+      if (settingsCheckbox) settingsCheckbox.checked = enabled;
+      promo.classList.remove("isOpen");
+      promo.setAttribute("aria-hidden", "true");
+      document.removeEventListener("keydown", onKey, true);
+    };
+    const kept = () => this.safeGetSetting(this.storageKeys.partyPresence) !== "false";
+    promo.querySelector(".partyPromoDone")?.addEventListener("click", () => answer(!!checkbox?.checked));
+    promo.querySelector(".partyPromoClose")?.addEventListener("click", () => answer(kept()));
+    promo.addEventListener("click", (event) => {
+      if (event.target === promo) answer(kept());
+    });
+    setTimeout(() => {
+      if (answered) return;
+      if (checkbox) checkbox.checked = kept();
+      promo.classList.add("isOpen");
+      promo.setAttribute("aria-hidden", "false");
+      document.addEventListener("keydown", onKey, true);
+    }, 2500);
+    return true;
   }
 
   maybeShowDiscordPromo() {

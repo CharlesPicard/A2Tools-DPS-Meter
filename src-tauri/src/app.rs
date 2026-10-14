@@ -2780,6 +2780,8 @@ pub fn run() {
             #[cfg(feature = "online")]
             crate::boss_report::spawn(app.handle().clone());
             #[cfg(feature = "online")]
+            crate::party_presence::spawn(app.handle().clone());
+            #[cfg(feature = "online")]
             crate::stream_overlay::sync(app.handle());
 
             // Reopen the Details window if it was left enabled. Done here rather

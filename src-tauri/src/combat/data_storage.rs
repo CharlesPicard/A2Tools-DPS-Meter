@@ -564,6 +564,8 @@ struct Inner {
     /// Field boss kills and HP milestones in the open world, not yet sent
     /// (`boss_report.rs`).
     boss_events: VecDeque<BossEvent>,
+    /// Party members who also run A2Tools, by name (`party_presence.rs`).
+    a2tools_users: HashSet<String>,
     /// Each party member's last HP (`1b 92`): falling to 0 from above is a
     /// death. The game sends no `42 36` death for a player (Ultimate Berk,
     /// 2026-10-11: 184 monster deaths, not one of the four that died).
@@ -695,6 +697,7 @@ impl DataStorage {
                 spawn_hp_ids: HashSet::new(),
                 boss_hp_band: HashMap::new(),
                 boss_events: VecDeque::new(),
+                a2tools_users: HashSet::new(),
                 last_hp: HashMap::new(),
                 despawned_summon_ids: HashSet::new(),
                 boss_entity_ids: HashSet::new(),
@@ -1373,6 +1376,15 @@ impl DataStorage {
             inner.spawn_hp_ids.insert(mid);
             inner.boss_hp_band.remove(&mid);
         }
+    }
+
+    /// The party members who also run A2Tools (`party_presence.rs`).
+    pub fn set_a2tools_users(&self, names: HashSet<String>) {
+        self.inner.write().a2tools_users = names;
+    }
+
+    pub fn a2tools_users(&self) -> HashSet<String> {
+        self.inner.read().a2tools_users.clone()
     }
 
     /// The field boss kills and HP milestones seen since the last call.

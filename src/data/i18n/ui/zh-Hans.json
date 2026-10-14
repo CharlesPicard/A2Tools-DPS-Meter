@@ -266,6 +266,7 @@
     "playerLimit": {
       "label": "最大显示人数"
     },
+    "partyPresence": "显示队伍中的 A2Tools 用户",
     "shareBossTimers": "分享野外首领计时",
     "debugLogging": "调试日志",
     "quit": "退出",
@@ -454,6 +455,7 @@
       "trainingMode": "训练模式下详情窗口显示哪些木桩：全部一起，或只显示你打得最多的那个。",
       "allTargetsWindow": "全部目标模式下，计量器汇总最后一次命中前这段时间内命中的所有目标。",
       "updateRate": "统计数字多久刷新一次。越快越早显示伤害，但占用更多 CPU。",
+      "partyPresence": "同样使用 A2Tools 的队友会在你的名字旁看到小小的 A2 标记，你也会看到他们的。队伍中任何使用 A2Tools 的人都看得到，因此会知道你使用第三方计量器。只会发送角色名称与服务器的哈希值。",
       "shareBossTimers": "通过 a2tools.app（及合作伙伴 Aion 2 Timers）与其他玩家分享野外首领计时：打开地图时图上的首领，以及你看到被击杀的野外首领，以及其 HP 每下降 10% 时的 HP。只会发送服务器、首领、时间与 HP。",
       "debugLogging": "写入开发者用于排查问题的诊断日志。",
       "saveRawPackets": "记录原始游戏流量以便提交错误报告。调试日志会随之开启。",
@@ -549,6 +551,7 @@
   },
   "meter": {
     "identifyingPlayer": "#{id}",
+    "a2toolsUser": "使用 A2Tools",
     "dpsSuffix": "/秒"
   },
   "skills": {
@@ -606,6 +609,11 @@
     "tierExpedition": "远征",
     "tierConquestNormal": "征服（普通）",
     "tierConquestHard": "征服（困难）"
+  },
+  "partyPromo": {
+    "title": "新功能：看见队伍中的 A2Tools 用户",
+    "text": "同样使用 A2Tools 的队友名字旁会出现小小的 A2 标记，他们的计量器上你的名字旁也会有。",
+    "hint": "队伍中任何使用 A2Tools 的人都能看出你使用第三方计量器。只会发送角色名称与服务器的哈希值。可随时在设置中更改。"
   },
   "discordPromo": {
     "title": "新功能：Discord 状态显示",

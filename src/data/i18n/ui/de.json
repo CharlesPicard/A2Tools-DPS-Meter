@@ -261,6 +261,7 @@
     "playerLimit": {
       "label": "Max. angezeigte Spieler"
     },
+    "partyPresence": "A2Tools-Nutzer in meiner Gruppe zeigen",
     "shareBossTimers": "Feldboss-Timer teilen",
     "debugLogging": "Debug-Protokoll",
     "quit": "Beenden",
@@ -447,6 +448,7 @@
       "trainingMode": "Im Trainingsmodus: welche Puppen das Detailfenster zeigt – alle zusammen oder nur die, die du am stärksten triffst.",
       "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
       "updateRate": "Wie oft sich die Zahlen des Meters aktualisieren. Schneller zeigt Treffer früher, braucht aber mehr CPU.",
+      "partyPresence": "Gruppenmitglieder, die auch A2Tools nutzen, sehen ein kleines A2 neben deinem Namen und du ihres. Jeder in deiner Gruppe mit A2Tools sieht es und weiß damit, dass du ein Drittanbieter-Meter nutzt. Gesendet werden nur Hashes von Charakternamen und Servern.",
       "shareBossTimers": "Teilt Feldboss-Timer über a2tools.app (und seinen Partner Aion 2 Timers) mit anderen Spielern: die Bosse auf deiner Karte, wenn du sie öffnest, und Feldbosse, die du sterben siehst, und ihre HP bei jedem Zehntel, das sie verlieren. Gesendet werden nur Server, Bosse, Zeiten und HP.",
       "debugLogging": "Schreibt ein Diagnoseprotokoll, mit dem der Entwickler Probleme finden kann.",
       "saveRawPackets": "Zeichnet rohen Spielverkehr für Fehlerberichte auf. Das Debug-Protokoll wird mit eingeschaltet.",
@@ -542,6 +544,7 @@
   },
   "meter": {
     "identifyingPlayer": "#{id}",
+    "a2toolsUser": "Nutzt A2Tools",
     "dpsSuffix": "/s"
   },
   "skills": {
@@ -599,6 +602,11 @@
     "tierExpedition": "Expedition",
     "tierConquestNormal": "Eroberung (Normal)",
     "tierConquestHard": "Eroberung (Schwer)"
+  },
+  "partyPromo": {
+    "title": "Neu: A2Tools-Nutzer in deiner Gruppe sehen",
+    "text": "Gruppenmitglieder, die auch A2Tools nutzen, bekommen ein kleines A2 neben ihrem Namen, und du eins neben deinem auf ihrem Meter.",
+    "hint": "Jeder in deiner Gruppe mit A2Tools kann sehen, dass du ein Drittanbieter-Meter nutzt. Gesendet werden nur Hashes von Charakternamen und Servern. Du kannst das jederzeit in den Einstellungen ändern."
   },
   "discordPromo": {
     "title": "Neu: Discord-Aktivität",

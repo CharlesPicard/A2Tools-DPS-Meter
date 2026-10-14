@@ -30,6 +30,10 @@ pub struct PersonalData {
     /// meter anybody should trust.
     #[serde(default)]
     pub is_supporter: bool,
+    /// A party member who runs A2Tools too (`party_presence.rs`): a small
+    /// mark beside the name.
+    #[serde(default)]
+    pub uses_a2tools: bool,
 }
 
 impl PersonalData {
@@ -44,6 +48,7 @@ impl PersonalData {
             combat_power: 0,
             gear_score: 0,
             is_supporter: false,
+            uses_a2tools: false,
         }
     }
 
@@ -58,6 +63,7 @@ impl PersonalData {
             combat_power: 0,
             gear_score: 0,
             is_supporter: false,
+            uses_a2tools: false,
         }
     }
 

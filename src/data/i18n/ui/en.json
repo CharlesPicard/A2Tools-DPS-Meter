@@ -271,6 +271,7 @@
     "playerLimit": {
       "label": "Max players shown"
     },
+    "partyPresence": "Show A2Tools users in my party",
     "shareBossTimers": "Share field boss timers",
     "debugLogging": "Debug logging",
     "quit": "Quit",
@@ -459,6 +460,7 @@
       "trainingMode": "In Train mode, which dummies the Details window shows: all of them together, or only the one you hit hardest.",
       "allTargetsWindow": "In All Targets mode, the meter adds up every target hit within this time of the latest hit.",
       "updateRate": "How often the meter's numbers refresh. Faster shows hits sooner but uses more CPU.",
+      "partyPresence": "Party members who also use A2Tools see a small A2 tag beside your name, and you see theirs. Anyone in your party using A2Tools can see it, so they'll know you use a third-party meter. Only hashes of character names and servers are sent.",
       "shareBossTimers": "Shares field boss timers with other players through a2tools.app (and its partner Aion 2 Timers): the bosses on your map when you open it, and the field bosses you see killed, and their HP each time it drops by a tenth. Only the server, the bosses, their times and HP are sent.",
       "debugLogging": "Writes a diagnostic log the developer can use to track down problems.",
       "saveRawPackets": "Records raw game traffic for bug reports. Debug logging turns on with it.",
@@ -554,6 +556,7 @@
   },
   "meter": {
     "identifyingPlayer": "#{id}",
+    "a2toolsUser": "Uses A2Tools",
     "dpsSuffix": "/s"
   },
   "skills": {
@@ -611,6 +614,11 @@
     "tierExpedition": "Expedition",
     "tierConquestNormal": "Conquest (Normal)",
     "tierConquestHard": "Conquest (Hard)"
+  },
+  "partyPromo": {
+    "title": "New: see A2Tools users in your party",
+    "text": "Party members who also use A2Tools get a small A2 tag beside their name, and you get one beside yours on their meter.",
+    "hint": "Anyone in your party who uses A2Tools will be able to see that you use a third-party meter. Only hashes of character names and servers are sent. You can change this any time in Settings."
   },
   "discordPromo": {
     "title": "New: Discord activity",
