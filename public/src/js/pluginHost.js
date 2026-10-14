@@ -73,7 +73,21 @@
       showToast(String(text));
       return true;
     },
+    // A link clicked in the plugin's page (the SDK passes on https ones): its
+    // frame may not open windows, so the browser opens it. Only plain https
+    // addresses, and one a second, so a plugin can't open a stream of tabs.
+    openUrl: ([raw]) => {
+      const url = new URL(String(raw));
+      if (url.protocol !== "https:" || url.username || url.password || url.href.length > 2048) {
+        throw new Error("only https links open");
+      }
+      const now = Date.now();
+      if (now - lastLinkAt < 1000) throw new Error("one link a second");
+      lastLinkAt = now;
+      return invoke("open_url", { url: url.href });
+    },
   };
+  let lastLinkAt = 0;
 
   window.addEventListener("message", async (event) => {
     if (!frame || event.source !== frame.contentWindow) return;
