@@ -424,13 +424,18 @@ pub struct BossEvent {
 pub enum BossEventKind {
     /// Killed at this moment (unix ms).
     Killed { at_ms: i64 },
-    /// Its HP first dropped through 75, 50 or 25 %: the percent then.
+    /// Its HP first dropped through a tenth (90, 80 ... 10 %): the percent then.
     Hp { percent: u8 },
 }
 
 /// Unsent boss events kept at most (the sender drains them every second).
 #[cfg(feature = "online")]
 const MAX_BOSS_EVENTS: usize = 64;
+
+/// A field boss's HP is reported as it drops through each tenth, lowest
+/// first so a jump through several finds the lowest.
+#[cfg(feature = "online")]
+const HP_STEPS: [u8; 9] = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
 #[cfg(feature = "online")]
 fn push_boss_event(inner: &mut Inner, event: BossEvent) {
@@ -553,7 +558,7 @@ struct Inner {
     /// Entities whose max HP came from their spawn record, so a percentage of
     /// it can be trusted (a peak seen later may be below the real max).
     spawn_hp_ids: HashSet<i32>,
-    /// A field boss's lowest HP milestone reported so far (100, 75, 50, 25),
+    /// A field boss's lowest HP milestone reported so far (100, 90 ... 10),
     /// per entity.
     boss_hp_band: HashMap<i32, u8>,
     /// Field boss kills and HP milestones in the open world, not yet sent
@@ -1875,7 +1880,7 @@ impl DataStorage {
             *max = hp;
         }
         // A field boss in the open world whose max HP is known from its spawn:
-        // the first time it drops through 75, 50 or 25 %, its percent then
+        // each time it first drops through a tenth (90, 80 ... 10 %), its percent then
         // (online builds only, as kills).
         #[cfg(feature = "online")]
         if let Some(max) = inner.mob_hp_data.get(&id).copied()
@@ -1887,7 +1892,8 @@ impl DataStorage {
                 if crate::capture::field_bosses::is_field_boss(code) {
                     let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
                     let band = inner.boss_hp_band.get(&id).copied().unwrap_or(100);
-                    if let Some(&crossed) = [25u8, 50, 75].iter().find(|&&m| pct <= m && band > m) {
+                    // The lowest tenth crossed: a jump through several sends one.
+                    if let Some(&crossed) = HP_STEPS.iter().find(|&&m| pct <= m && band > m) {
                         inner.boss_hp_band.insert(id, crossed);
                         push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Hp { percent: pct } });
                     }
@@ -3036,15 +3042,16 @@ mod tests {
         let s = DataStorage::new();
         s.append_mob(500, 2100079);
         s.append_mob_hp(500, 1000);
-        for hp in [900, 760, 740, 700, 400, 380, 120] {
+        for hp in [950, 880, 870, 790, 600, 400, 380, 120] {
             s.set_mob_current_hp(500, hp);
         }
         let pct: Vec<u8> = s.take_boss_events().into_iter().map(|e| match e.kind {
             BossEventKind::Hp { percent } => percent,
             _ => 0,
         }).collect();
-        // 74 % crosses 75, 40 % crosses 50, 12 % crosses 25 (each once).
-        assert_eq!(pct, vec![74, 40, 12]);
+        // 88 % crosses 90, 79 % crosses 80, 60 % crosses 70 and 60 (once, the
+        // lowest), 40 % crosses 50 and 40, 12 % crosses 30 and 20.
+        assert_eq!(pct, vec![88, 79, 60, 40, 12]);
         // Its spawn unseen: its max is a guess, so no percentages.
         s.append_mob(501, 2100079);
         s.set_mob_current_hp(501, 800);

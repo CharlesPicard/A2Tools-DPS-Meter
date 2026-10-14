@@ -15,7 +15,7 @@
 //! nothing, and a map read from inside a rift (its header not 0) isn't sent
 //! until it is known whose server it shows.
 //!
-//! Field boss kills and HP milestones (75 / 50 / 25 %) in the open world go
+//! Field boss kills and HP milestones (each tenth: 90, 80 ... 10 %) in the open world go
 //! too, as they happen (`spawn_events`): the boss, the server and the time or
 //! percent. a2tools.app passes them on to Aion 2 Timers.
 
