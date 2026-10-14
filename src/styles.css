@@ -3680,8 +3680,7 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   background: rgba(0, 0, 0, 0.3);
   border-radius: 6px;
 }
-.detailsPanel .detailsHeader .detailsModeBtn,
-.detailsPanel .detailsHeader .detailsPeakBtn {
+.detailsPanel .detailsHeader .detailsModeBtn {
   appearance: none;
   border: none;
   background: transparent;
@@ -3694,16 +3693,11 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.detailsPanel .detailsHeader .detailsModeBtn:hover,
-.detailsPanel .detailsHeader .detailsPeakBtn:hover {
+.detailsPanel .detailsHeader .detailsModeBtn:hover {
   color: rgba(255, 255, 255, 0.85);
 }
 .detailsPanel .detailsHeader .detailsModeBtn[data-mode="dmg"].isActive {
   background: #e0a23c;
-  color: #0c1628;
-}
-.detailsPanel .detailsHeader .detailsPeakBtn[aria-pressed="true"] {
-  background: #8fc2ff;
   color: #0c1628;
 }
 .detailsPanel .detailsHeader .detailsModeBtn[data-mode="heal"].isActive {
@@ -4016,8 +4010,8 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 .detailsPanel .detailsPartyBarDps {
   width: 62px;
 }
-/* With each player's peak beside the average (the PEAK toggle): a wider
-   column, the peak smaller and dimmer. */
+/* With each player's peak beside the average (Details' settings menu): a
+   wider column, the peak smaller and dimmer. */
 .detailsPanel .withPeak .detailsPartyBarDps {
   width: 112px;
 }

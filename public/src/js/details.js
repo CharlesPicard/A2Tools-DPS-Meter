@@ -228,8 +228,8 @@ const createDetailsUI = ({
     return hits.length ? `${formatDamageCompact(peakOf(hits))}${labelText("meter.dpsSuffix", "/s")}` : "-";
   };
 
-  // The party list can show each player's peak beside their average (the
-  // toggle at the top of Details; this viewer's choice, kept here).
+  // The party list can show each player's peak beside their average (a
+  // switch in Details' settings menu; this viewer's choice, kept here).
   const PEAK_KEY = "a2.details.showPeak";
   let showPeak = false;
   try { showPeak = localStorage.getItem(PEAK_KEY) === "1"; } catch {}
@@ -3272,11 +3272,10 @@ const createDetailsUI = ({
   });
   syncModeButtons();
 
-  const peakBtn = detailsPanel?.querySelector?.(".detailsPeakBtn");
-  peakBtn?.setAttribute?.("aria-pressed", String(showPeak));
-  peakBtn?.addEventListener?.("click", () => {
-    showPeak = !showPeak;
-    peakBtn.setAttribute("aria-pressed", String(showPeak));
+  const showPeakCheckbox = detailsPanel?.querySelector?.(".detailsShowPeakCheckbox");
+  if (showPeakCheckbox) showPeakCheckbox.checked = showPeak;
+  showPeakCheckbox?.addEventListener?.("change", () => {
+    showPeak = !!showPeakCheckbox.checked;
     try { localStorage.setItem(PEAK_KEY, showPeak ? "1" : "0"); } catch {}
     if (!lastDetails && !detailsContext) return;
     const ctx = buildPartyBarStats();

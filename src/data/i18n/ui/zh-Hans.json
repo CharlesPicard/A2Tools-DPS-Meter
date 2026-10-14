@@ -93,8 +93,8 @@
       "healPctTooltip": "治疗占比"
     },
     "peak": {
-      "toggle": "峰值",
-      "toggleTip": "在平均值旁显示每位玩家的峰值 DPS（最佳 5 秒）"
+      "label": "队伍列表",
+      "show": "在平均值旁显示峰值 DPS（最佳 5 秒）"
     },
     "party": {
       "activeDps": "有效时间 DPS：{dps}（战斗 {total} 中的 {active}）"

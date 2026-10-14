@@ -93,8 +93,8 @@
       "healPctTooltip": "치유량 %"
     },
     "peak": {
-      "toggle": "최고",
-      "toggleTip": "플레이어별 최고 DPS(5초 최고치)를 평균 옆에 표시"
+      "label": "파티 목록",
+      "show": "평균 옆에 최고 DPS(최고 5초) 표시"
     },
     "party": {
       "activeDps": "활동 시간 DPS: {dps} (전투 {total} 중 {active})"

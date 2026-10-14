@@ -83,9 +83,6 @@
                 <button class="detailsModeBtn isActive" type="button" data-mode="dmg" data-i18n="details.mode.dmg">DMG</button>
                 <button class="detailsModeBtn" type="button" data-mode="heal" data-i18n="details.mode.heal">HEAL</button>
               </div>
-              <div class="detailsModeToggle">
-                <button class="detailsPeakBtn" type="button" aria-pressed="false" data-i18n="details.peak.toggle" title="Show each player's peak DPS (best 5 s) beside their average" data-i18n-title="details.peak.toggleTip">PEAK</button>
-              </div>
               <div class="detailsScreenshotWrapper">
                 <button class="detailsScreenshotBtn" type="button" aria-label="Save screenshot to clipboard">
                   <i data-lucide="camera"></i>
@@ -147,6 +144,20 @@
                         aria-label="Skill icon size" />
                       <span class="detailsIconSizeValue">36px</span>
                     </div>
+                    <div class="detailsSettingsLabel" data-i18n="details.peak.label">
+                      Party list
+                    </div>
+                    <label class="detailsSettingsToggle">
+                      <span
+                        class="detailsSettingsToggleLabel"
+                        data-i18n="details.peak.show">
+                        Show peak DPS (best 5 s) beside the average
+                      </span>
+                      <span class="detailsSettingsToggleControl">
+                        <input type="checkbox" class="detailsShowPeakCheckbox" />
+                        <span class="detailsSettingsToggleTrack" aria-hidden="true"></span>
+                      </span>
+                    </label>
                     <div class="detailsSettingsLabel" data-i18n="details.screenshots.label">
                       Screenshots
                     </div>

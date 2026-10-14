@@ -93,8 +93,8 @@
       "healPctTooltip": "Soins %"
     },
     "peak": {
-      "toggle": "MAX",
-      "toggleTip": "Afficher le DPS max de chaque joueur (meilleures 5 s) à côté de sa moyenne"
+      "label": "Liste du groupe",
+      "show": "Afficher le DPS max (meilleures 5 s) à côté de la moyenne"
     },
     "party": {
       "activeDps": "DPS en temps actif : {dps} ({active} sur les {total} du combat)"

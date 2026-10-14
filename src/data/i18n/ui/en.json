@@ -98,8 +98,8 @@
       "healPctTooltip": "Healing %"
     },
     "peak": {
-      "toggle": "PEAK",
-      "toggleTip": "Show each player's peak DPS (best 5 s) beside their average"
+      "label": "Party list",
+      "show": "Show peak DPS (best 5 s) beside the average"
     },
     "party": {
       "activeDps": "Active-time DPS: {dps} ({active} of the fight's {total})"
