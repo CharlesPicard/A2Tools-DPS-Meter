@@ -576,6 +576,109 @@ pub async fn plugin_check_updates(app: tauri::AppHandle) -> Result<UpdateCheck, 
     Ok(UpdateCheck { view, updated, available, catalog_error })
 }
 
+/// Plugin updates the person said No to at start, a JSON object of id →
+/// version: that version is not offered again (a newer one is).
+pub const DECLINED_UPDATES_KEY: &str = "dpsMeter.pluginUpdatesDeclined";
+/// How long after start the catalog is asked, so the check stays out of the
+/// way of startup.
+#[cfg(feature = "online")]
+const UPDATE_ALERT_DELAY: Duration = Duration::from_secs(20);
+
+/// A permission, in plain words (Settings says the same, translated).
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn describe_permission(permission: &str) -> String {
+    match permission {
+        "storage" => "Save its own data on this computer".into(),
+        "notify" => "Show short messages in its window".into(),
+        "window" => "Show and hide its own window, without taking focus from the game".into(),
+        "events:character" => "See your character's name, server, class and level".into(),
+        p => match p.strip_prefix("decoder:") {
+            Some(name) => format!("Read your own game data: {name}"),
+            None => p.to_string(),
+        },
+    }
+}
+
+/// The updates to offer at start: those not already declined at that version.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn updates_to_offer(available: Vec<PluginAvailable>, declined: &HashMap<String, String>) -> Vec<PluginAvailable> {
+    available.into_iter().filter(|a| declined.get(&a.id) != Some(&a.to)).collect()
+}
+
+/// The question asked at start: each update, with what it newly asks to do,
+/// since Yes installs it.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn update_prompt(updates: &[PluginAvailable]) -> String {
+    let mut text = String::from(if updates.len() == 1 { "A plugin update is available:\n" } else { "Plugin updates are available:\n" });
+    for u in updates {
+        text.push_str(&format!("\n{} {} → {}", u.name, u.from, u.to));
+        if !u.new_permissions.is_empty() {
+            text.push_str("\n    The new version also asks to:");
+            for p in &u.new_permissions {
+                text.push_str(&format!("\n    • {}", describe_permission(p)));
+            }
+        }
+    }
+    text.push_str("\n\nUpdate now?");
+    text
+}
+
+/// At start, ask the signed catalog for newer reviewed versions of the
+/// installed plugins and, if there are any not declined before, offer to
+/// install them: no need to open Settings and press Check for updates.
+#[cfg(feature = "online")]
+pub fn alert_updates_at_start(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(UPDATE_ALERT_DELAY).await;
+        let Ok(host) = host(&app) else { return };
+        let Some(state) = app.try_state::<AppState>() else { return };
+        let available = match available_updates(&app, &host).await {
+            Ok(available) => available,
+            Err(e) => {
+                tracing::info!("Plugins: update check at start failed: {e}");
+                return;
+            }
+        };
+        let mut declined: HashMap<String, String> =
+            state.settings.get(DECLINED_UPDATES_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let updates = updates_to_offer(available, &declined);
+        if updates.is_empty() {
+            return;
+        }
+        let names = updates.iter().map(|u| format!("{} {} → {}", u.id, u.from, u.to)).collect::<Vec<_>>().join(", ");
+        tracing::info!("Plugins: updates available: {names}");
+        let prompt = update_prompt(&updates);
+        let accepted = tokio::task::spawn_blocking(move || {
+            crate::platform::dialog::ask_yes_no("A2Tools - Plugin Update", &prompt)
+        })
+        .await
+        .unwrap_or(false);
+        if !accepted {
+            for u in &updates {
+                declined.insert(u.id.clone(), u.to.clone());
+            }
+            state.settings.set(DECLINED_UPDATES_KEY, &serde_json::to_string(&declined).unwrap_or_default());
+            return;
+        }
+        let mut failed = Vec::new();
+        for u in &updates {
+            if let Err(e) = plugin_install(app.clone(), u.id.clone()).await {
+                failed.push(format!("{}: {e}", u.name));
+            }
+        }
+        // Settings, if open, shows the new versions.
+        let _ = app.emit_to("settings", "plugins-changed", ());
+        if !failed.is_empty() {
+            let message = format!("Couldn't update:\n\n{}", failed.join("\n"));
+            let _ = tokio::task::spawn_blocking(move || {
+                crate::platform::dialog::show_error("A2Tools - Plugin Update", &message)
+            })
+            .await;
+        }
+    });
+}
+
 /// A catalog entry as Settings lists it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -1197,8 +1300,40 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{base64, content_policy, inline_page, inlined_policy, take_ready, within_reach, Pending, SETTLE};
+    use super::{base64, content_policy, inline_page, inlined_policy, take_ready, update_prompt, updates_to_offer, within_reach};
+    use super::{Pending, PluginAvailable, SETTLE};
+    use std::collections::HashMap;
     use std::time::{Duration, Instant};
+
+    fn available(id: &str, from: &str, to: &str, new_permissions: &[&str]) -> PluginAvailable {
+        PluginAvailable {
+            id: id.into(),
+            name: format!("Plugin {id}"),
+            from: from.into(),
+            to: to.into(),
+            new_permissions: new_permissions.iter().map(|p| p.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn an_update_said_no_to_is_not_offered_again_but_a_newer_one_is() {
+        let declined = HashMap::from([("a".to_string(), "1.1.0".to_string()), ("b".to_string(), "2.0.0".to_string())]);
+        let offered = updates_to_offer(
+            vec![available("a", "1.0.0", "1.1.0", &[]), available("b", "2.0.0", "2.1.0", &[]), available("c", "0.1", "0.2", &[])],
+            &declined,
+        );
+        let ids: Vec<_> = offered.iter().map(|a| a.id.as_str()).collect();
+        assert_eq!(ids, ["b", "c"]);
+    }
+
+    #[test]
+    fn the_start_prompt_lists_each_update_and_what_it_newly_asks_for() {
+        let one = update_prompt(&[available("a", "1.0.0", "1.1.0", &[])]);
+        assert_eq!(one, "A plugin update is available:\n\nPlugin a 1.0.0 → 1.1.0\n\nUpdate now?");
+        let two = update_prompt(&[available("a", "1.0.0", "1.1.0", &[]), available("b", "2.0", "2.1", &["storage", "decoder:pets"])]);
+        assert!(two.starts_with("Plugin updates are available:"));
+        assert!(two.contains("Plugin b 2.0 → 2.1\n    The new version also asks to:\n    • Save its own data on this computer\n    • Read your own game data: pets"));
+    }
 
     #[test]
     fn a_window_left_on_a_screen_goes_back_there_and_one_off_every_screen_does_not() {
