@@ -736,44 +736,62 @@ body.linuxOverlay .meter {
 .list .item .fill { --tex-x-used: 0px; }
 :root[data-texture-offset] .list .item .fill { --tex-x-used: var(--tex-x, 0px); }
 /* Flames: greys and white blended over the bar, so the fire burns in its colour. */
-:root[data-bar-texture="flames"] .list .item .fill {
+:root[data-bar-texture="flames"] .list .item .fill,
+:root[data-bar-texture="flames"] .bossHpFill,
+:root[data-bar-texture="flames"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-flames) var(--tex-x-used) 100% / 200px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Frost crystal: pale cut facets. */
-:root[data-bar-texture="crystal"] .list .item .fill {
+:root[data-bar-texture="crystal"] .list .item .fill,
+:root[data-bar-texture="crystal"] .bossHpFill,
+:root[data-bar-texture="crystal"] .detailsPanel .detailsPartyBarFill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 50%), var(--tex-crystal) var(--tex-x-used) 50% / 120px 40px repeat-x, var(--bar-base);
 }
 /* Glacier: dark facets over the bar's own colour drawn stronger. */
-:root[data-bar-texture="glacier"] .list .item .fill {
+:root[data-bar-texture="glacier"] .list .item .fill,
+:root[data-bar-texture="glacier"] .bossHpFill,
+:root[data-bar-texture="glacier"] .detailsPanel .detailsPartyBarFill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.3)), var(--tex-glacier) var(--tex-x-used) 50% / 120px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
 }
 /* Feathers: one feather along the bar, in its colour. */
-:root[data-bar-texture="feathers"] .list .item .fill {
+:root[data-bar-texture="feathers"] .list .item .fill,
+:root[data-bar-texture="feathers"] .bossHpFill,
+:root[data-bar-texture="feathers"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-feathers) var(--tex-x-used) 50% / 240px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Wing: blade-like feathers stacked down from the bar's top edge. */
-:root[data-bar-texture="wing"] .list .item .fill {
+:root[data-bar-texture="wing"] .list .item .fill,
+:root[data-bar-texture="wing"] .bossHpFill,
+:root[data-bar-texture="wing"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-wing) var(--tex-x-used) 0 / 200px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Storm: forked lightning. */
-:root[data-bar-texture="storm"] .list .item .fill {
+:root[data-bar-texture="storm"] .list .item .fill,
+:root[data-bar-texture="storm"] .bossHpFill,
+:root[data-bar-texture="storm"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-storm) var(--tex-x-used) 50% / 220px 40px repeat-x, var(--bar-base);
 }
 /* Nebula: clouds and dust lanes in the bar's own colour. */
-:root[data-bar-texture="nebula"] .list .item .fill {
+:root[data-bar-texture="nebula"] .list .item .fill,
+:root[data-bar-texture="nebula"] .bossHpFill,
+:root[data-bar-texture="nebula"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-nebula) var(--tex-x-used) 50% / 240px 40px repeat-x, var(--bar-base);
   background-blend-mode: overlay, normal;
 }
 /* Galaxy: a band in the bar's colour, its stars drawn plainly over it. */
-:root[data-bar-texture="galaxy"] .list .item .fill {
+:root[data-bar-texture="galaxy"] .list .item .fill,
+:root[data-bar-texture="galaxy"] .bossHpFill,
+:root[data-bar-texture="galaxy"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-galaxy-stars) var(--tex-x-used) 50% / 300px 40px repeat-x, var(--tex-galaxy) var(--tex-x-used) 50% / 300px 40px repeat-x, var(--bar-base);
   background-blend-mode: normal, overlay, normal;
 }
 /* Aura: ribbons of light and wisps of smoke in the bar's own colour. */
-:root[data-bar-texture="aura"] .list .item .fill {
+:root[data-bar-texture="aura"] .list .item .fill,
+:root[data-bar-texture="aura"] .bossHpFill,
+:root[data-bar-texture="aura"] .detailsPanel .detailsPartyBarFill {
   background: var(--tex-aura) var(--tex-x-used) 50% / 720px 40px repeat-x, var(--bar-base);
   background-blend-mode: overlay, normal;
 }
@@ -838,6 +856,36 @@ body.linuxOverlay .meter {
 .settingsPanel .barTextureDropdownBtn[data-texture="aura"] {
   background: var(--tex-aura) 0 50% / 720px 40px repeat-x, var(--bar-base);
   background-blend-mode: overlay, normal;
+}
+
+/* The same textures on the boss's HP bar and Details' party bars. Each has
+   its own colour as --bar (the boss bar's by how much HP is left), the
+   pattern starts at its left end, and the tile is scaled to the bar's
+   height rather than its length. */
+.bossHpFill {
+  --bar: #3fbf6e;
+  --bar-base: linear-gradient(180deg, #47d47d 0%, #2ea75f 100%);
+  --tex-x-used: 0px;
+}
+.bossHpBar.isMid .bossHpFill {
+  --bar: #e0a640;
+  --bar-base: linear-gradient(180deg, #f0bb52 0%, #cf912c 100%);
+}
+.bossHpBar.isLow .bossHpFill {
+  --bar: #de5252;
+  --bar-base: linear-gradient(180deg, #f06a6a 0%, #c93c3c 100%);
+}
+.detailsPanel .detailsPartyBarFill {
+  --bar-base: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--bar) 26%, transparent) 0%,
+    color-mix(in srgb, var(--bar) 55%, transparent) 100%
+  );
+  --tex-x-used: 0px;
+}
+:root[data-bar-texture] .bossHpFill,
+:root[data-bar-texture] .detailsPanel .detailsPartyBarFill {
+  background-size: auto 100%;
 }
 
 /* Your own row carries a lit rail on the left, so you can find yourself

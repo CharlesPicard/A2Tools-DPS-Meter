@@ -609,7 +609,7 @@ const createDetailsUI = ({
     // "All" bar
     const allBar = document.createElement("div");
     allBar.className = "detailsPartyBar" + (!selectedAttackerIds || selectedAttackerIds.length === 0 ? " isSelected" : "");
-    allBar.innerHTML = `<div class="detailsPartyBarFill" style="transform:scaleX(1)"></div><div class="detailsPartyBarContent"><span class="detailsPartyBarName">All</span></div>`;
+    allBar.innerHTML = `<div class="detailsPartyBarFill" style="transform:none;width:100%"></div><div class="detailsPartyBarContent"><span class="detailsPartyBarName">All</span></div>`;
     allBar.addEventListener("click", async () => {
       selectedAttackerIds = null;
       selectedAttackerLabel = labelText("details.all", "All");
@@ -633,7 +633,9 @@ const createDetailsUI = ({
 
       const fillEl = document.createElement("div");
       fillEl.className = "detailsPartyBarFill";
-      fillEl.style.transform = `scaleX(${Math.max(0, Math.min(1, ratio))})`;
+      // A width rather than a stretch, so a bar texture keeps its size.
+      fillEl.style.transform = "none";
+      fillEl.style.width = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
 
       const contentEl = document.createElement("div");
       contentEl.className = "detailsPartyBarContent";
