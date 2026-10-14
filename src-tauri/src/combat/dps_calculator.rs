@@ -242,13 +242,15 @@ impl DpsCalculator {
         };
         dps_data.target_mob_code = target_mob_code;
 
-        // Collect actors from selected targets
+        // Collect actors from selected targets (damage + heal)
         let mut combined_actors: HashMap<i32, i64> = HashMap::new();
+        let mut combined_heals: HashMap<i32, i64> = HashMap::new();
         let mut combined_jobs: HashMap<i32, Option<JobClass>> = HashMap::new();
         for &tid in &target_ids {
             if let Some(target_data) = combat_data.get(&tid) {
                 for (&actor_id, actor_data) in &target_data.actors {
                     *combined_actors.entry(actor_id).or_insert(0) += actor_data.total_damage;
+                    *combined_heals.entry(actor_id).or_insert(0) += actor_data.party_heal + actor_data.regen;
                     if actor_data.job.is_some() && combined_jobs.get(&actor_id).and_then(|j| j.as_ref()).is_none() {
                         combined_jobs.insert(actor_id, actor_data.job);
                     }
@@ -320,6 +322,7 @@ impl DpsCalculator {
             }
 
             entry.amount += damage as f64;
+            entry.heal_amount += *combined_heals.get(&actor_id).unwrap_or(&0) as f64;
 
             if entry.job.is_empty() {
                 if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
@@ -488,6 +491,7 @@ impl DpsCalculator {
                 }
             }
             data.dps = data.amount / bt as f64 * 1000.0;
+            data.hps = data.heal_amount / bt as f64 * 1000.0;
             data.damage_contribution = if total_damage > 0.0 {
                 data.amount / total_damage * 100.0
             } else {

@@ -2241,8 +2241,8 @@ class DpsApp {
       }
     });
     this.metricToggleBtn?.addEventListener("click", () => {
-      // DPS -> total damage -> both -> DPS.
-      const order = ["dps", "totalDamage", "both"];
+      // DPS -> total damage -> both -> HPS -> total heal -> DPS.
+      const order = ["dps", "totalDamage", "both", "hps", "totalHeal"];
       const nextMode = order[(order.indexOf(this.displayMode) + 1) % order.length];
       this.setDisplayMode(nextMode, { persist: true });
       this.renderCurrentRows();
@@ -4653,7 +4653,7 @@ class DpsApp {
   }
 
   setDisplayMode(mode, { persist = false } = {}) {
-    this.displayMode = mode === "totalDamage" || mode === "both" ? mode : "dps";
+    this.displayMode = ["totalDamage", "both", "hps", "totalHeal"].includes(mode) ? mode : "dps";
     if (persist) {
       this.safeSetStorage(this.storageKeys.displayMode, this.displayMode);
     }
@@ -4666,6 +4666,8 @@ class DpsApp {
       totalDamage: ["header.display.total", "DMG", "header.display.ariaDamage", "Showing total damage"],
       both: ["header.display.both", "BOTH", "header.display.ariaBoth", "Showing DPS and total damage"],
       dps: ["header.display.dps", "DPS", "header.display.ariaDps", "Showing DPS"],
+      hps: ["header.display.hps", "HPS", "header.display.ariaHps", "Showing healing per second"],
+      totalHeal: ["header.display.totalHeal", "HEAL", "header.display.ariaHeal", "Showing total healing"],
     }[this.displayMode];
     const label = this.i18n?.t(labelKey, labelFallback) ?? labelFallback;
     const ariaLabel = this.i18n?.t(ariaKey, ariaFallback) ?? ariaFallback;
@@ -4979,10 +4981,18 @@ class DpsApp {
         text: this.formatAbbreviatedNumber(totalDamage),
       };
     }
+    if (this.displayMode === "hps") {
+      const hps = Number(row?.hps) || 0;
+      const suffix = this.i18n?.t?.("meter.dpsSuffix", "/s") ?? "/s";
+      return { value: hps, text: `${this.formatDpsThousands(hps)}${suffix}` };
+    }
+    if (this.displayMode === "totalHeal") {
+      const healAmount = Number(row?.healAmount) || 0;
+      return { value: healAmount, text: this.formatAbbreviatedNumber(healAmount) };
+    }
     const dps = Number(row?.dps) || 0;
     const dpsText = `${this.formatDpsThousands(dps)}${this.meterDpsSuffix()}`;
     if (this.displayMode === "both") {
-      // "408k (13k/s)", as a player asked: damage leads, so the bars follow it.
       const totalDamage = Number(row?.totalDamage) || 0;
       return { value: totalDamage, text: `${this.formatAbbreviatedNumber(totalDamage)} (${dpsText})` };
     }
