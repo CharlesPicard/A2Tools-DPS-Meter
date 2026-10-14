@@ -75,6 +75,9 @@ pub struct DpsCalculator {
     /// `DataStorage::names_generation` at the last computed snapshot: a name
     /// that arrives after the last hit must still reach the meter.
     last_names_gen: u64,
+    /// `DataStorage::party_placeholders_wanted` at the last computed snapshot:
+    /// the party rows go when it turns false, ten minutes after the roster.
+    last_party_rows: bool,
     target_selection_mode: TargetSelectionMode,
     last_known_local_id: Option<i64>,
     all_targets_window_ms: i64,
@@ -103,6 +106,7 @@ impl DpsCalculator {
             last_dps_snapshot: None,
             last_damage_gen: -1,
             last_names_gen: 0,
+            last_party_rows: false,
             target_selection_mode: TargetSelectionMode::BossTargets,
             last_known_local_id: None,
             all_targets_window_ms: 120_000,
@@ -186,11 +190,19 @@ impl DpsCalculator {
         // `#id` until someone hit something.
         let current_gen = self.data_storage.damage_generation();
         let names_gen = self.data_storage.names_generation();
-        if current_gen == self.last_damage_gen && names_gen == self.last_names_gen && self.last_dps_snapshot.is_some() {
-            return self.last_dps_snapshot.as_ref().unwrap().clone();
+        let party_rows = self.data_storage.party_placeholders_wanted();
+        if current_gen == self.last_damage_gen
+            && names_gen == self.last_names_gen
+            && party_rows == self.last_party_rows
+            && self.last_dps_snapshot.is_some()
+        {
+            let mut snap = self.last_dps_snapshot.as_ref().unwrap().clone();
+            self.finalize_rows(&mut snap);
+            return snap;
         }
         self.last_damage_gen = current_gen;
         self.last_names_gen = names_gen;
+        self.last_party_rows = party_rows;
 
         // Get pre-computed aggregates (cheap — small map, not 17K packets).
         // Light snapshot: skips per-hit timestamps (unused here, grows unbounded).
@@ -290,8 +302,8 @@ impl DpsCalculator {
                 self.finalize_rows(&mut snap);
                 return snap;
             }
-            self.finalize_rows(&mut dps_data);
             self.last_dps_snapshot = Some(dps_data.clone());
+            self.finalize_rows(&mut dps_data);
             return dps_data;
         }
 
@@ -501,8 +513,6 @@ impl DpsCalculator {
             dps_data.map.remove(&uid);
         }
 
-        self.finalize_rows(&mut dps_data);
-
         dps_data.battle_time = battle_time;
         // total_damage here is the cumulative damage to the selected target(s).
         // Paired with target_max_hp it yields remaining = max(0, max_hp - dealt).
@@ -518,6 +528,7 @@ impl DpsCalculator {
             dps_data.target_current_hp = 0;
         }
         self.last_dps_snapshot = Some(dps_data.clone());
+        self.finalize_rows(&mut dps_data);
         dps_data
     }
 
@@ -532,7 +543,11 @@ impl DpsCalculator {
     /// non-positive ids as junk.
     /// Everything that has to happen to a row set before it goes on screen,
     /// in one place so a new return path cannot quietly skip half of it.
+    /// Run on every result, the cached one too, and never saved into
+    /// `last_dps_snapshot`: a party row kept there outlived the party, and
+    /// one added only on a fresh result vanished on the next cached one.
     fn finalize_rows(&self, dps_data: &mut DpsData) {
+        dps_data.party_generation = self.data_storage.party_generation();
         self.add_party_rows(dps_data);
         self.mark_supporters(dps_data);
     }
@@ -2096,6 +2111,43 @@ mod tests {
         let mut rows: Vec<i32> = shown.map.keys().copied().collect();
         rows.sort_unstable();
         assert_eq!(rows, vec![2653, 7983, 13179, 15468]);
+    }
+
+    /// Someone joining between fights shows at once, not at the next hit:
+    /// the roster changes no damage and binds no name, and the cached
+    /// result was returned until one of those did (2026-10-13: Boushii
+    /// joined in town and stayed off the meter).
+    #[test]
+    fn a_new_party_member_shows_without_a_hit() {
+        use crate::combat::data_storage::PartyMember;
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(7983));
+        let member = |slot| PartyMember { slot, ..Default::default() };
+        storage.set_party_roster(vec![("Nullception".into(), member(1)), ("Real".into(), member(2))], true);
+        let mut calc = meter(&storage);
+        let names = |calc: &mut DpsCalculator| {
+            let mut n: Vec<String> = calc.get_dps().map.values().map(|d| d.nickname.clone()).collect();
+            n.sort();
+            n
+        };
+        assert_eq!(names(&mut calc), ["Nullception", "Real"]);
+        // The same party again (a map load) is no party change.
+        let party = calc.get_dps().party_generation;
+        storage.set_party_roster(vec![("Nullception".into(), member(1)), ("Real".into(), member(2))], true);
+        assert_eq!(calc.get_dps().party_generation, party);
+        storage.set_party_roster(
+            vec![("Nullception".into(), member(1)), ("Real".into(), member(2)), ("Boushii".into(), member(3))],
+            true,
+        );
+        assert_ne!(calc.get_dps().party_generation, party, "someone joined");
+        assert_eq!(names(&mut calc), ["Boushii", "Nullception", "Real"]);
+        // And on the next update, a cached one: the row was added only to the
+        // fresh result, so it showed for one tick.
+        assert_eq!(names(&mut calc), ["Boushii", "Nullception", "Real"]);
+
+        // Leaving: the roster has you alone, and the others' rows go.
+        storage.set_party_roster(vec![("Nullception".into(), member(1))], true);
+        assert!(!names(&mut calc).contains(&"Boushii".to_string()));
     }
 
     #[test]

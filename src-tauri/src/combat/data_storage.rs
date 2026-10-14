@@ -27,6 +27,9 @@ const ZONE_RESET_DEBOUNCE_MS: i64 = 4_000;
 /// How long party members who have not fought stay on the meter after the
 /// last roster. See `DataStorage::party_placeholders_wanted`.
 const PARTY_PLACEHOLDER_MS: i64 = 10 * 60 * 1000;
+/// A "no longer in a party" record this soon after the party ended is about
+/// that same party. See `DataStorage::note_party_left`.
+const PARTY_LEFT_AFTER_END_MS: i64 = 10 * 1000;
 /// "Has not happened" for the times below. Not 0: a replayed slice's clock
 /// starts before 0 (the lead-in runs at negative offsets from the pull), so
 /// a 0 there read as "a moment ago" and suppressed every zone reset in the
@@ -434,6 +437,12 @@ struct Inner {
     /// Bumped whenever `nickname_storage` changes, so the meter redraws a
     /// name that arrives after the last hit (see `names_generation`).
     names_generation: u64,
+    /// Changes when the party's members change, or it ends (see
+    /// `party_generation`).
+    party_generation: u64,
+    /// When the party last ended (`end_party`), clock ms; `NEVER_MS` if it
+    /// has not.
+    party_ended_at_ms: i64,
     pending_nicknames: HashMap<i32, String>,
     permanent_nicknames: HashMap<i32, String>,
     summon_storage: HashMap<i32, i32>,
@@ -599,6 +608,8 @@ impl DataStorage {
                 actor_jobs: HashMap::new(),
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
+                party_generation: 0,
+            party_ended_at_ms: NEVER_MS,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
                 summon_storage: HashMap::new(),
@@ -1453,6 +1464,9 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.party_roster_at_ms = now_ms();
         inner.party_placeholders_hidden = false;
+        // The meter's rows name the party: someone joining between fights
+        // must show without waiting for a hit (see `names_generation`).
+        inner.names_generation += 1;
 
         // Leaving, being kicked, or the party disbanding all show up the same way:
         // the next complete roster has you on your own. Going from a real party
@@ -1473,20 +1487,16 @@ impl DataStorage {
                 inner.party_members.len(),
                 members.len()
             );
-            // Save the party's fights while the roster and instance still say
-            // whose they are; the hook reads this storage, so no lock is held.
             drop(inner);
-            self.run_before_reset();
-            let mut inner = self.inner.write();
-            inner.party_members.clear();
-            inner.roster_dungeon_id = 0;
-            inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
-            drop(inner);
-            self.flush_combat_only();
-            self.combat_reset_requested.store(true, Ordering::Relaxed);
+            self.end_party();
             return;
         }
 
+        let joined = members.iter().any(|(name, _)| !inner.party_members.contains_key(name));
+        let left = complete && inner.party_members.keys().any(|name| !members.iter().any(|(n, _)| n == name));
+        if joined || left {
+            inner.party_generation += 1;
+        }
         if complete {
             inner.party_members.clear();
         }
@@ -1494,6 +1504,39 @@ impl DataStorage {
             inner.party_members.insert(name, member);
         }
         bind_roster_names_by_class(&mut inner);
+    }
+
+    /// You are no longer in a party: drop the roster rows and ask for a
+    /// combat reset, so the meter stops showing teammates who are no longer
+    /// with you. The fights so far are saved first.
+    fn end_party(&self) {
+        // Save the party's fights while the roster and instance still say
+        // whose they are; the hook reads this storage, so no lock is held.
+        self.run_before_reset();
+        let mut inner = self.inner.write();
+        inner.party_members.clear();
+        inner.party_generation += 1;
+        inner.party_ended_at_ms = now_ms();
+        inner.roster_dungeon_id = 0;
+        inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
+        drop(inner);
+        self.flush_combat_only();
+        self.combat_reset_requested.store(true, Ordering::Relaxed);
+    }
+
+    /// The game said you are no longer in a party: `13 92` for an open-world
+    /// party, `1d 97` for a dungeon or raid party (the finder's, whose roster
+    /// is `02 97`). You left, were kicked, or it disbanded. An open-world
+    /// party sends no roster at all, and leaving a raid others are still in
+    /// sends none that has you on your own, so this is the only sign. When
+    /// the roster has just ended the party (`1d 97` came 3 s after it at
+    /// 00:58 on 2026-10-14), it is not ended again.
+    pub fn note_party_left(&self) {
+        if now_ms().saturating_sub(self.inner.read().party_ended_at_ms) < PARTY_LEFT_AFTER_END_MS {
+            return;
+        }
+        tracing::info!("Party left — clearing party rows");
+        self.end_party();
     }
 
     /// A zone load named the map it loads (`21 36`). The map, once known, is
@@ -1547,7 +1590,9 @@ impl DataStorage {
     /// The player reset the meter: stop showing party members who have not
     /// fought, until the game sends the next roster.
     pub fn hide_party_placeholders(&self) {
-        self.inner.write().party_placeholders_hidden = true;
+        let mut inner = self.inner.write();
+        inner.party_placeholders_hidden = true;
+        inner.names_generation += 1;
     }
 
     /// Record a power-scalar reading for an actor. See `Inner::actor_power_scalars`.
@@ -1897,7 +1942,15 @@ impl DataStorage {
         inner.names_generation += 1;
     }
 
-    /// Changes whenever a name is bound, replaced or dropped.
+    /// Changes when someone joins or leaves the party, or it ends: the meter
+    /// then drops the rows it kept from the last fight, which name the old
+    /// party. Not with every roster; the game resends it on each map load.
+    pub fn party_generation(&self) -> u64 {
+        self.inner.read().party_generation
+    }
+
+    /// Changes whenever a name is bound, replaced or dropped, and with each
+    /// party roster (the meter's rows for members who haven't fought).
     pub fn names_generation(&self) -> u64 {
         self.inner.read().names_generation
     }
