@@ -6820,7 +6820,7 @@ body:not(.isSettingsWindow):not(.isHistoryWindow):not(.isDetailsWindow) :is(inpu
 /* The private build: compiled without online features (app.rs build_features,
    tauriBridge.js sets html.a2-offline). What would reach a service is hidden:
    the account and uploads, Streaming, Send Logs to Dev, the A2Tools.app link,
-   the account and Discord offers. */
+   the account and Discord offers, and sharing field boss timers. */
 html.a2-offline .settingsNavItem[data-section="account"],
 html.a2-offline .settingsNavItem[data-section="streaming"],
 html.a2-offline #settingsSection-account,
@@ -6828,6 +6828,7 @@ html.a2-offline #settingsSection-streaming,
 html.a2-offline .settingsPanel .sendLogsRow,
 html.a2-offline .settingsPanel .a2toolsButton,
 html.a2-offline .discordPromo,
+html.a2-offline .shareBossTimersRow,
 html.a2-offline .historyUploadBtn {
   display: none !important;
 }

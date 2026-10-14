@@ -429,8 +429,10 @@ pub enum BossEventKind {
 }
 
 /// Unsent boss events kept at most (the sender drains them every second).
+#[cfg(feature = "online")]
 const MAX_BOSS_EVENTS: usize = 64;
 
+#[cfg(feature = "online")]
 fn push_boss_event(inner: &mut Inner, event: BossEvent) {
     inner.boss_events.push_back(event);
     while inner.boss_events.len() > MAX_BOSS_EVENTS {
@@ -1375,7 +1377,9 @@ impl DataStorage {
 
     pub fn mark_entity_dead(&self, entity_id: i32) {
         let mut inner = self.inner.write();
-        // A field boss killed in the open world: its exact time, to share.
+        // A field boss killed in the open world: its exact time, to share
+        // (online builds only: boss_report.rs sends it).
+        #[cfg(feature = "online")]
         if inner.current_dungeon_id <= 0 && !inner.dead_entity_ids.contains(&entity_id) {
             if let Some(&code) = inner.mob_storage.get(&entity_id) {
                 if crate::capture::field_bosses::is_field_boss(code) {
@@ -1870,10 +1874,15 @@ impl DataStorage {
         if hp > *max {
             *max = hp;
         }
-        let max = *max;
         // A field boss in the open world whose max HP is known from its spawn:
-        // the first time it drops through 75, 50 or 25 %, its percent then.
-        if inner.current_dungeon_id <= 0 && max > 0 && inner.spawn_hp_ids.contains(&id) {
+        // the first time it drops through 75, 50 or 25 %, its percent then
+        // (online builds only, as kills).
+        #[cfg(feature = "online")]
+        if let Some(max) = inner.mob_hp_data.get(&id).copied()
+            && inner.current_dungeon_id <= 0
+            && max > 0
+            && inner.spawn_hp_ids.contains(&id)
+        {
             if let Some(&code) = inner.mob_storage.get(&id) {
                 if crate::capture::field_bosses::is_field_boss(code) {
                     let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
@@ -3002,6 +3011,7 @@ mod tests {
     }
 
     /// Bodyguard Teegant (NPC 2100079), a Verteron field boss.
+    #[cfg(feature = "online")]
     #[test]
     fn a_field_boss_kill_in_the_open_world_is_queued_with_its_time() {
         let s = DataStorage::new();
@@ -3020,6 +3030,7 @@ mod tests {
         assert!(s.take_boss_events().is_empty());
     }
 
+    #[cfg(feature = "online")]
     #[test]
     fn a_field_boss_hp_milestone_goes_once_per_band_and_only_with_its_spawn_hp() {
         let s = DataStorage::new();
