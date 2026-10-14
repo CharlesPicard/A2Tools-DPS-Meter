@@ -7364,6 +7364,14 @@ html.a2-offline .historyUploadBtn {
 .settingsPanel .pluginError {
   color: #ff9a9a;
 }
+/* The switch that turns a plugin on or off, before its buttons; a plugin
+   turned off is dimmed (its switch stays clear to turn it back on). */
+.settingsPanel .pluginEnabledToggle {
+  margin-right: 4px;
+}
+.settingsPanel .pluginOff .settingsInfo {
+  opacity: 0.5;
+}
 
 /* Why a key is framed red, under its label. */
 .settingsPanel .keybindHint {

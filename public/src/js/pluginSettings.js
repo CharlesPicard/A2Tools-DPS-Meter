@@ -30,7 +30,7 @@
       status.classList.toggle("pluginError", isError && !!text);
     };
 
-    let view = { devMode: false, online: true, plugins: [] };
+    let view = { devMode: false, online: true, plugins: [], disabled: [] };
     let catalog = null; // the catalog's entries, once fetched
     // Plugins the last update changed, by id → the version before; marked
     // green until Settings closes.
@@ -115,6 +115,27 @@
       end.append(...buttons);
       item.append(info, end);
       return item;
+    };
+
+    // On: the plugin starts with the meter. Off: installed, but not running.
+    const enabledSwitch = (p, on) => {
+      const control = document.createElement("label");
+      control.className = "settingsToggleControl pluginEnabledToggle";
+      const tip = t("settings.plugins.enabledTip", "On: starts with the meter. Off: stays installed but doesn't run.");
+      control.title = tip;
+      const input = document.createElement("input");
+      input.type = "checkbox";
+      input.checked = on;
+      input.setAttribute("aria-label", `${t("settings.plugins.enabled", "Enabled")}: ${p.name}`);
+      input.addEventListener("change", () => {
+        say("");
+        run(invoke("plugin_set_enabled", { id: p.id, enabled: input.checked }));
+      });
+      const track = document.createElement("span");
+      track.className = "settingsToggleTrack";
+      track.setAttribute("aria-hidden", "true");
+      control.append(input, track);
+      return control;
     };
 
     const run = (promise) => promise.then(render).catch((e) => say(String(e)));
@@ -214,7 +235,9 @@
           title.push(" ", tag);
         }
         const buttons = [];
-        if (!p.error) {
+        const on = !(view.disabled || []).includes(p.id);
+        if (!p.error) buttons.push(enabledSwitch(p, on));
+        if (!p.error && on) {
           buttons.push(button(t("settings.plugins.open", "Open"), () => invoke("plugin_open", { id: p.id }).catch((e) => say(String(e)))));
         }
         const newer = p.reviewed && available.get(p.id);
@@ -232,6 +255,7 @@
         }));
         const item = pluginRow(title, p.error || p.description || p.path, !!p.error, buttons);
         if (wasUpdated) item.classList.add("pluginUpdated");
+        if (!p.error && !on) item.classList.add("pluginOff");
         list.append(item);
       }
       empty.hidden = list.childElementCount > 0;

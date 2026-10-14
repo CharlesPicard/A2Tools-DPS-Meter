@@ -3188,6 +3188,7 @@ pub fn run() {
             crate::plugins::plugin_window,
             crate::plugins::plugin_close,
             crate::plugins::plugin_open,
+            crate::plugins::plugin_set_enabled,
             crate::plugins::plugin_hello,
             crate::plugins::plugin_storage_get,
             crate::plugins::plugin_boss_timers,
