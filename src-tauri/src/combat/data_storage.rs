@@ -30,6 +30,16 @@ const PARTY_PLACEHOLDER_MS: i64 = 10 * 60 * 1000;
 /// A "no longer in a party" record this soon after the party ended is about
 /// that same party. See `DataStorage::note_party_left`.
 const PARTY_LEFT_AFTER_END_MS: i64 = 10 * 1000;
+/// Whether a player other than you has damage on the meter (a summon counts
+/// as its owner). With no local player known, any player counts.
+fn others_on_meter(inner: &Inner) -> bool {
+    let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok());
+    inner.target_combat.values().flat_map(|t| t.actors.keys()).any(|&actor| {
+        let owner = inner.summon_storage.get(&actor).copied().unwrap_or(actor);
+        Some(owner) != me && (inner.known_player_ids.contains(&owner) || inner.nickname_storage.contains_key(&owner))
+    })
+}
+
 /// "Has not happened" for the times below. Not 0: a replayed slice's clock
 /// starts before 0 (the lead-in runs at negative offsets from the pull), so
 /// a 0 there read as "a moment ago" and suppressed every zone reset in the
@@ -1531,9 +1541,21 @@ impl DataStorage {
     /// sends none that has you on your own, so this is the only sign. When
     /// the roster has just ended the party (`1d 97` came 3 s after it at
     /// 00:58 on 2026-10-14), it is not ended again.
+    ///
+    /// Nor is anything cleared when there is no party to clear: no roster and
+    /// nobody but you on the meter. Should the game ever send one of these in
+    /// another case (an invite declined or failed, a login, a zone change
+    /// while solo), a fight of your own is not wiped.
     pub fn note_party_left(&self) {
-        if now_ms().saturating_sub(self.inner.read().party_ended_at_ms) < PARTY_LEFT_AFTER_END_MS {
-            return;
+        {
+            let inner = self.inner.read();
+            if now_ms().saturating_sub(inner.party_ended_at_ms) < PARTY_LEFT_AFTER_END_MS {
+                return;
+            }
+            if inner.party_members.is_empty() && !others_on_meter(&inner) {
+                tracing::info!("Party left, but no party and nobody else on the meter: nothing to clear");
+                return;
+            }
         }
         tracing::info!("Party left — clearing party rows");
         self.end_party();
@@ -3285,5 +3307,29 @@ mod tests {
         assert_eq!(s.current_dungeon_id(), 610073);
         s.note_map_load(610073);
         assert_eq!(s.current_dungeon_id(), 610073, "a teleport inside keeps it");
+    }
+
+    /// A "no longer in a party" record with no party to clear (no roster,
+    /// nobody but you on the meter) leaves your fight alone; with another
+    /// player on the meter (an open-world party has no roster), it clears.
+    #[test]
+    fn leaving_a_party_clears_only_when_there_was_one() {
+        let s = DataStorage::new();
+        s.note_party_left();
+        assert!(!s.take_combat_reset_requested(), "an empty meter");
+
+        s.set_local_player_id(Some(101));
+        s.append_nickname_authoritative(101, "Nullception");
+        s.append_damage(hit(101, 900, 1_000, 500, false));
+        s.register_confirmed_summon_by_id(5_000, 101);
+        s.append_damage(hit(5_000, 900, 1_500, 200, false));
+        s.note_party_left();
+        assert!(!s.take_combat_reset_requested(), "only you, and your summon");
+        assert!(s.get_combat_snapshot()[&900].total_damage > 0, "your fight is kept");
+
+        s.append_nickname_authoritative(202, "JinSoul");
+        s.append_damage(hit(202, 900, 2_000, 300, false));
+        s.note_party_left();
+        assert!(s.take_combat_reset_requested(), "an open-world party: someone else on the meter");
     }
 }
