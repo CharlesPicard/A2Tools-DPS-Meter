@@ -242,21 +242,22 @@ impl DpsCalculator {
         };
         dps_data.target_mob_code = target_mob_code;
 
-        // Collect actors from selected targets (damage + heal)
+        // Collect actors from selected targets
         let mut combined_actors: HashMap<i32, i64> = HashMap::new();
-        let mut combined_heals: HashMap<i32, i64> = HashMap::new();
         let mut combined_jobs: HashMap<i32, Option<JobClass>> = HashMap::new();
         for &tid in &target_ids {
             if let Some(target_data) = combat_data.get(&tid) {
                 for (&actor_id, actor_data) in &target_data.actors {
                     *combined_actors.entry(actor_id).or_insert(0) += actor_data.total_damage;
-                    *combined_heals.entry(actor_id).or_insert(0) += actor_data.party_heal + actor_data.regen;
                     if actor_data.job.is_some() && combined_jobs.get(&actor_id).and_then(|j| j.as_ref()).is_none() {
                         combined_jobs.insert(actor_id, actor_data.job);
                     }
                 }
             }
         }
+
+        // Heal data lives in a separate global store, not per-target
+        let heal_snapshot = self.data_storage.get_heal_snapshot();
 
         // Calculate battle time
         let battle_time = if self.current_target != 0 {
@@ -322,7 +323,10 @@ impl DpsCalculator {
             }
 
             entry.amount += damage as f64;
-            entry.heal_amount += *combined_heals.get(&actor_id).unwrap_or(&0) as f64;
+            let actor_heal: i64 = heal_snapshot.get(&actor_id)
+                .map(|skills| skills.values().map(|s| s.total_heal).sum())
+                .unwrap_or(0);
+            entry.heal_amount += actor_heal as f64;
 
             if entry.job.is_empty() {
                 if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
