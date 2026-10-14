@@ -424,18 +424,12 @@ pub struct BossEvent {
 pub enum BossEventKind {
     /// Killed at this moment (unix ms).
     Killed { at_ms: i64 },
-    /// Its HP first dropped through a tenth (90, 80 ... 10 %): the percent then.
-    Hp { percent: u8 },
 }
 
 /// Unsent boss events kept at most (the sender drains them every second).
 #[cfg(feature = "online")]
 const MAX_BOSS_EVENTS: usize = 64;
 
-/// A field boss's HP is reported as it drops through each tenth, lowest
-/// first so a jump through several finds the lowest.
-#[cfg(feature = "online")]
-const HP_STEPS: [u8; 9] = [10, 20, 30, 40, 50, 60, 70, 80, 90];
 
 #[cfg(feature = "online")]
 fn push_boss_event(inner: &mut Inner, event: BossEvent) {
@@ -558,9 +552,10 @@ struct Inner {
     /// Entities whose max HP came from their spawn record, so a percentage of
     /// it can be trusted (a peak seen later may be below the real max).
     spawn_hp_ids: HashSet<i32>,
-    /// A field boss's lowest HP milestone reported so far (100, 90 ... 10),
-    /// per entity.
-    boss_hp_band: HashMap<i32, u8>,
+    /// A field boss's HP now (NPC code, whole percent), per entity, and the
+    /// percent last handed to the sender (`take_boss_hp`).
+    boss_hp_now: HashMap<i32, (i32, u8)>,
+    boss_hp_sent: HashMap<i32, u8>,
     /// Field boss kills and HP milestones in the open world, not yet sent
     /// (`boss_report.rs`).
     boss_events: VecDeque<BossEvent>,
@@ -695,7 +690,8 @@ impl DataStorage {
                 boss_maps: Vec::new(),
                 boss_map_seq: 0,
                 spawn_hp_ids: HashSet::new(),
-                boss_hp_band: HashMap::new(),
+                boss_hp_now: HashMap::new(),
+                boss_hp_sent: HashMap::new(),
                 boss_events: VecDeque::new(),
                 a2tools_users: HashSet::new(),
                 last_hp: HashMap::new(),
@@ -1374,7 +1370,8 @@ impl DataStorage {
             let mut inner = self.inner.write();
             inner.mob_hp_data.insert(mid, hp);
             inner.spawn_hp_ids.insert(mid);
-            inner.boss_hp_band.remove(&mid);
+            inner.boss_hp_now.remove(&mid);
+            inner.boss_hp_sent.remove(&mid);
         }
     }
 
@@ -1387,7 +1384,22 @@ impl DataStorage {
         self.inner.read().a2tools_users.clone()
     }
 
-    /// The field boss kills and HP milestones seen since the last call.
+    /// The field bosses whose HP changed since the last call: (NPC code,
+    /// whole percent). `boss_report.rs` sends them every 3 seconds.
+    pub fn take_boss_hp(&self) -> Vec<(i32, u8)> {
+        let mut inner = self.inner.write();
+        let now: Vec<(i32, i32, u8)> = inner.boss_hp_now.iter().map(|(&id, &(npc, pct))| (id, npc, pct)).collect();
+        let mut out = Vec::new();
+        for (id, npc, pct) in now {
+            if inner.boss_hp_sent.get(&id) != Some(&pct) {
+                inner.boss_hp_sent.insert(id, pct);
+                out.push((npc, pct));
+            }
+        }
+        out
+    }
+
+    /// The field boss kills seen since the last call.
     pub fn take_boss_events(&self) -> Vec<BossEvent> {
         self.inner.write().boss_events.drain(..).collect()
     }
@@ -1404,6 +1416,8 @@ impl DataStorage {
                 }
             }
         }
+        inner.boss_hp_now.remove(&entity_id);
+        inner.boss_hp_sent.remove(&entity_id);
         inner.dead_entity_ids.insert(entity_id);
         inner.hp_floored_ids.remove(&entity_id);
         inner.death_log.push_back((entity_id, now_ms(), None));
@@ -1892,8 +1906,7 @@ impl DataStorage {
             *max = hp;
         }
         // A field boss in the open world whose max HP is known from its spawn:
-        // each time it first drops through a tenth (90, 80 ... 10 %), its percent then
-        // (online builds only, as kills).
+        // its HP now, for the sender's next pass (online builds only, as kills).
         #[cfg(feature = "online")]
         if let Some(max) = inner.mob_hp_data.get(&id).copied()
             && inner.current_dungeon_id <= 0
@@ -1903,12 +1916,7 @@ impl DataStorage {
             if let Some(&code) = inner.mob_storage.get(&id) {
                 if crate::capture::field_bosses::is_field_boss(code) {
                     let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
-                    let band = inner.boss_hp_band.get(&id).copied().unwrap_or(100);
-                    // The lowest tenth crossed: a jump through several sends one.
-                    if let Some(&crossed) = HP_STEPS.iter().find(|&&m| pct <= m && band > m) {
-                        inner.boss_hp_band.insert(id, crossed);
-                        push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Hp { percent: pct } });
-                    }
+                    inner.boss_hp_now.insert(id, (code, pct));
                 }
             }
         }
@@ -3050,25 +3058,23 @@ mod tests {
 
     #[cfg(feature = "online")]
     #[test]
-    fn a_field_boss_hp_milestone_goes_once_per_band_and_only_with_its_spawn_hp() {
+    fn a_field_boss_hp_goes_when_it_changed_and_only_with_its_spawn_hp() {
         let s = DataStorage::new();
         s.append_mob(500, 2100079);
         s.append_mob_hp(500, 1000);
-        for hp in [950, 880, 870, 790, 600, 400, 380, 120] {
-            s.set_mob_current_hp(500, hp);
-        }
-        let pct: Vec<u8> = s.take_boss_events().into_iter().map(|e| match e.kind {
-            BossEventKind::Hp { percent } => percent,
-            _ => 0,
-        }).collect();
-        // 88 % crosses 90, 79 % crosses 80, 60 % crosses 70 and 60 (once, the
-        // lowest), 40 % crosses 50 and 40, 12 % crosses 30 and 20.
-        assert_eq!(pct, vec![88, 79, 60, 40, 12]);
+        s.set_mob_current_hp(500, 950);
+        assert_eq!(s.take_boss_hp(), vec![(2100079, 95)]);
+        assert!(s.take_boss_hp().is_empty(), "unchanged: nothing");
+        s.set_mob_current_hp(500, 948); // still 94 %... 94.8 -> 94
+        s.set_mob_current_hp(500, 700);
+        assert_eq!(s.take_boss_hp(), vec![(2100079, 70)], "the percent now, once");
+        // Dead: no more HP for it.
+        s.mark_entity_dead(500);
+        assert!(s.take_boss_hp().is_empty());
         // Its spawn unseen: its max is a guess, so no percentages.
         s.append_mob(501, 2100079);
         s.set_mob_current_hp(501, 800);
-        s.set_mob_current_hp(501, 300);
-        assert!(s.take_boss_events().is_empty());
+        assert!(s.take_boss_hp().is_empty());
     }
 
     #[test]

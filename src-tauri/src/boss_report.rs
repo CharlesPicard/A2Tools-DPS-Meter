@@ -15,9 +15,10 @@
 //! nothing, and a map read from inside a rift (its header not 0) isn't sent
 //! until it is known whose server it shows.
 //!
-//! Field boss kills and HP milestones (each tenth: 90, 80 ... 10 %) in the open world go
-//! too, as they happen (`spawn_events`): the boss, the server and the time or
-//! percent. a2tools.app passes them on to Aion 2 Timers.
+//! Field boss kills in the open world go too, as they happen, and a field
+//! boss's HP every 3 seconds while it changes (`spawn_events`): the boss, the
+//! server and the time or percent. a2tools.app passes them on to Aion 2
+//! Timers when a boss's HP has dropped by a percent or more.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -64,8 +65,11 @@ pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
 /// known (the meter started mid-game).
 const EVENT_WAIT_MS: i64 = 5 * 60_000;
 
-/// The request for a field boss event: (path, body), or None for a boss
-/// a2tools.app doesn't know.
+/// HP is sent this often, for the bosses whose percent changed.
+const HP_EVERY: Duration = Duration::from_secs(3);
+
+/// The request for a kill: (path, body), or None for a boss a2tools.app
+/// doesn't know.
 pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str, serde_json::Value)> {
     let id = crate::capture::field_bosses::world_map_id(event.npc)?;
     Some(match event.kind {
@@ -73,21 +77,45 @@ pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str,
             "/api/boss-timers/kill",
             json!({ "format": 1, "server": server_id, "id": id, "diedAt": at_ms / 1000 }),
         ),
-        BossEventKind::Hp { percent } => (
-            "/api/boss-timers/hp",
-            json!({ "format": 1, "server": server_id, "id": id, "hp": percent }),
-        ),
     })
+}
+
+/// The HP request for the bosses that changed: (NPC code, percent) each.
+pub fn hp_request(server_id: u16, changed: &[(i32, u8)]) -> Option<serde_json::Value> {
+    let bosses: Vec<_> = changed
+        .iter()
+        .filter_map(|&(npc, pct)| crate::capture::field_bosses::world_map_id(npc).map(|id| json!({ "id": id, "hp": pct })))
+        .collect();
+    (!bosses.is_empty()).then(|| json!({ "format": 1, "server": server_id, "bosses": bosses }))
 }
 
 /// Kills and HP milestones, sent within a second of happening.
 fn spawn_events(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         let mut waiting: Vec<(i64, BossEvent)> = Vec::new();
+        let mut last_hp = std::time::Instant::now();
         loop {
             tokio::time::sleep(Duration::from_secs(1)).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
             let now = crate::clock::now_ms();
+            // HP every 3 seconds, the bosses whose percent changed; dropped
+            // when it can't go (HP is only worth anything now).
+            if last_hp.elapsed() >= HP_EVERY {
+                last_hp = std::time::Instant::now();
+                let changed = state.data_storage.take_boss_hp();
+                let server = state.data_storage.local_profile().server_id;
+                let off = state.settings.get(SETTING_KEY).as_deref() == Some("false");
+                if let (false, false, Some(body)) = (off, server == 0, hp_request(server, &changed)) {
+                    let url = format!("{}/api/boss-timers/hp", crate::account::base_url());
+                    let request = state.http.post(&url)
+                        .header(reqwest::header::CONTENT_TYPE, "application/json")
+                        .body(body.to_string())
+                        .timeout(Duration::from_secs(10));
+                    if let Err(e) = request.send().await {
+                        tracing::debug!("Boss timers: could not send HP: {e}");
+                    }
+                }
+            }
             waiting.extend(state.data_storage.take_boss_events().into_iter().map(|e| (now, e)));
             if waiting.is_empty() {
                 continue;
@@ -173,14 +201,15 @@ mod tests {
     use crate::capture::boss_map::BossOnMap;
 
     #[test]
-    fn a_kill_and_an_hp_milestone_name_the_boss_by_its_world_map_id() {
+    fn a_kill_and_the_hp_name_the_boss_by_its_world_map_id() {
         let kill = BossEvent { npc: 2100079, kind: BossEventKind::Killed { at_ms: 1_791_993_638_495 } };
         let (path, body) = event_request(1301, &kill).unwrap();
         assert_eq!(path, "/api/boss-timers/kill");
         assert_eq!(body, json!({ "format": 1, "server": 1301, "id": 101006, "diedAt": 1_791_993_638 }));
-        let hp = BossEvent { npc: 2100079, kind: BossEventKind::Hp { percent: 49 } };
-        assert_eq!(event_request(1301, &hp).unwrap().1["hp"], 49);
-        assert!(event_request(1301, &BossEvent { npc: 1, kind: BossEventKind::Hp { percent: 50 } }).is_none());
+        assert!(event_request(1301, &BossEvent { npc: 1, kind: BossEventKind::Killed { at_ms: 0 } }).is_none());
+        let hp = hp_request(1301, &[(2100079, 49), (1, 50)]).unwrap();
+        assert_eq!(hp, json!({ "format": 1, "server": 1301, "bosses": [{ "id": 101006, "hp": 49 }] }));
+        assert!(hp_request(1301, &[(1, 50)]).is_none());
     }
 
     #[test]

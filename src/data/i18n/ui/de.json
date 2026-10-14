@@ -449,7 +449,7 @@
       "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
       "updateRate": "Wie oft sich die Zahlen des Meters aktualisieren. Schneller zeigt Treffer früher, braucht aber mehr CPU.",
       "partyPresence": "Gruppenmitglieder, die auch A2Tools nutzen, sehen ein kleines A2 neben deinem Namen und du ihres. Jeder in deiner Gruppe mit A2Tools sieht es und weiß damit, dass du ein Drittanbieter-Meter nutzt. Gesendet werden nur Hashes von Charakternamen und Servern.",
-      "shareBossTimers": "Teilt Feldboss-Timer über a2tools.app (und seinen Partner Aion 2 Timers) mit anderen Spielern: die Bosse auf deiner Karte, wenn du sie öffnest, und Feldbosse, die du sterben siehst, und ihre HP bei jedem Zehntel, das sie verlieren. Gesendet werden nur Server, Bosse, Zeiten und HP.",
+      "shareBossTimers": "Teilt Feldboss-Timer über a2tools.app (und seinen Partner Aion 2 Timers) mit anderen Spielern: die Bosse auf deiner Karte, wenn du sie öffnest, und Feldbosse, die du sterben siehst, und ihre HP, während du gegen sie kämpfst. Gesendet werden nur Server, Bosse, Zeiten und HP.",
       "debugLogging": "Schreibt ein Diagnoseprotokoll, mit dem der Entwickler Probleme finden kann.",
       "saveRawPackets": "Zeichnet rohen Spielverkehr für Fehlerberichte auf. Das Debug-Protokoll wird mit eingeschaltet.",
       "globalHotkeys": "Die Tasten unten funktionieren überall, auch wenn das Spiel im Vordergrund ist. Aus: Sie werden für andere Programme freigegeben. Unter Linux registriert der Desktop sie und fragt eventuell, ob du sie erlaubst.",
