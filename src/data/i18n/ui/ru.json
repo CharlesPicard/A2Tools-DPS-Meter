@@ -97,6 +97,9 @@
       "healPct": "Л%",
       "healPctTooltip": "Лечение %"
     },
+    "party": {
+      "activeDps": "DPS за активное время: {dps} ({active} из {total} боя)"
+    },
     "stats": {
       "totalDamage": "Общий урон",
       "contribution": "Вклад",
@@ -111,7 +114,8 @@
       "multiHitDamage": "Урон мультиудара",
       "multiHitHits": "Мультиудары",
       "maxHp": "Макс. HP",
-      "deaths": "Смерти"
+      "deaths": "Смерти",
+      "peakDps": "Пиковый DPS (5 с)"
     },
     "titleFor": "для",
     "titleVs": "против",

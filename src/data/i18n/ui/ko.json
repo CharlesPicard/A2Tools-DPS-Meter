@@ -92,6 +92,9 @@
       "healPct": "치유%",
       "healPctTooltip": "치유량 %"
     },
+    "party": {
+      "activeDps": "활동 시간 DPS: {dps} (전투 {total} 중 {active})"
+    },
     "stats": {
       "totalDamage": "총 피해",
       "contribution": "기여도",
@@ -106,7 +109,8 @@
       "maxHp": "최대 HP",
       "hits": "타격",
       "selfHealing": "자가 회복",
-      "deaths": "사망"
+      "deaths": "사망",
+      "peakDps": "최고 DPS (5초)"
     },
     "titleFor": "대상",
     "titleVs": "vs",

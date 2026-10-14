@@ -92,6 +92,9 @@
       "healPct": "S%",
       "healPctTooltip": "Soins %"
     },
+    "party": {
+      "activeDps": "DPS en temps actif : {dps} ({active} sur les {total} du combat)"
+    },
     "stats": {
       "totalDamage": "Dégâts totaux",
       "contribution": "Contribution",
@@ -106,7 +109,8 @@
       "multiHitDamage": "Dégâts des coups multiples",
       "multiHitHits": "Coups multiples",
       "maxHp": "PV max.",
-      "deaths": "Morts"
+      "deaths": "Morts",
+      "peakDps": "DPS max (5 s)"
     },
     "titleFor": "pour",
     "titleVs": "contre",

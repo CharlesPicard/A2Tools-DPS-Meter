@@ -92,6 +92,9 @@
       "healPct": "治療%",
       "healPctTooltip": "治療占比"
     },
+    "party": {
+      "activeDps": "有效時間 DPS：{dps}（戰鬥 {total} 中的 {active}）"
+    },
     "stats": {
       "totalDamage": "總傷害",
       "contribution": "貢獻度",
@@ -106,7 +109,8 @@
       "maxHp": "最大HP",
       "hits": "命中次數",
       "selfHealing": "自我治療",
-      "deaths": "死亡次數"
+      "deaths": "死亡次數",
+      "peakDps": "峰值 DPS（5 秒）"
     },
     "titleFor": "針對",
     "titleVs": "vs",

@@ -92,6 +92,9 @@
       "healPct": "回復%",
       "healPctTooltip": "回復量 %"
     },
+    "party": {
+      "activeDps": "攻撃時間DPS: {dps}（戦闘 {total} 中 {active}）"
+    },
     "stats": {
       "totalDamage": "総ダメージ",
       "contribution": "貢献度",
@@ -106,7 +109,8 @@
       "multiHitDamage": "多段ヒットのダメージ",
       "multiHitHits": "多段ヒット",
       "maxHp": "最大HP",
-      "deaths": "死亡回数"
+      "deaths": "死亡回数",
+      "peakDps": "最大DPS（5秒）"
     },
     "titleFor": "対象",
     "titleVs": "対",

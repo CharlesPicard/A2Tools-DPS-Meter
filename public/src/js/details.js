@@ -192,6 +192,53 @@ const createDetailsUI = ({
     return formatCount(ids ? d.deaths.filter((x) => ids.has(Number(x?.actorId))).length : d.deaths.length);
   };
 
+  // Every hit's time (ms into the fight) and its share of the skill's
+  // damage, from the skills' own hit times.
+  const hitsOf = (skills, keep = () => true) => {
+    const hits = [];
+    for (const skill of Array.isArray(skills) ? skills : []) {
+      if (!skill || !keep(skill)) continue;
+      const times = Array.isArray(skill.hitTimestamps) ? skill.hitTimestamps : [];
+      if (!times.length) continue;
+      const each = (Number(skill.dmg) || 0) / times.length;
+      for (const ts of times) hits.push({ ts: Number(ts), dmg: each });
+    }
+    return hits.sort((a, b) => a.ts - b.ts);
+  };
+
+  // The most damage done in any 5 seconds of the fight, per second: the
+  // selected players' together (everyone's for the fight as a whole).
+  const BURST_WINDOW_MS = 5000;
+  const peakDps = (d) => {
+    const hits = hitsOf(d?.skills);
+    if (!hits.length) return "-";
+    let best = 0;
+    let sum = 0;
+    let lo = 0;
+    for (const hit of hits) {
+      sum += hit.dmg;
+      while (hits[lo].ts <= hit.ts - BURST_WINDOW_MS) sum -= hits[lo++].dmg;
+      if (sum > best) best = sum;
+    }
+    return `${formatDamageCompact(best / (BURST_WINDOW_MS / 1000))}${labelText("meter.dpsSuffix", "/s")}`;
+  };
+
+  // Each player's first and last hit (ms into the fight), for the DPS over
+  // the time they were hitting.
+  const hitSpans = (details) => {
+    const spans = new Map();
+    for (const skill of Array.isArray(details?.skills) ? details.skills : []) {
+      const actorId = Number(skill?.actorId);
+      const times = Array.isArray(skill?.hitTimestamps) ? skill.hitTimestamps.map(Number) : [];
+      if (!Number.isFinite(actorId) || !times.length) continue;
+      const span = spans.get(actorId) || { first: Infinity, last: -Infinity };
+      span.first = Math.min(span.first, ...times);
+      span.last = Math.max(span.last, ...times);
+      spans.set(actorId, span);
+    }
+    return spans;
+  };
+
   const STATUS = [
     {
       key: "details.stats.totalDamage",
@@ -213,6 +260,7 @@ const createDetailsUI = ({
     { key: "details.stats.parryRate", fallback: "Parry Rate", getValue: (d) => pctText(d?.totalParryPct) },
     { key: "details.stats.regen", fallback: "Regen", getValue: (d) => formatDamageCompact(d?.totalRegen) },
     { key: "details.stats.deaths", fallback: "Deaths", getValue: (d) => deathCount(d) },
+    { key: "details.stats.peakDps", fallback: "Peak DPS (5 s)", getValue: (d) => peakDps(d) },
   ];
 
   // Stats shown when the DMG/HEAL toggle is on HEAL. Fewer, healing-relevant rows;
@@ -551,6 +599,7 @@ const createDetailsUI = ({
     const topDmg = actors.reduce((m, a) => Math.max(m, Number(a.totalDmg) || 0), 1);
     const btMs = Number(battleTimeMs) || Number(lastDetails?.battleTimeMs) || 0;
     const dpsSuffix = labelText("meter.dpsSuffix", "/s");
+    const spans = hitSpans(lastUnfilteredDetails || lastDetails);
 
     const rerender = () => {
       const ctx = buildPartyBarStats();
@@ -612,6 +661,16 @@ const createDetailsUI = ({
       const dpsEl = document.createElement("span");
       dpsEl.className = "detailsPartyBarDps";
       dpsEl.textContent = btMs > 0 ? `${formatDamageCompact(dmg / btMs * 1000)}${dpsSuffix}` : "-";
+      // The figure is over the whole fight; the tooltip gives it over the time
+      // this player was hitting (first hit to last; at least a second).
+      const span = spans.get(actorId);
+      if (span && btMs > 0) {
+        const activeMs = Math.max(1000, span.last - span.first);
+        dpsEl.title = labelText("details.party.activeDps", "Active-time DPS: {dps} ({active} of the fight's {total})")
+          .replace("{dps}", `${formatDamageCompact(dmg / activeMs * 1000)}${dpsSuffix}`)
+          .replace("{active}", ftlTime(activeMs / 1000))
+          .replace("{total}", ftlTime(btMs / 1000));
+      }
 
       const dmgEl = document.createElement("span");
       dmgEl.className = "detailsPartyBarDmg";
