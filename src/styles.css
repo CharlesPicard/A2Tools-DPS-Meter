@@ -2647,10 +2647,11 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
    outside it scroll the image clear of the text, and since the fill is
    transparent and clipped to the gradient, the name simply disappears for part
    of every cycle — which is exactly what the first version of this did.
-   Both ends of the gradient are the same gold, so the wrap is invisible. */
+   The metal underneath is its own layer at 100%, so the name stays gold
+   wherever the shine is. */
 @keyframes a2toolsGoldSweep {
-  from { background-position: 100% 50%; }
-  to   { background-position: 0% 50%; }
+  from { background-position: 100% 50%, 0 0; }
+  to   { background-position: 0% 50%, 0 0; }
 }
 
 @supports ((background-clip: text) or (-webkit-background-clip: text)) {
@@ -2662,26 +2663,33 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
        gold and the effect reads as a rare glint. A second band roughly opposite
        it means one is nearly always crossing the name. Both ends are the same
        gold so the wrap stays invisible. */
-    background-image: linear-gradient(
-      /* Steeper than the usual near-horizontal sweep so the band reads as a
-         diagonal shine crossing the glyphs rather than a bar sliding sideways.
-         Kept off a true 45deg: on a line of text only ~17px tall, too steep and
-         the band clears the name almost as soon as it arrives. */
-      125deg,
-      #c9922f 0%,
-      #ffeaad 13%,
-      #fffdf2 18%,
-      #ffeaad 23%,
-      #c9922f 34%,
-      #e9bb5c 50%,
-      #c9922f 66%,
-      #ffeaad 75%,
-      #fffdf2 80%,
-      #ffeaad 85%,
-      #c9922f 100%
-    );
-    background-size: 280% 100%;
-    background-repeat: no-repeat;
+    /* Two layers, clipped to the glyphs. Underneath, polished metal: light
+       along the top of the letters, deep amber at the foot, a little bounce
+       light at the very bottom. On top, a narrow white shine that sweeps
+       across once (a2toolsGoldSweep) and comes to rest past the end. */
+    background-image:
+      linear-gradient(
+        /* Steeper than the usual near-horizontal sweep so the band reads as a
+           diagonal shine crossing the glyphs rather than a bar sliding sideways. */
+        115deg,
+        rgba(255, 255, 255, 0) 0%,
+        rgba(255, 255, 255, 0) 40%,
+        rgba(255, 252, 235, 0.95) 48%,
+        rgba(255, 255, 255, 1) 50%,
+        rgba(255, 252, 235, 0.95) 52%,
+        rgba(255, 255, 255, 0) 60%,
+        rgba(255, 255, 255, 0) 100%
+      ),
+      linear-gradient(
+        180deg,
+        #fff7d6 0%,
+        #ffe390 24%,
+        #f9c84e 46%,
+        #d9952a 70%,
+        #b8771c 84%,
+        #f3c763 100%
+      );
+    background-size: 300% 100%, 100% 100%;
     -webkit-background-clip: text;
     background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -2690,12 +2698,15 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
        composited result instead, which is what keeps the name readable once the
        gradient is doing the colouring. */
     text-shadow: none;
-    /* A tight, dark outline first, so the gold reads over bright bars and
-       textures, then the drop shadow and the glow. */
+    /* A tight dark outline (twice, for weight), a drop shadow and a dark
+       halo first, so the gold reads over bright and gold bars and textures;
+       the glow after them is kept faint, or on a gold bar it washes out. */
     filter:
-      drop-shadow(0 0 0.6px rgba(0, 0, 0, 1))
-      drop-shadow(0 1px 1px rgba(0, 0, 0, 1))
-      drop-shadow(0 0 5px rgba(255, 190, 60, 0.42));
+      drop-shadow(0 0 0.8px rgba(0, 0, 0, 1))
+      drop-shadow(0 0 0.8px rgba(0, 0, 0, 1))
+      drop-shadow(0 1px 1.2px rgba(0, 0, 0, 0.95))
+      drop-shadow(0 0 3px rgba(40, 22, 0, 0.7))
+      drop-shadow(0 0 5px rgba(255, 196, 70, 0.3));
     /* Once, when the name turns gold (a supporter joins the meter), then it
        holds with a band across the start of the name. */
     animation: a2toolsGoldSweep 2.4s ease-out 1 both;
@@ -2709,7 +2720,7 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   .detailsPanel .detailsPartyBarName.isSupporter,
   .hoverDetailsTooltipHeader .isSupporter {
     animation: none;
-    background-position: 50% 50%;
+    background-position: 0% 50%, 0 0;
   }
 }
 
