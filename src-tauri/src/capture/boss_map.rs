@@ -36,6 +36,8 @@ pub struct BossMap {
     /// enemy map is viewed from a rift; reports only go out when it is 0.
     pub header: u16,
     pub bosses: Vec<BossOnMap>,
+    /// When the meter read it (unix ms).
+    pub seen_ms: i64,
 }
 
 const OPCODE: [u8; 2] = [0x01, 0x91];
@@ -110,7 +112,7 @@ pub fn parse(packet: &[u8], now_ms: i64) -> Option<BossMap> {
         bosses.push(BossOnMap { id: u32::try_from(id).ok()?, up, time_ms });
         i = end;
     }
-    Some(BossMap { map_id, header, bosses })
+    Some(BossMap { map_id, header, bosses, seen_ms: now_ms })
 }
 
 #[cfg(test)]

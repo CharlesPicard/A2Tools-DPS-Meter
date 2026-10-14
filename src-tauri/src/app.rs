@@ -3190,6 +3190,7 @@ pub fn run() {
             crate::plugins::plugin_open,
             crate::plugins::plugin_hello,
             crate::plugins::plugin_storage_get,
+            crate::plugins::plugin_boss_timers,
             crate::plugins::plugin_storage_set,
             get_dps_snapshot,
             get_skill_details,

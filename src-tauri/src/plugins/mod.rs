@@ -33,6 +33,8 @@ use decoder::{Decoder, DecoderSpec};
 pub const DEV_MODE_KEY: &str = "dpsMeter.pluginDevMode";
 /// The folders loaded in developer mode, a JSON array of paths.
 pub const DEV_FOLDERS_KEY: &str = "dpsMeter.devPlugins";
+/// How often plugins' "game" event (is AION2 open) is looked at.
+const GAME_CHECK: Duration = Duration::from_secs(5);
 /// The scheme plugin files are served from (`http://a2plugin.localhost/` on
 /// Windows, `a2plugin://localhost/` elsewhere).
 pub const SCHEME: &str = "a2plugin";
@@ -173,6 +175,27 @@ impl Default for PluginHost {
     }
 }
 
+/// A map the player opened, as a2.on("bossMap") hands it on: the feed's
+/// shape (times in unix seconds), each boss stamped with when it was read.
+fn boss_map_event(map: &crate::capture::boss_map::BossMap) -> Value {
+    let secs = |ms: i64| (ms > 0).then_some(ms / 1000);
+    let bosses: serde_json::Map<String, Value> = map
+        .bosses
+        .iter()
+        .map(|b| {
+            let entry = serde_json::json!({
+                "state": if b.up { "up" } else { "dead" },
+                "upSince": if b.up { secs(b.time_ms) } else { None },
+                "nextSpawn": if b.up { None } else { secs(b.time_ms) },
+                "reportedAt": map.seen_ms / 1000,
+                "confirmed": true,
+            });
+            (b.id.to_string(), entry)
+        })
+        .collect();
+    serde_json::json!({ "map": map.map_id, "bosses": bosses })
+}
+
 /// Who is playing, as plugins with `events:character` see it.
 fn character(app: &tauri::AppHandle) -> Option<Value> {
     app.try_state::<AppState>().map(|s| {
@@ -294,7 +317,12 @@ impl PluginHost {
             let app = app.clone();
             std::thread::Builder::new()
                 .name("plugin-events".into())
-                .spawn(move || loop {
+                .spawn(move || {
+                let mut told = character(&app);
+                let mut game = crate::platform::window_detector::find_aion2_window();
+                let mut game_checked = Instant::now();
+                let mut map_seq = 0u64;
+                loop {
                     // Woken by each queued event; the timeout lets settling
                     // events go once their wait is over.
                     let ready = {
@@ -308,6 +336,34 @@ impl PluginHost {
                         ready
                     };
                     host.flush(&app, ready);
+                    // The character as the meter learns it (a login, a switch,
+                    // or the meter starting mid-game): open plugins hear it then,
+                    // not only when their window opens.
+                    let now = character(&app);
+                    if now != told {
+                        host.tell_character(&app, now.clone());
+                        told = now;
+                    }
+                    // A map the player opened: its field bosses, to plugins
+                    // with feed:boss-timers at once (the shared feed lags).
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Some((next, maps)) = state.data_storage.boss_maps_since(map_seq) {
+                            map_seq = next;
+                            if let Some(map) = maps.iter().filter(|m| m.header == 0).max_by_key(|m| m.seen_ms) {
+                                host.tell_permitted(&app, "feed:boss-timers", "bossMap", boss_map_event(map));
+                            }
+                        }
+                    }
+                    // Whether AION2 is open, looked at every few seconds.
+                    if game_checked.elapsed() >= GAME_CHECK {
+                        game_checked = Instant::now();
+                        let running = crate::platform::window_detector::find_aion2_window();
+                        if running != game {
+                            game = running;
+                            host.tell_all(&app, "game", serde_json::json!({ "running": running }));
+                        }
+                    }
+                }
                 })
                 .ok();
         }
@@ -395,6 +451,51 @@ impl PluginHost {
                 }
             }
             let _ = app.emit_to(format!("plugin-{}", item.plugin), "plugin-event", event);
+        }
+    }
+
+    /// An unnumbered event to every loaded plugin (pluginHost.js hands it
+    /// straight on).
+    fn tell_all(&self, app: &tauri::AppHandle, event: &str, data: Value) {
+        let ids: Vec<String> =
+            self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().map(|l| l.manifest.id.clone()).collect();
+        for id in ids {
+            let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", msg);
+        }
+    }
+
+    /// An unnumbered event to the plugins with a permission.
+    fn tell_permitted(&self, app: &tauri::AppHandle, permission: &str, event: &str, data: Value) {
+        let ids: Vec<String> = self
+            .loaded
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|l| l.manifest.permissions.iter().any(|p| p == permission))
+            .map(|l| l.manifest.id.clone())
+            .collect();
+        for id in ids {
+            let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", msg);
+        }
+    }
+
+    /// The character, to every plugin allowed to know it (pluginHost.js hands
+    /// an unnumbered event straight on).
+    fn tell_character(&self, app: &tauri::AppHandle, who: Option<Value>) {
+        let Some(who) = who else { return };
+        let ids: Vec<String> = self
+            .loaded
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|l| l.manifest.permissions.iter().any(|p| p == "events:character"))
+            .map(|l| l.manifest.id.clone())
+            .collect();
+        for id in ids {
+            let event = serde_json::json!({ "plugin": id, "event": "character", "data": who });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", event);
         }
     }
 
@@ -909,6 +1010,7 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         "character": character,
         "language": language,
         "reviewed": reviewed,
+        "game": crate::platform::window_detector::find_aion2_window(),
     }))
 }
 
@@ -941,6 +1043,46 @@ pub fn broadcast(app: &tauri::AppHandle, event: &str, data: Value) {
 fn require(app: &tauri::AppHandle, id: &str, permission: &str) -> Result<(), String> {
     let has = host(app)?.with(id, |l| l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
     if has { Ok(()) } else { Err(format!("the plugin lacks the {permission:?} permission")) }
+}
+
+/// A server's field boss timers, as players' meters reported them
+/// (a2tools.app's feed, `boss_report.rs`), for plugins with
+/// `feed:boss-timers`: the published file as it is, or None when the server
+/// has none yet. Kept a minute, so plugins asking often fetch it once.
+#[tauri::command]
+pub async fn plugin_boss_timers(app: tauri::AppHandle, window: tauri::WebviewWindow, server: u32) -> Result<Option<Value>, String> {
+    let id = window_plugin(&window)?;
+    require(&app, &id, "feed:boss-timers")?;
+    if !(1000..10000).contains(&server) {
+        return Err("not a server id".into());
+    }
+    boss_timers(&app, server).await
+}
+
+#[cfg(feature = "online")]
+async fn boss_timers(app: &tauri::AppHandle, server: u32) -> Result<Option<Value>, String> {
+    static CACHE: std::sync::OnceLock<Mutex<HashMap<u32, (Instant, Option<Value>)>>> = std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(Mutex::default);
+    if let Some((at, value)) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&server) {
+        if at.elapsed() < Duration::from_secs(60) {
+            return Ok(value.clone());
+        }
+    }
+    let state = app.try_state::<AppState>().ok_or("no app state")?;
+    let url = format!("https://cdn.a2tools.app/feeds/boss-timers/{server}.json");
+    let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
+    let value = match res.status() {
+        s if s == reqwest::StatusCode::NOT_FOUND => None,
+        s if s.is_success() => Some(serde_json::from_str(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?),
+        s => return Err(format!("the feed answered {s}")),
+    };
+    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(server, (Instant::now(), value.clone()));
+    Ok(value)
+}
+
+#[cfg(not(feature = "online"))]
+async fn boss_timers(_app: &tauri::AppHandle, _server: u32) -> Result<Option<Value>, String> {
+    Err("this meter is built without network features".into())
 }
 
 #[tauri::command]

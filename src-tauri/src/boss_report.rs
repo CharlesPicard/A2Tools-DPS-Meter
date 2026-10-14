@@ -8,7 +8,9 @@
 //! hash of their address that changes daily, and keeps no address.
 //!
 //! A map is sent when the player opens it, at most once a minute per map,
-//! and not again while it says the same as the last one sent. Only the
+//! and not again while it says the same as the last one sent. A meter started
+//! mid-game doesn't know the server until the game says it: the newest map
+//! waits until then, and goes if it is still under MAX_AGE_MS old. Only the
 //! player's own server's maps: an enemy map viewed from the menu carries
 //! nothing, and a map read from inside a rift (its header not 0) isn't sent
 //! until it is known whose server it shows.
@@ -27,6 +29,8 @@ const CHECK: Duration = Duration::from_secs(10);
 const MIN_GAP_MS: i64 = 60_000;
 /// The same map, unchanged, is sent again after this long (to confirm it).
 const RESEND_SAME_MS: i64 = 10 * 60_000;
+/// A map read longer ago than this is not sent (waiting for the server).
+const MAX_AGE_MS: i64 = 10 * 60_000;
 
 /// The report the site's /api/boss-timers/report reads (format 1).
 pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
@@ -60,16 +64,19 @@ pub fn spawn(app: tauri::AppHandle) {
             tokio::time::sleep(CHECK).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
             let Some((next, maps)) = state.data_storage.boss_maps_since(seq) else { continue };
-            seq = next;
             if state.settings.get(SETTING_KEY).as_deref() == Some("false") {
+                seq = next;
                 continue;
             }
+            // The server isn't known yet (the meter started mid-game): keep
+            // the maps for when it is.
             let server = state.data_storage.local_profile().server_id;
             if server == 0 {
                 continue;
             }
+            seq = next;
             let now = crate::clock::now_ms();
-            for map in maps.iter().filter(|m| m.header == 0) {
+            for map in maps.iter().filter(|m| m.header == 0 && now - m.seen_ms <= MAX_AGE_MS) {
                 let said = serde_json::to_string(&report(server, map, 0)["bosses"]).unwrap_or_default();
                 if let Some((at, before)) = sent.get(&(server, map.map_id)) {
                     if now - at < MIN_GAP_MS || (*before == said && now - at < RESEND_SAME_MS) {
@@ -107,6 +114,7 @@ mod tests {
         let map = BossMap {
             map_id: 1010,
             header: 0,
+            seen_ms: 1_791_993_638_495,
             bosses: vec![
                 BossOnMap { id: 101_006, up: true, time_ms: 1_791_993_400_000 },
                 BossOnMap { id: 101_002, up: false, time_ms: 1_791_994_085_000 },

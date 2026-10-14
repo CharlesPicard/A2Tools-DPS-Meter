@@ -48,6 +48,9 @@
       if (permission === "events:character") {
         return t("settings.plugins.permCharacter", "See your character's name, server, class and level");
       }
+      if (permission === "feed:boss-timers") {
+        return t("settings.plugins.permBossTimers", "Read the field boss timers players share through a2tools.app");
+      }
       if (permission.startsWith("decoder:")) {
         return t("settings.plugins.permDecoder", "Read your own game data: {name}", { name: permission.slice(8) });
       }
