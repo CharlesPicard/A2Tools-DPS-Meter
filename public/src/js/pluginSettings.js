@@ -265,6 +265,10 @@
 
     // The list comes with whether developer mode is on.
     invoke("plugin_list").then((v) => { render(v); loadCatalog(); }).catch(() => {});
+    // An update installed from the prompt at start (plugins::alert_updates_at_start).
+    window.__TAURI__?.window?.getCurrentWindow?.().listen("plugins-changed", () => {
+      invoke("plugin_list").then((v) => { render(v); loadCatalog(); }).catch(() => {});
+    });
 
     toggle.addEventListener("change", () => {
       say("");

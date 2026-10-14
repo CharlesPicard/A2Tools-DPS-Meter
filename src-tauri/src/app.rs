@@ -2863,6 +2863,8 @@ pub fn run() {
             app.manage(std::sync::Arc::clone(&plugin_host));
             plugin_host.reload(app.handle());
             crate::plugins::restore_windows(app.handle());
+            #[cfg(feature = "online")]
+            crate::plugins::alert_updates_at_start(app.handle());
 
             app.manage(Hotkeys {
                 manager: platform::hotkeys::HotkeyManager::new(),

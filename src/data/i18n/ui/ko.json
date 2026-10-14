@@ -637,5 +637,13 @@
     "ask": "A2Tools DPS 미터는 게임 네트워크 트래픽을 읽기 위해 Npcap이 필요한데, Npcap이 없거나 작동하지 않습니다.\n\n지금 설치할까요? 미터가 npcap.com에서 Npcap 설치 프로그램을 내려받아 실행합니다. Npcap이 설치되면 미터가 자동으로 캡처를 시작합니다.\n\n직접 설치하려면 아니요를 누르고 https://npcap.com/#download 에서 설치하세요.",
     "downloadFailed": "Npcap 설치 프로그램을 내려받지 못했습니다 ({error}).\n\nhttps://npcap.com/#download 에서 직접 설치한 뒤 미터를 다시 여세요.",
     "stillMissing": "Npcap이 아직 작동하지 않습니다. 설치 프로그램을 끝까지 진행하지 않고 닫았다면 https://npcap.com/#download 에서 Npcap을 설치한 뒤 미터를 다시 여세요."
+  },
+  "pluginUpdatePrompt": {
+    "title": "A2Tools - 플러그인 업데이트",
+    "one": "플러그인 업데이트가 있습니다:",
+    "many": "플러그인 업데이트가 있습니다:",
+    "alsoAsks": "새 버전은 다음 권한도 요청합니다:",
+    "updateNow": "지금 업데이트할까요?",
+    "failed": "업데이트하지 못했습니다:"
   }
 }

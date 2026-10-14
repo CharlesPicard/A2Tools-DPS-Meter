@@ -630,5 +630,13 @@
     "ask": "A2Tools DPS Meter がゲームの通信を読み取るには Npcap が必要ですが、Npcap が見つからないか動作していません。\n\n今すぐインストールしますか？メーターが npcap.com から Npcap のインストーラーをダウンロードして開きます。Npcap がインストールされると、メーターは自動でキャプチャを始めます。\n\n自分でインストールする場合は「いいえ」を選び、https://npcap.com/#download からインストールしてください。",
     "downloadFailed": "Npcap のインストーラーをダウンロードできませんでした（{error}）。\n\nhttps://npcap.com/#download から自分でインストールしてから、メーターを開き直してください。",
     "stillMissing": "Npcap がまだ動作していません。インストーラーを最後まで進めずに閉じた場合は、https://npcap.com/#download から Npcap をインストールしてから、メーターを開き直してください。"
+  },
+  "pluginUpdatePrompt": {
+    "title": "A2Tools - プラグインの更新",
+    "one": "プラグインの更新があります：",
+    "many": "プラグインの更新があります：",
+    "alsoAsks": "新しいバージョンでは、さらに次のことを求めます：",
+    "updateNow": "今すぐ更新しますか？",
+    "failed": "更新できませんでした："
   }
 }

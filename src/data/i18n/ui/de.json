@@ -630,5 +630,13 @@
     "ask": "A2Tools DPS Meter braucht Npcap, um den Netzwerkverkehr des Spiels zu lesen, und Npcap fehlt oder funktioniert nicht.\n\nJetzt installieren? Das Meter lädt den Npcap-Installer von npcap.com herunter und öffnet ihn. Sobald Npcap installiert ist, beginnt das Meter von selbst mit der Aufzeichnung.\n\nWähle Nein, um es selbst von https://npcap.com/#download zu installieren.",
     "downloadFailed": "Der Npcap-Installer konnte nicht heruntergeladen werden ({error}).\n\nInstalliere ihn selbst von https://npcap.com/#download und öffne das Meter danach erneut.",
     "stillMissing": "Npcap funktioniert immer noch nicht. Falls der Installer vor dem Ende geschlossen wurde, installiere Npcap von https://npcap.com/#download und öffne das Meter danach erneut."
+  },
+  "pluginUpdatePrompt": {
+    "title": "A2Tools - Plugin-Update",
+    "one": "Ein Plugin-Update ist verfügbar:",
+    "many": "Plugin-Updates sind verfügbar:",
+    "alsoAsks": "Die neue Version möchte außerdem:",
+    "updateNow": "Jetzt aktualisieren?",
+    "failed": "Konnte nicht aktualisiert werden:"
   }
 }

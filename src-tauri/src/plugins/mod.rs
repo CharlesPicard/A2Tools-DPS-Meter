@@ -681,25 +681,35 @@ fn refresh_windows(app: &tauri::AppHandle, host: &PluginHost) {
     }
 }
 
+/// The catalog's newer versions of installed plugins, each with the entry
+/// to install.
+#[cfg(feature = "online")]
+fn newer_entries(catalog: catalog::Catalog, host: &PluginHost) -> Vec<(PluginAvailable, catalog::Entry)> {
+    let installed: Vec<PluginInfo> = host.list().into_iter().filter(|p| p.reviewed && p.error.is_none()).collect();
+    installed
+        .into_iter()
+        .filter_map(|p| {
+            let entry = catalog.plugins.iter().find(|e| e.id == p.id)?;
+            catalog::newer(&entry.version, &p.version).then(|| {
+                let available = PluginAvailable {
+                    id: p.id.clone(),
+                    name: entry.name.clone(),
+                    from: p.version.clone(),
+                    to: entry.version.clone(),
+                    new_permissions: entry.permissions.iter().filter(|x| !p.permissions.contains(x)).cloned().collect(),
+                };
+                (available, entry.clone())
+            })
+        })
+        .collect()
+}
+
 /// The catalog's newer versions of installed plugins.
 #[cfg(feature = "online")]
 async fn available_updates(app: &tauri::AppHandle, host: &PluginHost) -> Result<Vec<PluginAvailable>, String> {
     let http = app.try_state::<AppState>().ok_or("no app state")?.http.clone();
     let catalog = catalog::fetch(&http).await?;
-    let installed: Vec<PluginInfo> = host.list().into_iter().filter(|p| p.reviewed && p.error.is_none()).collect();
-    Ok(installed
-        .into_iter()
-        .filter_map(|p| {
-            let entry = catalog.plugins.iter().find(|e| e.id == p.id)?;
-            catalog::newer(&entry.version, &p.version).then(|| PluginAvailable {
-                id: p.id.clone(),
-                name: entry.name.clone(),
-                from: p.version.clone(),
-                to: entry.version.clone(),
-                new_permissions: entry.permissions.iter().filter(|x| !p.permissions.contains(x)).cloned().collect(),
-            })
-        })
-        .collect())
+    Ok(newer_entries(catalog, host).into_iter().map(|(a, _)| a).collect())
 }
 
 /// Check for plugin updates: read every plugin folder again (a developer
@@ -728,6 +738,162 @@ pub async fn plugin_check_updates(app: tauri::AppHandle) -> Result<UpdateCheck, 
     #[cfg(not(feature = "online"))]
     let (available, catalog_error) = (Vec::new(), None);
     Ok(UpdateCheck { view, updated, available, catalog_error })
+}
+
+/// Plugin updates the person said No to at start, a JSON object of id →
+/// version: that version is not offered again (a newer one is).
+pub const DECLINED_UPDATES_KEY: &str = "dpsMeter.pluginUpdatesDeclined";
+/// How long after start the catalog is asked, so the check stays out of the
+/// way of startup.
+#[cfg(feature = "online")]
+const UPDATE_ALERT_DELAY: Duration = Duration::from_secs(20);
+
+/// The languages the meter's pages come in.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+const LANGUAGES: [&str; 10] = ["de", "en", "es", "fr", "ja", "ko", "pt", "ru", "zh-Hans", "zh-Hant"];
+
+/// The update prompt's words, in the meter's language
+/// (`pluginUpdatePrompt` in the UI translations; the permissions as Settings
+/// words them, `settings.plugins.perm*`).
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+struct PromptTexts {
+    title: String,
+    one: String,
+    many: String,
+    also_asks: String,
+    update_now: String,
+    failed: String,
+    perm_storage: String,
+    perm_notify: String,
+    perm_window: String,
+    perm_character: String,
+    perm_decoder: String,
+}
+
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
+    let load = |lang: &str| -> Option<Value> {
+        let path = data_dir?.join("i18n").join("ui").join(format!("{lang}.json"));
+        serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    };
+    let lang = LANGUAGES.iter().find(|known| known.eq_ignore_ascii_case(lang)).copied().unwrap_or("en");
+    let (ui, en) = (load(lang), load("en"));
+    let text = |section: &[&str], key: &str, fallback: &str| -> String {
+        [ui.as_ref(), en.as_ref()]
+            .into_iter()
+            .flatten()
+            .find_map(|v| section.iter().fold(v, |v, s| &v[s])[key].as_str().map(str::to_string))
+            .unwrap_or_else(|| fallback.to_string())
+    };
+    let prompt = |key: &str, fallback: &str| text(&["pluginUpdatePrompt"], key, fallback);
+    let perm = |key: &str, fallback: &str| text(&["settings", "plugins"], key, fallback);
+    PromptTexts {
+        title: prompt("title", "A2Tools - Plugin Update"),
+        one: prompt("one", "A plugin update is available:"),
+        many: prompt("many", "Plugin updates are available:"),
+        also_asks: prompt("alsoAsks", "The new version also asks to:"),
+        update_now: prompt("updateNow", "Update now?"),
+        failed: prompt("failed", "Couldn't update:"),
+        perm_storage: perm("permStorage", "Save its own data on this computer"),
+        perm_notify: perm("permNotify", "Show short messages in its window"),
+        perm_window: perm("permWindow", "Show and hide its own window, without taking focus from the game"),
+        perm_character: perm("permCharacter", "See your character's name, server, class and level"),
+        perm_decoder: perm("permDecoder", "Read your own game data: {name}"),
+    }
+}
+
+/// A permission, in plain words, as Settings words it.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn describe_permission(t: &PromptTexts, permission: &str) -> String {
+    match permission {
+        "storage" => t.perm_storage.clone(),
+        "notify" => t.perm_notify.clone(),
+        "window" => t.perm_window.clone(),
+        "events:character" => t.perm_character.clone(),
+        p => match p.strip_prefix("decoder:") {
+            Some(name) => t.perm_decoder.replace("{name}", name),
+            None => p.to_string(),
+        },
+    }
+}
+
+/// The updates to offer at start: those not already declined at that version.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn updates_to_offer<T>(available: Vec<(PluginAvailable, T)>, declined: &HashMap<String, String>) -> Vec<(PluginAvailable, T)> {
+    available.into_iter().filter(|(a, _)| declined.get(&a.id) != Some(&a.to)).collect()
+}
+
+/// The question asked at start: each update, with what it newly asks to do,
+/// since Yes installs it.
+#[cfg_attr(not(feature = "online"), allow(dead_code))]
+fn update_prompt(t: &PromptTexts, updates: &[&PluginAvailable]) -> String {
+    let mut text = format!("{}\n", if updates.len() == 1 { &t.one } else { &t.many });
+    for u in updates {
+        text.push_str(&format!("\n{} {} → {}", u.name, u.from, u.to));
+        if !u.new_permissions.is_empty() {
+            text.push_str(&format!("\n    {}", t.also_asks));
+            for p in &u.new_permissions {
+                text.push_str(&format!("\n    • {}", describe_permission(t, p)));
+            }
+        }
+    }
+    text.push_str(&format!("\n\n{}", t.update_now));
+    text
+}
+
+/// At start, ask the signed catalog for newer reviewed versions of the
+/// installed plugins and, if there are any not declined before, offer to
+/// install them: no need to open Settings and press Check for updates. Yes
+/// installs the very entries shown, not whatever the catalog says by then.
+#[cfg(feature = "online")]
+pub fn alert_updates_at_start(app: &tauri::AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(UPDATE_ALERT_DELAY).await;
+        let Ok(host) = host(&app) else { return };
+        let Some(state) = app.try_state::<AppState>() else { return };
+        let catalog = match catalog::fetch(&state.http).await {
+            Ok(catalog) => catalog,
+            Err(e) => {
+                tracing::info!("Plugins: update check at start failed: {e}");
+                return;
+            }
+        };
+        let mut declined: HashMap<String, String> =
+            state.settings.get(DECLINED_UPDATES_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
+        let updates = updates_to_offer(newer_entries(catalog, &host), &declined);
+        if updates.is_empty() {
+            return;
+        }
+        let names = updates.iter().map(|(u, _)| format!("{} {} → {}", u.id, u.from, u.to)).collect::<Vec<_>>().join(", ");
+        tracing::info!("Plugins: updates available: {names}");
+        let lang = state.settings.get("dpsMeter.language").unwrap_or_else(|| "en".into());
+        let t = prompt_texts(state.i18n_data_dir.as_deref(), &lang);
+        let prompt = update_prompt(&t, &updates.iter().map(|(u, _)| u).collect::<Vec<_>>());
+        let title = t.title.clone();
+        let accepted = tokio::task::spawn_blocking(move || crate::platform::dialog::ask_yes_no(&title, &prompt))
+            .await
+            .unwrap_or(false);
+        if !accepted {
+            for (u, _) in &updates {
+                declined.insert(u.id.clone(), u.to.clone());
+            }
+            state.settings.set(DECLINED_UPDATES_KEY, &serde_json::to_string(&declined).unwrap_or_default());
+            return;
+        }
+        let mut failed = Vec::new();
+        for (u, entry) in &updates {
+            if let Err(e) = install_entry(&app, &host, entry).await {
+                failed.push(format!("{}: {e}", u.name));
+            }
+        }
+        // Settings, if open, shows the new versions.
+        let _ = app.emit_to("settings", "plugins-changed", ());
+        if !failed.is_empty() {
+            let message = format!("{}\n\n{}", t.failed, failed.join("\n"));
+            let _ = tokio::task::spawn_blocking(move || crate::platform::dialog::show_error(&t.title, &message)).await;
+        }
+    });
 }
 
 /// A catalog entry as Settings lists it.
@@ -777,6 +943,21 @@ pub async fn plugin_catalog(app: tauri::AppHandle) -> Result<Vec<CatalogItem>, S
     }
 }
 
+/// Install one catalog entry (its files checked against the signed
+/// catalog's hashes) and run it.
+#[cfg(feature = "online")]
+async fn install_entry(app: &tauri::AppHandle, host: &Arc<PluginHost>, entry: &catalog::Entry) -> Result<(), String> {
+    let http = app.try_state::<AppState>().ok_or("no app state")?.http.clone();
+    let dir = plugins_dir(app)?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    catalog::install(&http, entry, &dir).await?;
+    tracing::info!("Plugins: installed {} {}", entry.id, entry.version);
+    host.reload(app);
+    refresh_windows(app, host);
+    restore_windows(app);
+    Ok(())
+}
+
 /// Install a reviewed plugin from the catalog, or update it to the catalog's
 /// version. Its saved data is kept.
 #[tauri::command]
@@ -787,13 +968,7 @@ pub async fn plugin_install(app: tauri::AppHandle, id: String) -> Result<Plugins
         let http = app.try_state::<AppState>().ok_or("no app state")?.http.clone();
         let catalog = catalog::fetch(&http).await?;
         let entry = catalog.plugins.iter().find(|e| e.id == id).ok_or("that plugin is not in the catalog")?;
-        let dir = plugins_dir(&app)?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        catalog::install(&http, entry, &dir).await?;
-        tracing::info!("Plugins: installed {} {}", entry.id, entry.version);
-        host.reload(&app);
-        refresh_windows(&app, &host);
-        restore_windows(&app);
+        install_entry(&app, &host, entry).await?;
         Ok(view(&app, &host))
     }
     #[cfg(not(feature = "online"))]
@@ -1450,10 +1625,61 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{base64, content_policy, inline_page, inlined_policy, should_start, take_ready, within_reach};
-    use super::{Pending, PluginInfo, SETTLE};
-    use std::collections::HashSet;
+    use super::{base64, content_policy, inline_page, inlined_policy, prompt_texts, should_start, take_ready};
+    use super::{update_prompt, updates_to_offer, within_reach, Pending, PluginAvailable, PluginInfo, LANGUAGES, SETTLE};
+    use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
+
+    fn available(id: &str, from: &str, to: &str, new_permissions: &[&str]) -> PluginAvailable {
+        PluginAvailable {
+            id: id.into(),
+            name: format!("Plugin {id}"),
+            from: from.into(),
+            to: to.into(),
+            new_permissions: new_permissions.iter().map(|p| p.to_string()).collect(),
+        }
+    }
+
+    #[test]
+    fn an_update_said_no_to_is_not_offered_again_but_a_newer_one_is() {
+        let declined = HashMap::from([("a".to_string(), "1.1.0".to_string()), ("b".to_string(), "2.0.0".to_string())]);
+        let offered = updates_to_offer(
+            vec![(available("a", "1.0.0", "1.1.0", &[]), ()), (available("b", "2.0.0", "2.1.0", &[]), ()), (available("c", "0.1", "0.2", &[]), ())],
+            &declined,
+        );
+        let ids: Vec<_> = offered.iter().map(|(a, _)| a.id.as_str()).collect();
+        assert_eq!(ids, ["b", "c"]);
+    }
+
+    #[test]
+    fn the_start_prompt_lists_each_update_and_what_it_newly_asks_for() {
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/data");
+        let en = prompt_texts(Some(&data), "en");
+        let one = update_prompt(&en, &[&available("a", "1.0.0", "1.1.0", &[])]);
+        assert_eq!(one, "A plugin update is available:\n\nPlugin a 1.0.0 → 1.1.0\n\nUpdate now?");
+        let (a, b) = (available("a", "1.0.0", "1.1.0", &[]), available("b", "2.0", "2.1", &["storage", "decoder:pets"]));
+        let two = update_prompt(&en, &[&a, &b]);
+        assert!(two.starts_with("Plugin updates are available:"));
+        assert!(two.contains("Plugin b 2.0 → 2.1\n    The new version also asks to:\n    • Save its own data on this computer\n    • Read your own game data: pets"));
+        let de = update_prompt(&prompt_texts(Some(&data), "de"), &[&b]);
+        assert!(de.contains("Jetzt aktualisieren?") && de.contains("Deine eigenen Spieldaten lesen: pets"), "{de}");
+    }
+
+    #[test]
+    fn the_update_prompt_has_words_in_every_language() {
+        let data = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/data");
+        let en = prompt_texts(Some(&data), "en");
+        for lang in LANGUAGES {
+            let t = prompt_texts(Some(&data), lang);
+            assert!(t.perm_decoder.contains("{name}"), "{lang}");
+            if lang != "en" {
+                for (word, english) in [(&t.title, &en.title), (&t.many, &en.many), (&t.update_now, &en.update_now), (&t.failed, &en.failed), (&t.perm_storage, &en.perm_storage)] {
+                    assert_ne!(word, english, "{lang} is translated");
+                }
+            }
+        }
+        assert_eq!(prompt_texts(None, "ko").update_now, en.update_now, "no data: the built-in English");
+    }
 
     #[test]
     fn a_reload_starts_enabled_plugins_but_not_one_closed_with_x_or_turned_off() {
