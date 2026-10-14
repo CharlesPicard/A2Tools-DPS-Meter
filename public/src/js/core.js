@@ -3166,6 +3166,9 @@ class DpsApp {
     this.supportActionButtons?.forEach((button) => {
       button.addEventListener("click", () => this.handleSupportAction(button));
     });
+    this.supportQrImage?.addEventListener("click", () => {
+      if (this.supportQrUrl) window.javaBridge?.openBrowser?.(this.supportQrUrl);
+    });
 
     this.kofiButton?.addEventListener("click", () => {
       window.javaBridge?.openBrowser?.("https://ko-fi.com/W7W51T1YW9");
@@ -3315,6 +3318,13 @@ class DpsApp {
     const src = this.supportQrImages?.[type];
     if (!src) return;
     this.supportQrImage.src = src;
+    // Ko-fi's (or Afdian's) code opens its page when clicked; WeChat's has
+    // no page to open.
+    const url = this.supportPrimaryButton?.dataset.support === type ? this.supportPrimaryButton.dataset.url : "";
+    this.supportQrUrl = url || "";
+    this.supportQrImage.classList.toggle("isLink", !!url);
+    if (url) this.supportQrImage.title = url;
+    else this.supportQrImage.removeAttribute("title");
     this.updateSupportTitle(type);
     this.supportActionButtons?.forEach((button) => {
       const match = button.dataset.support === type || button.dataset.qr === type;

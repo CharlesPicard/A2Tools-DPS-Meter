@@ -4825,6 +4825,9 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   color: #bcd8ff;
 }
 /* What the buttons below do: a site opens in the browser, crypto copies. */
+.supportModal .supportQrImage.isLink {
+  cursor: pointer;
+}
 .supportModal .supportLinksHint {
   margin: 0 0 8px;
   font-size: 11.5px;
