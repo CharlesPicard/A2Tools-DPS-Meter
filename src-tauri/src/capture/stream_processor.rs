@@ -2013,7 +2013,7 @@ fn entry_count_at(body: &[u8], at: usize) -> Option<(u8, u8, i32, [i32; 2], usiz
 
 /// Odyle energy as `(basic, charged)` from an entry, when it is that entry.
 fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
-    // Generous bounds (the game's are 840 and 2000): only to turn away bytes
+    // Generous bounds (the game's are 840, or 560 without a membership, and 2000): only to turn away bytes
     // that merely look like the entry.
     let ok = |n: i32| (0..=100_000).contains(&n);
     (kind == 0x0C && slot == 1 && ok(v[0]) && ok(v[1])).then(|| (v[0] as u32, v[1] as u32))

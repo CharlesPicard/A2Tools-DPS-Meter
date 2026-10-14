@@ -3033,7 +3033,7 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 }
 
 /* Odyle energy — below the meter beside the ping, as the game writes it:
-   basic (+charged)/840, the charged part in the game's cyan. */
+   basic (+charged), the charged part in the game's cyan. */
 .odyleDisplay {
   display: none;
   margin: 0;

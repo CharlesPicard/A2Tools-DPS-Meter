@@ -5657,8 +5657,9 @@ class DpsApp {
     }
   }
 
-  // Odyle energy as the game shows it: basic (+charged)/840. The game's
-  // maximums (840 basic, 2000 charged) are not in its records.
+  // Odyle energy: basic (+charged), as the game writes it. Without the
+  // game's maximum: it is 840 with a membership and 560 without, and the
+  // records read so far don't say which applies.
   updateOdyle(energy) {
     if (energy && typeof energy === "object") this.odyleEnergy = energy;
     const el = this.odyleEl;
@@ -5670,7 +5671,6 @@ class DpsApp {
     }
     el.querySelector(".odyleBasic").textContent = String(basic);
     el.querySelector(".odyleCharged").textContent = charged > 0 ? `(+${charged})` : "";
-    el.querySelector(".odyleMax").textContent = "/840";
     el.classList.add("isVisible");
   }
 
