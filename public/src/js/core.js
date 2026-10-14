@@ -1460,6 +1460,9 @@ class DpsApp {
       const combatPower = Math.trunc(Number(isObj ? value.combatPower : 0)) || 0;
       const gearScore = Math.trunc(Number(isObj ? value.gearScore : 0)) || 0;
 
+      const hps = Math.trunc(Number(isObj ? value.hps : 0));
+      const healAmount = Math.trunc(Number(isObj ? value.healAmount : 0));
+
       rows.push({
         id: String(id),
         name,
@@ -1467,12 +1470,12 @@ class DpsApp {
         dps,
         totalDamage,
         damageContribution,
+        hps,
+        healAmount,
         combatPower,
         gearScore,
         isUser: (!!name && name === this.USER_NAME) || (hasLocalId && numericId === localId),
         isIdentifying,
-        // Resolved in Rust against a downloaded roster; the frontend only
-        // renders it. Cosmetic only — it must not reach sorting or bar colour.
         isSupporter: !!(isObj && value.isSupporter) && this.showSupporterColors !== false,
       });
     }
