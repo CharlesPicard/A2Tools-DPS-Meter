@@ -263,6 +263,7 @@
     "playerLimit": {
       "label": "最大顯示人數"
     },
+    "shareBossTimers": "分享野外首領計時",
     "debugLogging": "除錯記錄",
     "quit": "結束",
     "discord": {
@@ -450,6 +451,7 @@
       "trainingMode": "訓練模式下詳細資料視窗顯示哪些木樁：全部一起，或只顯示你打得最多的那個。",
       "allTargetsWindow": "全部目標模式下，計量器彙總最後一次命中前這段時間內命中的所有目標。",
       "updateRate": "統計數字多久刷新一次。越快越早顯示傷害，但佔用更多 CPU。",
+      "shareBossTimers": "開啟地圖時，圖上的野外首領計時會透過 a2tools.app 分享給其他玩家的活動計時器。只會傳送伺服器、首領與時間。",
       "debugLogging": "寫入開發者用於排查問題的診斷記錄。",
       "saveRawPackets": "記錄原始遊戲流量以便回報錯誤。除錯記錄會隨之開啟。",
       "globalHotkeys": "下面的按鍵在遊戲位於前景時也能使用。關閉後，這些按鍵會釋放給其他程式。在 Linux 上由桌面註冊這些按鍵，桌面可能會請你核准。",

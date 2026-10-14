@@ -507,6 +507,10 @@ struct Inner {
     /// (`42 36` flag 3) and party members' (`note_hp`). Details marks the
     /// players' on its DPS chart. The last `MAX_DEATHS` only.
     death_log: VecDeque<(i32, i64, Option<i64>)>,
+    /// The maps the player last opened, one per map (`capture::boss_map`),
+    /// and a count that moves with each, for `boss_maps_since`.
+    boss_maps: Vec<crate::capture::boss_map::BossMap>,
+    boss_map_seq: u64,
     /// Each party member's last HP (`1b 92`): falling to 0 from above is a
     /// death. The game sends no `42 36` death for a player (Ultimate Berk,
     /// 2026-10-11: 184 monster deaths, not one of the four that died).
@@ -633,6 +637,8 @@ impl DataStorage {
                 hostile_target_ids: HashSet::new(),
                 dead_entity_ids: HashSet::new(),
                 death_log: VecDeque::new(),
+                boss_maps: Vec::new(),
+                boss_map_seq: 0,
                 last_hp: HashMap::new(),
                 despawned_summon_ids: HashSet::new(),
                 boss_entity_ids: HashSet::new(),
@@ -1354,6 +1360,22 @@ impl DataStorage {
 
     /// The deaths from `from` to `to` (ms), oldest first: (entity, time, the
     /// revive's time if they are back up).
+    /// A map the player opened, with its field bosses: kept until the same
+    /// map is opened again.
+    pub fn note_boss_map(&self, map: crate::capture::boss_map::BossMap) {
+        let mut inner = self.inner.write();
+        inner.boss_maps.retain(|m| m.map_id != map.map_id);
+        inner.boss_maps.push(map);
+        inner.boss_map_seq += 1;
+    }
+
+    /// The maps opened since `seq` was read (all of them, newest last), and
+    /// the count to ask with next time; None when nothing is new.
+    pub fn boss_maps_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::boss_map::BossMap>)> {
+        let inner = self.inner.read();
+        (inner.boss_map_seq != seq).then(|| (inner.boss_map_seq, inner.boss_maps.clone()))
+    }
+
     pub fn deaths_between(&self, from: i64, to: i64) -> Vec<(i32, i64, Option<i64>)> {
         self.inner.read().death_log.iter().filter(|d| d.1 >= from && d.1 <= to).copied().collect()
     }

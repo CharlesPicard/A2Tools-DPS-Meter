@@ -280,6 +280,10 @@ impl StreamProcessor {
         self.parse_death_packet(packet);
         self.parse_zone_change_packet(packet);
         self.parse_map_load_packet(packet);
+        // The field bosses on a map the player opened (boss timers).
+        if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
+            self.data_storage.note_boss_map(map);
+        }
 
         if !parsed_damage && !parsed_name && !parsed_summon && !parsed_ownership && !parsed_hp {
             self.parse_dot_packet(packet);

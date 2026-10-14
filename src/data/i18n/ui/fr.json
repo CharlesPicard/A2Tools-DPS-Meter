@@ -258,6 +258,7 @@
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
+    "shareBossTimers": "Partager les minuteurs des boss de terrain",
     "debugLogging": "Journal de débogage",
     "quit": "Quitter",
     "discord": {
@@ -443,6 +444,7 @@
       "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
       "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
       "updateRate": "À quelle fréquence les chiffres du compteur se rafraîchissent. Plus rapide affiche les coups plus tôt mais utilise plus de CPU.",
+      "shareBossTimers": "Quand vous ouvrez votre carte, les minuteurs des boss de terrain qu'elle affiche sont partagés avec les autres joueurs via a2tools.app, pour leurs Event Timers. Seuls le serveur, les boss et leurs heures sont envoyés.",
       "debugLogging": "Écrit un journal de diagnostic que le développeur peut utiliser pour trouver les problèmes.",
       "saveRawPackets": "Enregistre le trafic brut du jeu pour les rapports de bug. Le journal de débogage s'active avec.",
       "globalHotkeys": "Les touches ci-dessous fonctionnent partout, même quand le jeu est au premier plan. Désactivé, elles sont libérées pour d'autres programmes. Sous Linux, le bureau les enregistre et peut vous demander de les approuver.",

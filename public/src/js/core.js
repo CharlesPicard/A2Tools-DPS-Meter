@@ -89,6 +89,7 @@ class DpsApp {
       displayMode: "dpsMeter.displayMode",
       language: "dpsMeter.language",
       debugLogging: "dpsMeter.debugLoggingEnabled",
+      shareBossTimers: "dpsMeter.shareBossTimers",
       pinMeToTop: "dpsMeter.pinMeToTop",
       mainPlayerNamesBold: "dpsMeter.mainPlayerNamesBold",
       showSupporterColors: "dpsMeter.showSupporterColors",
@@ -2486,6 +2487,7 @@ class DpsApp {
     this.showSuspendBtnCheckbox = document.querySelector(".showSuspendBtnCheckbox");
     this.bossLogsCheckbox = document.querySelector(".bossLogsCheckbox");
     this.debugLoggingCheckbox = document.querySelector(".debugLoggingCheckbox");
+    this.shareBossTimersCheckbox = document.querySelector(".shareBossTimersCheckbox");
     this.showPingCheckbox = document.querySelector(".showPingCheckbox");
     this.saveRawPacketsCheckbox = document.querySelector(".saveRawPacketsCheckbox");
     this.sendLogsBtn = document.querySelector(".sendLogsBtn");
@@ -2706,6 +2708,14 @@ class DpsApp {
         const isChecked = !!event.target?.checked;
         this.safeSetSetting(this.storageKeys.bossLogs, String(isChecked));
         window.javaBridge?.setBossLogsEnabled?.(isChecked);
+      });
+    }
+    // Field boss timers from the player's map, shared through a2tools.app
+    // (boss_report.rs): on unless turned off.
+    if (this.shareBossTimersCheckbox) {
+      this.shareBossTimersCheckbox.checked = this.safeGetSetting(this.storageKeys.shareBossTimers) !== "false";
+      this.shareBossTimersCheckbox.addEventListener("change", (event) => {
+        this.safeSetSetting(this.storageKeys.shareBossTimers, event.target?.checked ? "true" : "false");
       });
     }
     if (this.debugLoggingCheckbox) {
