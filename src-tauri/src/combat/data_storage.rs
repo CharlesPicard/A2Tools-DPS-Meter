@@ -609,7 +609,7 @@ impl DataStorage {
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
                 party_generation: 0,
-            party_ended_at_ms: NEVER_MS,
+                party_ended_at_ms: NEVER_MS,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
                 summon_storage: HashMap::new(),
