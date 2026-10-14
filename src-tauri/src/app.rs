@@ -2778,6 +2778,8 @@ pub fn run() {
             #[cfg(feature = "online")]
             crate::presence::spawn(app.handle().clone());
             #[cfg(feature = "online")]
+            crate::boss_report::spawn(app.handle().clone());
+            #[cfg(feature = "online")]
             crate::stream_overlay::sync(app.handle());
 
             // Reopen the Details window if it was left enabled. Done here rather
@@ -3188,8 +3190,10 @@ pub fn run() {
             crate::plugins::plugin_window,
             crate::plugins::plugin_close,
             crate::plugins::plugin_open,
+            crate::plugins::plugin_set_enabled,
             crate::plugins::plugin_hello,
             crate::plugins::plugin_storage_get,
+            crate::plugins::plugin_boss_timers,
             crate::plugins::plugin_storage_set,
             get_dps_snapshot,
             get_skill_details,

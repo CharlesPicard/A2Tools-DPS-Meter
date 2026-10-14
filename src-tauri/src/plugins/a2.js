@@ -9,7 +9,13 @@
 //                                              playing (with events:character), else null; `at` is
 //                                              when the meter read it (unix ms), or null on meters
 //                                              that don't say
-//   a2.on("character", (c) => ...)             your character (name, serverId, class, level)
+//   a2.on("character", (c) => ...)             your character (name, serverId, class, level), at start and
+//                                              whenever it changes (meter 2.0.65 on)
+//   a2.on("bossMap", ({ map, bosses }) => ...) a map the player just opened, its field bosses as
+//                                              a2.bossTimers gives them (permission
+//                                              "feed:boss-timers", meter 2.0.65 on)
+//   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
+//                                              (meter 2.0.65 on)
 //   a2.on("language", (code) => ...)           the meter's language ("en", "ko", "zh-Hans", ...), at start and on change
 //   a2.on("compact", (on) => ...)              the window's fold button: show only the essentials
 //
@@ -18,6 +24,11 @@
 //   await a2.storage.get("state")              the plugin's own saved data
 //   await a2.storage.set("state", value)
 //   a2.notify("Text")                          a short message in the plugin's window
+//   await a2.bossTimers(serverId)              a server's field boss timers, as players' meters
+//                                              share them through a2tools.app (permission
+//                                              "feed:boss-timers", meter 2.0.65 on): { bosses: { <id>:
+//                                              { state, upSince, nextSpawn, reportedAt, confirmed } } }
+//                                              or null
 //   a2.window.show() / a2.window.hide()        its own window, shown on top without taking focus
 //                                              (permission "window", plugin API 2)
 //   a2.ready()                                 call once the handlers are set
@@ -64,6 +75,7 @@
       set: (key, value) => call("storage.set", [key, JSON.stringify(value)]),
     }),
     notify: (text) => call("notify", [String(text)]),
+    bossTimers: (server) => call("bossTimers", [Number(server)]),
     window: Object.freeze({
       show: () => call("window.show", []),
       hide: () => call("window.hide", []),

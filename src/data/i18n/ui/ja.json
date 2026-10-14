@@ -92,6 +92,13 @@
       "healPct": "回復%",
       "healPctTooltip": "回復量 %"
     },
+    "peak": {
+      "label": "パーティーリスト",
+      "show": "平均の横に最大DPS（最高の5秒）を表示"
+    },
+    "party": {
+      "activeDps": "攻撃時間DPS: {dps}（戦闘 {total} 中 {active}）"
+    },
     "stats": {
       "totalDamage": "総ダメージ",
       "contribution": "貢献度",
@@ -106,7 +113,11 @@
       "multiHitDamage": "多段ヒットのダメージ",
       "multiHitHits": "多段ヒット",
       "maxHp": "最大HP",
-      "deaths": "死亡回数"
+      "damageReceived": "被ダメージ",
+      "deaths": "死亡回数",
+      "avgDps": "平均DPS",
+      "peakDps": "最大DPS",
+      "peakDpsTip": "戦闘中の任意の5秒間で最も高いDPS"
     },
     "titleFor": "対象",
     "titleVs": "対",
@@ -250,6 +261,7 @@
     "playerLimit": {
       "label": "表示する最大プレイヤー数"
     },
+    "shareBossTimers": "フィールドボスのタイマーを共有",
     "debugLogging": "デバッグログ",
     "quit": "終了",
     "discord": {
@@ -373,6 +385,7 @@
       "options": {
         "combatPower": "戦闘力",
         "gearScore": "装備スコア",
+        "both": "両方",
         "off": "オフ"
       }
     },
@@ -434,6 +447,7 @@
       "trainingMode": "トレーニングモードで詳細ウィンドウに表示するかかしです：すべてまとめて、または一番多く攻撃した1体だけ。",
       "allTargetsWindow": "全ターゲットモードで、最後のヒットからこの時間内に攻撃したすべての対象を合計します。",
       "updateRate": "メーターの数値を更新する間隔です。速いほどダメージが早く表示されますが、CPU 使用量が増えます。",
+      "shareBossTimers": "マップを開くと、表示されたフィールドボスのタイマーが a2tools.app を通じて他のプレイヤーのイベントタイマーと共有されます。送信されるのはサーバー、ボス、時刻だけです。",
       "debugLogging": "開発者が問題を調べるための診断ログを書き出します。",
       "saveRawPackets": "バグ報告用にゲームの生の通信を記録します。デバッグログも一緒にオンになります。",
       "globalHotkeys": "下のキーはゲームが前面にあるときも使えます。オフにすると、ほかのプログラムがこれらのキーを使えます。Linux ではデスクトップがキーを登録し、承認を求めることがあります。",
@@ -476,7 +490,7 @@
       "installing": "インストール中…",
       "installDone": "{name} {version} をインストールしました。",
       "updatesAvailable": "アップデートがあります: {list}",
-      "unreviewed": "未審査",
+      "unreviewed": "開発",
       "by": "作成: {author}",
       "consentTitle": "{name} をインストールしますか？",
       "consentUpdateTitle": "{name} を更新しますか？",
@@ -486,9 +500,12 @@
       "permStorage": "このPCに自身のデータを保存する",
       "permNotify": "自身のウィンドウに短いメッセージを表示する",
       "permWindow": "ゲームのフォーカスを奪わずに、自身のウィンドウを表示・非表示にする",
+      "permBossTimers": "a2tools.app でプレイヤーが共有するフィールドボスのタイマーを読む",
       "permCharacter": "キャラクターの名前・サーバー・クラス・レベルを見る",
       "permDecoder": "自分のゲームデータを読む: {name}",
-      "permNone": "ウィンドウを表示する以外のことはしません"
+      "permNone": "ウィンドウを表示する以外のことはしません",
+      "enabled": "有効",
+      "enabledTip": "オン：メーターと一緒に起動します。オフ：インストールされたままですが、動作しません。"
     }
   },
   "support": {

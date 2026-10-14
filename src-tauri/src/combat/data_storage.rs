@@ -27,6 +27,19 @@ const ZONE_RESET_DEBOUNCE_MS: i64 = 4_000;
 /// How long party members who have not fought stay on the meter after the
 /// last roster. See `DataStorage::party_placeholders_wanted`.
 const PARTY_PLACEHOLDER_MS: i64 = 10 * 60 * 1000;
+/// A "no longer in a party" record this soon after the party ended is about
+/// that same party. See `DataStorage::note_party_left`.
+const PARTY_LEFT_AFTER_END_MS: i64 = 10 * 1000;
+/// Whether a player other than you has damage on the meter (a summon counts
+/// as its owner). With no local player known, any player counts.
+fn others_on_meter(inner: &Inner) -> bool {
+    let me = inner.local_player_id.and_then(|id| i32::try_from(id).ok());
+    inner.target_combat.values().flat_map(|t| t.actors.keys()).any(|&actor| {
+        let owner = inner.summon_storage.get(&actor).copied().unwrap_or(actor);
+        Some(owner) != me && (inner.known_player_ids.contains(&owner) || inner.nickname_storage.contains_key(&owner))
+    })
+}
+
 /// "Has not happened" for the times below. Not 0: a replayed slice's clock
 /// starts before 0 (the lead-in runs at negative offsets from the pull), so
 /// a 0 there read as "a moment ago" and suppressed every zone reset in the
@@ -434,6 +447,12 @@ struct Inner {
     /// Bumped whenever `nickname_storage` changes, so the meter redraws a
     /// name that arrives after the last hit (see `names_generation`).
     names_generation: u64,
+    /// Changes when the party's members change, or it ends (see
+    /// `party_generation`).
+    party_generation: u64,
+    /// When the party last ended (`end_party`), clock ms; `NEVER_MS` if it
+    /// has not.
+    party_ended_at_ms: i64,
     pending_nicknames: HashMap<i32, String>,
     permanent_nicknames: HashMap<i32, String>,
     summon_storage: HashMap<i32, i32>,
@@ -498,6 +517,10 @@ struct Inner {
     /// (`42 36` flag 3) and party members' (`note_hp`). Details marks the
     /// players' on its DPS chart. The last `MAX_DEATHS` only.
     death_log: VecDeque<(i32, i64, Option<i64>)>,
+    /// The maps the player last opened, one per map (`capture::boss_map`),
+    /// and a count that moves with each, for `boss_maps_since`.
+    boss_maps: Vec<crate::capture::boss_map::BossMap>,
+    boss_map_seq: u64,
     /// Each party member's last HP (`1b 92`): falling to 0 from above is a
     /// death. The game sends no `42 36` death for a player (Ultimate Berk,
     /// 2026-10-11: 184 monster deaths, not one of the four that died).
@@ -599,6 +622,8 @@ impl DataStorage {
                 actor_jobs: HashMap::new(),
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
+                party_generation: 0,
+                party_ended_at_ms: NEVER_MS,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
                 summon_storage: HashMap::new(),
@@ -622,6 +647,8 @@ impl DataStorage {
                 hostile_target_ids: HashSet::new(),
                 dead_entity_ids: HashSet::new(),
                 death_log: VecDeque::new(),
+                boss_maps: Vec::new(),
+                boss_map_seq: 0,
                 last_hp: HashMap::new(),
                 despawned_summon_ids: HashSet::new(),
                 boss_entity_ids: HashSet::new(),
@@ -1343,6 +1370,22 @@ impl DataStorage {
 
     /// The deaths from `from` to `to` (ms), oldest first: (entity, time, the
     /// revive's time if they are back up).
+    /// A map the player opened, with its field bosses: kept until the same
+    /// map is opened again.
+    pub fn note_boss_map(&self, map: crate::capture::boss_map::BossMap) {
+        let mut inner = self.inner.write();
+        inner.boss_maps.retain(|m| m.map_id != map.map_id);
+        inner.boss_maps.push(map);
+        inner.boss_map_seq += 1;
+    }
+
+    /// The maps opened since `seq` was read (all of them, newest last), and
+    /// the count to ask with next time; None when nothing is new.
+    pub fn boss_maps_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::boss_map::BossMap>)> {
+        let inner = self.inner.read();
+        (inner.boss_map_seq != seq).then(|| (inner.boss_map_seq, inner.boss_maps.clone()))
+    }
+
     pub fn deaths_between(&self, from: i64, to: i64) -> Vec<(i32, i64, Option<i64>)> {
         self.inner.read().death_log.iter().filter(|d| d.1 >= from && d.1 <= to).copied().collect()
     }
@@ -1453,6 +1496,9 @@ impl DataStorage {
         let mut inner = self.inner.write();
         inner.party_roster_at_ms = now_ms();
         inner.party_placeholders_hidden = false;
+        // The meter's rows name the party: someone joining between fights
+        // must show without waiting for a hit (see `names_generation`).
+        inner.names_generation += 1;
 
         // Leaving, being kicked, or the party disbanding all show up the same way:
         // the next complete roster has you on your own. Going from a real party
@@ -1473,20 +1519,16 @@ impl DataStorage {
                 inner.party_members.len(),
                 members.len()
             );
-            // Save the party's fights while the roster and instance still say
-            // whose they are; the hook reads this storage, so no lock is held.
             drop(inner);
-            self.run_before_reset();
-            let mut inner = self.inner.write();
-            inner.party_members.clear();
-            inner.roster_dungeon_id = 0;
-            inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
-            drop(inner);
-            self.flush_combat_only();
-            self.combat_reset_requested.store(true, Ordering::Relaxed);
+            self.end_party();
             return;
         }
 
+        let joined = members.iter().any(|(name, _)| !inner.party_members.contains_key(name));
+        let left = complete && inner.party_members.keys().any(|name| !members.iter().any(|(n, _)| n == name));
+        if joined || left {
+            inner.party_generation += 1;
+        }
         if complete {
             inner.party_members.clear();
         }
@@ -1494,6 +1536,51 @@ impl DataStorage {
             inner.party_members.insert(name, member);
         }
         bind_roster_names_by_class(&mut inner);
+    }
+
+    /// You are no longer in a party: drop the roster rows and ask for a
+    /// combat reset, so the meter stops showing teammates who are no longer
+    /// with you. The fights so far are saved first.
+    fn end_party(&self) {
+        // Save the party's fights while the roster and instance still say
+        // whose they are; the hook reads this storage, so no lock is held.
+        self.run_before_reset();
+        let mut inner = self.inner.write();
+        inner.party_members.clear();
+        inner.party_generation += 1;
+        inner.party_ended_at_ms = now_ms();
+        inner.roster_dungeon_id = 0;
+        inner.current_dungeon_id = dungeon_of_map(0, inner.current_map_id);
+        drop(inner);
+        self.flush_combat_only();
+        self.combat_reset_requested.store(true, Ordering::Relaxed);
+    }
+
+    /// The game said you are no longer in a party: `13 92` for an open-world
+    /// party, `1d 97` for a dungeon or raid party (the finder's, whose roster
+    /// is `02 97`). You left, were kicked, or it disbanded. An open-world
+    /// party sends no roster at all, and leaving a raid others are still in
+    /// sends none that has you on your own, so this is the only sign. When
+    /// the roster has just ended the party (`1d 97` came 3 s after it at
+    /// 00:58 on 2026-10-14), it is not ended again.
+    ///
+    /// Nor is anything cleared when there is no party to clear: no roster and
+    /// nobody but you on the meter. Should the game ever send one of these in
+    /// another case (an invite declined or failed, a login, a zone change
+    /// while solo), a fight of your own is not wiped.
+    pub fn note_party_left(&self) {
+        {
+            let inner = self.inner.read();
+            if now_ms().saturating_sub(inner.party_ended_at_ms) < PARTY_LEFT_AFTER_END_MS {
+                return;
+            }
+            if inner.party_members.is_empty() && !others_on_meter(&inner) {
+                tracing::info!("Party left, but no party and nobody else on the meter: nothing to clear");
+                return;
+            }
+        }
+        tracing::info!("Party left — clearing party rows");
+        self.end_party();
     }
 
     /// A zone load named the map it loads (`21 36`). The map, once known, is
@@ -1547,7 +1634,9 @@ impl DataStorage {
     /// The player reset the meter: stop showing party members who have not
     /// fought, until the game sends the next roster.
     pub fn hide_party_placeholders(&self) {
-        self.inner.write().party_placeholders_hidden = true;
+        let mut inner = self.inner.write();
+        inner.party_placeholders_hidden = true;
+        inner.names_generation += 1;
     }
 
     /// Record a power-scalar reading for an actor. See `Inner::actor_power_scalars`.
@@ -1897,7 +1986,15 @@ impl DataStorage {
         inner.names_generation += 1;
     }
 
-    /// Changes whenever a name is bound, replaced or dropped.
+    /// Changes when someone joins or leaves the party, or it ends: the meter
+    /// then drops the rows it kept from the last fight, which name the old
+    /// party. Not with every roster; the game resends it on each map load.
+    pub fn party_generation(&self) -> u64 {
+        self.inner.read().party_generation
+    }
+
+    /// Changes whenever a name is bound, replaced or dropped, and with each
+    /// party roster (the meter's rows for members who haven't fought).
     pub fn names_generation(&self) -> u64 {
         self.inner.read().names_generation
     }
@@ -3232,5 +3329,29 @@ mod tests {
         assert_eq!(s.current_dungeon_id(), 610073);
         s.note_map_load(610073);
         assert_eq!(s.current_dungeon_id(), 610073, "a teleport inside keeps it");
+    }
+
+    /// A "no longer in a party" record with no party to clear (no roster,
+    /// nobody but you on the meter) leaves your fight alone; with another
+    /// player on the meter (an open-world party has no roster), it clears.
+    #[test]
+    fn leaving_a_party_clears_only_when_there_was_one() {
+        let s = DataStorage::new();
+        s.note_party_left();
+        assert!(!s.take_combat_reset_requested(), "an empty meter");
+
+        s.set_local_player_id(Some(101));
+        s.append_nickname_authoritative(101, "Nullception");
+        s.append_damage(hit(101, 900, 1_000, 500, false));
+        s.register_confirmed_summon_by_id(5_000, 101);
+        s.append_damage(hit(5_000, 900, 1_500, 200, false));
+        s.note_party_left();
+        assert!(!s.take_combat_reset_requested(), "only you, and your summon");
+        assert!(s.get_combat_snapshot()[&900].total_damage > 0, "your fight is kept");
+
+        s.append_nickname_authoritative(202, "JinSoul");
+        s.append_damage(hit(202, 900, 2_000, 300, false));
+        s.note_party_left();
+        assert!(s.take_combat_reset_requested(), "an open-world party: someone else on the meter");
     }
 }

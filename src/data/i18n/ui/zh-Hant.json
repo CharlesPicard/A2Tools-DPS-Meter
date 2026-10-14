@@ -92,6 +92,13 @@
       "healPct": "治療%",
       "healPctTooltip": "治療占比"
     },
+    "peak": {
+      "label": "隊伍列表",
+      "show": "在平均值旁顯示峰值 DPS（最佳 5 秒）"
+    },
+    "party": {
+      "activeDps": "有效時間 DPS：{dps}（戰鬥 {total} 中的 {active}）"
+    },
     "stats": {
       "totalDamage": "總傷害",
       "contribution": "貢獻度",
@@ -106,7 +113,11 @@
       "maxHp": "最大HP",
       "hits": "命中次數",
       "selfHealing": "自我治療",
-      "deaths": "死亡次數"
+      "damageReceived": "承受傷害",
+      "deaths": "死亡次數",
+      "avgDps": "平均 DPS",
+      "peakDps": "峰值 DPS",
+      "peakDpsTip": "戰鬥中任意 5 秒內的最高 DPS"
     },
     "titleFor": "針對",
     "titleVs": "vs",
@@ -255,6 +266,7 @@
     "playerLimit": {
       "label": "最大顯示人數"
     },
+    "shareBossTimers": "分享野外首領計時",
     "debugLogging": "除錯記錄",
     "quit": "結束",
     "discord": {
@@ -378,6 +390,7 @@
       "options": {
         "combatPower": "戰鬥力",
         "gearScore": "裝備分數",
+        "both": "兩者",
         "off": "關閉"
       }
     },
@@ -441,6 +454,7 @@
       "trainingMode": "訓練模式下詳細資料視窗顯示哪些木樁：全部一起，或只顯示你打得最多的那個。",
       "allTargetsWindow": "全部目標模式下，計量器彙總最後一次命中前這段時間內命中的所有目標。",
       "updateRate": "統計數字多久刷新一次。越快越早顯示傷害，但佔用更多 CPU。",
+      "shareBossTimers": "開啟地圖時，圖上的野外首領計時會透過 a2tools.app 分享給其他玩家的活動計時器。只會傳送伺服器、首領與時間。",
       "debugLogging": "寫入開發者用於排查問題的診斷記錄。",
       "saveRawPackets": "記錄原始遊戲流量以便回報錯誤。除錯記錄會隨之開啟。",
       "globalHotkeys": "下面的按鍵在遊戲位於前景時也能使用。關閉後，這些按鍵會釋放給其他程式。在 Linux 上由桌面註冊這些按鍵，桌面可能會請你核准。",
@@ -483,7 +497,7 @@
       "installing": "正在安裝…",
       "installDone": "{name} {version} 已安裝。",
       "updatesAvailable": "有可用更新：{list}",
-      "unreviewed": "未審核",
+      "unreviewed": "開發",
       "by": "作者：{author}",
       "consentTitle": "安裝 {name}？",
       "consentUpdateTitle": "更新 {name}？",
@@ -493,9 +507,12 @@
       "permStorage": "在此電腦上儲存自己的資料",
       "permNotify": "在自己的視窗中顯示簡短訊息",
       "permWindow": "顯示和隱藏自己的視窗，不會搶走遊戲的焦點",
+      "permBossTimers": "讀取玩家透過 a2tools.app 分享的野外首領計時",
       "permCharacter": "查看你角色的名稱、伺服器、職業和等級",
       "permDecoder": "讀取你自己的遊戲資料：{name}",
-      "permNone": "除顯示視窗外不做其他事"
+      "permNone": "除顯示視窗外不做其他事",
+      "enabled": "啟用",
+      "enabledTip": "開啟：隨計量器啟動。關閉：保持安裝，但不執行。"
     }
   },
   "support": {

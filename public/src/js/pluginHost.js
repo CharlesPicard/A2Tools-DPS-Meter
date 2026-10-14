@@ -29,6 +29,7 @@
   const deliver = (event, data, extra = {}) => {
     if (event.startsWith("decoded:") && !allowed(`decoder:${event.slice(8)}`)) return;
     if (event === "character" && !allowed("events:character")) return;
+    if (event === "bossMap" && !allowed("feed:boss-timers")) return;
     const msg = { event, data, ...extra };
     if (ready) send(msg);
     else queue.push(msg);
@@ -59,6 +60,11 @@
       return true;
     },
     "storage.get": ([key]) => invoke("plugin_storage_get", { key: String(key) }),
+    // The field boss timers players' meters share, for one server.
+    bossTimers: ([server]) => {
+      if (!allowed("feed:boss-timers")) throw new Error('the plugin lacks the "feed:boss-timers" permission');
+      return invoke("plugin_boss_timers", { server: Number(server) });
+    },
     "storage.set": ([key, value]) => invoke("plugin_storage_set", { key: String(key), value: String(value) }),
     "window.show": () => {
       if (!allowed("window")) throw new Error('the plugin lacks the "window" permission');
@@ -109,8 +115,8 @@
     invoke("start_tool_drag").catch(() => {});
   });
   document.querySelector(".pluginClose").addEventListener("click", () => {
-    // Closed here, it stays closed at the next start (unlike a window the
-    // plugin hid, which comes back hidden and keeps watching).
+    // Closed until the next start; turning the plugin off in Settings keeps
+    // it closed.
     invoke("plugin_close").catch(() => {});
   });
 
@@ -162,11 +168,10 @@
     manifest = hello.manifest;
     document.title = manifest.name;
     document.querySelector(".pluginName").textContent = `${manifest.name} ${manifest.version}`;
-    // Reviewed plugins come from the signed catalog; anything else is a developer folder.
-    document.querySelector(".pluginBadge").hidden = !!hello.reviewed;
     deliver("language", hello.language || "en");
     deliver("compact", panel.compact);
     if (hello.character) deliver("character", hello.character);
+    if (typeof hello.game === "boolean") deliver("game", { running: hello.game });
     run = hello.run;
     try {
       const cursor = JSON.parse(localStorage.getItem(CURSOR_KEY) || "null");

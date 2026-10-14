@@ -15,7 +15,7 @@
 pub mod catalog;
 pub mod decoder;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -33,6 +33,8 @@ use decoder::{Decoder, DecoderSpec};
 pub const DEV_MODE_KEY: &str = "dpsMeter.pluginDevMode";
 /// The folders loaded in developer mode, a JSON array of paths.
 pub const DEV_FOLDERS_KEY: &str = "dpsMeter.devPlugins";
+/// How often plugins' "game" event (is AION2 open) is looked at.
+const GAME_CHECK: Duration = Duration::from_secs(5);
 /// The scheme plugin files are served from (`http://a2plugin.localhost/` on
 /// Windows, `a2plugin://localhost/` elsewhere).
 pub const SCHEME: &str = "a2plugin";
@@ -46,6 +48,9 @@ const MIN_PANEL_HEIGHT: f64 = 60.0;
 /// ran: a JSON object of id → "shown" | "hidden". They open again at start, so
 /// a plugin that watches in the background (hidden) keeps doing so.
 pub const WINDOWS_KEY: &str = "dpsMeter.pluginWindows";
+/// Plugins turned off in Settings, a JSON array of ids: they stay installed
+/// but don't run. Every other plugin starts with the meter.
+pub const DISABLED_KEY: &str = "dpsMeter.pluginsDisabled";
 /// Largest value one storage key may hold.
 const MAX_STORED: usize = 1024 * 1024;
 /// How long a decoded event waits before it is stamped with the character and
@@ -109,13 +114,54 @@ pub struct PluginsView {
     /// Whether this build can reach the catalog (not the offline build).
     pub online: bool,
     pub plugins: Vec<PluginInfo>,
+    /// Ids of the plugins turned off.
+    pub disabled: Vec<String>,
 }
 
 fn view(app: &tauri::AppHandle, host: &PluginHost) -> PluginsView {
     let dev_mode = app
         .try_state::<AppState>()
         .is_some_and(|s| s.settings.get(DEV_MODE_KEY).as_deref() == Some("true"));
-    PluginsView { dev_mode, online: cfg!(feature = "online"), plugins: host.list() }
+    PluginsView { dev_mode, online: cfg!(feature = "online"), plugins: host.list(), disabled: disabled(app) }
+}
+
+/// The plugins turned off.
+fn disabled(app: &tauri::AppHandle) -> Vec<String> {
+    app.try_state::<AppState>()
+        .and_then(|s| s.settings.get(DISABLED_KEY))
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn set_disabled(app: &tauri::AppHandle, id: &str, off: bool) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let mut ids = disabled(app);
+    ids.retain(|x| x != id);
+    if off {
+        ids.push(id.to_string());
+    }
+    state.settings.set(DISABLED_KEY, &serde_json::to_string(&ids).unwrap_or_default());
+}
+
+/// Turn a plugin on (it starts now and with every start of the meter) or off
+/// (its window closes; it stays installed, with its data).
+/// Async: on Windows, building a window from a synchronous command deadlocks.
+#[tauri::command]
+pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool) -> Result<PluginsView, String> {
+    if !valid_id(&id) {
+        return Err("not a plugin id".into());
+    }
+    set_disabled(&app, &id, !enabled);
+    reopened(&app, &id);
+    if enabled {
+        open_window(&app, &id, true)?;
+        remember_window(&app, &id, Some("shown"));
+    } else if let Some(window) = app.get_webview_window(&format!("plugin-{id}")) {
+        let _ = window.close();
+    }
+    tracing::info!("Plugins: {id} {}", if enabled { "enabled" } else { "disabled" });
+    let host = host(&app)?;
+    Ok(view(&app, &host))
 }
 
 /// Where reviewed plugins are installed.
@@ -152,6 +198,9 @@ pub struct PluginHost {
     seq: Mutex<u64>,
     run: String,
     flusher: AtomicBool,
+    /// Plugins closed with their window's ×, this run: a reload (an install,
+    /// Check for updates, a folder added) does not start them again.
+    closed: Mutex<HashSet<String>>,
 }
 
 impl Default for PluginHost {
@@ -169,8 +218,30 @@ impl Default for PluginHost {
             seq: Mutex::new(0),
             run,
             flusher: AtomicBool::new(false),
+            closed: Mutex::default(),
         }
     }
+}
+
+/// A map the player opened, as a2.on("bossMap") hands it on: the feed's
+/// shape (times in unix seconds), each boss stamped with when it was read.
+fn boss_map_event(map: &crate::capture::boss_map::BossMap) -> Value {
+    let secs = |ms: i64| (ms > 0).then_some(ms / 1000);
+    let bosses: serde_json::Map<String, Value> = map
+        .bosses
+        .iter()
+        .map(|b| {
+            let entry = serde_json::json!({
+                "state": if b.up { "up" } else { "dead" },
+                "upSince": if b.up { secs(b.time_ms) } else { None },
+                "nextSpawn": if b.up { None } else { secs(b.time_ms) },
+                "reportedAt": map.seen_ms / 1000,
+                "confirmed": true,
+            });
+            (b.id.to_string(), entry)
+        })
+        .collect();
+    serde_json::json!({ "map": map.map_id, "bosses": bosses })
 }
 
 /// Who is playing, as plugins with `events:character` see it.
@@ -294,7 +365,12 @@ impl PluginHost {
             let app = app.clone();
             std::thread::Builder::new()
                 .name("plugin-events".into())
-                .spawn(move || loop {
+                .spawn(move || {
+                let mut told = character(&app);
+                let mut game = crate::platform::window_detector::find_aion2_window();
+                let mut game_checked = Instant::now();
+                let mut map_seq = 0u64;
+                loop {
                     // Woken by each queued event; the timeout lets settling
                     // events go once their wait is over.
                     let ready = {
@@ -308,6 +384,34 @@ impl PluginHost {
                         ready
                     };
                     host.flush(&app, ready);
+                    // The character as the meter learns it (a login, a switch,
+                    // or the meter starting mid-game): open plugins hear it then,
+                    // not only when their window opens.
+                    let now = character(&app);
+                    if now != told {
+                        host.tell_character(&app, now.clone());
+                        told = now;
+                    }
+                    // A map the player opened: its field bosses, to plugins
+                    // with feed:boss-timers at once (the shared feed lags).
+                    if let Some(state) = app.try_state::<AppState>() {
+                        if let Some((next, maps)) = state.data_storage.boss_maps_since(map_seq) {
+                            map_seq = next;
+                            if let Some(map) = maps.iter().filter(|m| m.header == 0).max_by_key(|m| m.seen_ms) {
+                                host.tell_permitted(&app, "feed:boss-timers", "bossMap", boss_map_event(map));
+                            }
+                        }
+                    }
+                    // Whether AION2 is open, looked at every few seconds.
+                    if game_checked.elapsed() >= GAME_CHECK {
+                        game_checked = Instant::now();
+                        let running = crate::platform::window_detector::find_aion2_window();
+                        if running != game {
+                            game = running;
+                            host.tell_all(&app, "game", serde_json::json!({ "running": running }));
+                        }
+                    }
+                }
                 })
                 .ok();
         }
@@ -398,6 +502,51 @@ impl PluginHost {
         }
     }
 
+    /// An unnumbered event to every loaded plugin (pluginHost.js hands it
+    /// straight on).
+    fn tell_all(&self, app: &tauri::AppHandle, event: &str, data: Value) {
+        let ids: Vec<String> =
+            self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().map(|l| l.manifest.id.clone()).collect();
+        for id in ids {
+            let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", msg);
+        }
+    }
+
+    /// An unnumbered event to the plugins with a permission.
+    fn tell_permitted(&self, app: &tauri::AppHandle, permission: &str, event: &str, data: Value) {
+        let ids: Vec<String> = self
+            .loaded
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|l| l.manifest.permissions.iter().any(|p| p == permission))
+            .map(|l| l.manifest.id.clone())
+            .collect();
+        for id in ids {
+            let msg = serde_json::json!({ "plugin": id, "event": event, "data": data });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", msg);
+        }
+    }
+
+    /// The character, to every plugin allowed to know it (pluginHost.js hands
+    /// an unnumbered event straight on).
+    fn tell_character(&self, app: &tauri::AppHandle, who: Option<Value>) {
+        let Some(who) = who else { return };
+        let ids: Vec<String> = self
+            .loaded
+            .read()
+            .unwrap_or_else(|p| p.into_inner())
+            .iter()
+            .filter(|l| l.manifest.permissions.iter().any(|p| p == "events:character"))
+            .map(|l| l.manifest.id.clone())
+            .collect();
+        for id in ids {
+            let event = serde_json::json!({ "plugin": id, "event": "character", "data": who });
+            let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", event);
+        }
+    }
+
     fn list(&self) -> Vec<PluginInfo> {
         let mut out: Vec<PluginInfo> = self.loaded.read().unwrap_or_else(|p| p.into_inner()).iter().map(info).collect();
         out.extend(self.errors.read().unwrap_or_else(|p| p.into_inner()).iter().cloned());
@@ -452,12 +601,15 @@ pub fn plugin_list(app: tauri::AppHandle) -> Result<PluginsView, String> {
 }
 
 /// Turn developer mode on or off, and load or unload its plugins.
+/// Async: it may start plugins, and building a window from a synchronous
+/// command deadlocks on Windows.
 #[tauri::command]
-pub fn plugin_set_dev_mode(app: tauri::AppHandle, enabled: bool) -> Result<PluginsView, String> {
+pub async fn plugin_set_dev_mode(app: tauri::AppHandle, enabled: bool) -> Result<PluginsView, String> {
     let state = app.try_state::<AppState>().ok_or("no app state")?;
     state.settings.set(DEV_MODE_KEY, if enabled { "true" } else { "false" });
     let host = host(&app)?;
     host.reload(&app);
+    restore_windows(&app);
     Ok(view(&app, &host))
 }
 
@@ -478,6 +630,7 @@ pub async fn plugin_add_folder(app: tauri::AppHandle, window: tauri::WebviewWind
     state.settings.set(DEV_FOLDERS_KEY, &serde_json::to_string(&folders).unwrap_or_default());
     let host = host(&app)?;
     host.reload(&app);
+    restore_windows(&app);
     Ok(view(&app, &host))
 }
 
@@ -576,6 +729,7 @@ pub async fn plugin_check_updates(app: tauri::AppHandle) -> Result<UpdateCheck, 
         .map(|p| PluginUpdate { id: p.id.clone(), name: p.name.clone(), from: before.get(&p.id).cloned(), to: p.version.clone() })
         .collect();
     refresh_windows(&app, &host);
+    restore_windows(&app);
     #[cfg(feature = "online")]
     let (available, catalog_error) = match available_updates(&app, &host).await {
         Ok(available) => (available, None),
@@ -800,6 +954,7 @@ async fn install_entry(app: &tauri::AppHandle, host: &Arc<PluginHost>, entry: &c
     tracing::info!("Plugins: installed {} {}", entry.id, entry.version);
     host.reload(app);
     refresh_windows(app, host);
+    restore_windows(app);
     Ok(())
 }
 
@@ -833,6 +988,7 @@ pub fn plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<PluginsView
         let _ = window.close();
     }
     remember_window(&app, &id, None);
+    set_disabled(&app, &id, false);
     let dir = plugins_dir(&app)?.join(&id);
     if dir.is_dir() {
         std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -1017,21 +1173,46 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
 /// Async: on Windows, building a window from a synchronous command deadlocks.
 #[tauri::command]
 pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    if disabled(&app).contains(&id) {
+        return Err("that plugin is turned off".into());
+    }
+    reopened(&app, &id);
     open_window(&app, &id, true)?;
     remember_window(&app, &id, Some("shown"));
     Ok(())
 }
 
-/// Open again the plugin windows that were open when the meter last closed.
+/// A plugin opened by hand (Open, or turned on) starts again after reloads.
+fn reopened(app: &tauri::AppHandle, id: &str) {
+    if let Ok(host) = host(app) {
+        host.closed.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+    }
+}
+
+/// Whether a plugin should be started now: loaded, turned on, not closed with
+/// × this run, and not already running.
+fn should_start(p: &PluginInfo, off: &[String], closed: &HashSet<String>, running: bool) -> bool {
+    p.error.is_none() && !off.contains(&p.id) && !closed.contains(&p.id) && !running
+}
+
+/// Start every plugin that is turned on and not running, its window shown or
+/// hidden as it was last left (shown the first time): at start, and when a
+/// plugin is installed or its folder loaded. One closed with × this run stays
+/// closed.
 pub fn restore_windows(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else { return };
+    let Ok(host) = host(app) else { return };
     let windows: serde_json::Map<String, Value> =
         state.settings.get(WINDOWS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    for (id, how) in windows {
-        let visible = how.as_str() != Some("hidden");
-        if let Err(e) = open_window(app, &id, visible) {
-            tracing::info!("Plugins: not reopening {id}: {e}");
-            remember_window(app, &id, None);
+    let off = disabled(app);
+    let closed = host.closed.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for p in host.list() {
+        if !should_start(&p, &off, &closed, app.get_webview_window(&format!("plugin-{}", p.id)).is_some()) {
+            continue;
+        }
+        let visible = windows.get(&p.id).and_then(Value::as_str) != Some("hidden");
+        if let Err(e) = open_window(app, &p.id, visible) {
+            tracing::info!("Plugins: not starting {}: {e}", p.id);
         }
     }
 }
@@ -1052,11 +1233,12 @@ pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visibl
     Ok(())
 }
 
-/// The window's close button: close it, and don't reopen it at the next start.
+/// The window's close button: close it until the next start (turning the
+/// plugin off in Settings keeps it closed).
 #[tauri::command]
 pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
     let id = window_plugin(&window)?;
-    remember_window(&app, &id, None);
+    host(&app)?.closed.lock().unwrap_or_else(|e| e.into_inner()).insert(id);
     let _ = window.close();
     Ok(())
 }
@@ -1084,6 +1266,7 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         "character": character,
         "language": language,
         "reviewed": reviewed,
+        "game": crate::platform::window_detector::find_aion2_window(),
     }))
 }
 
@@ -1116,6 +1299,46 @@ pub fn broadcast(app: &tauri::AppHandle, event: &str, data: Value) {
 fn require(app: &tauri::AppHandle, id: &str, permission: &str) -> Result<(), String> {
     let has = host(app)?.with(id, |l| l.manifest.permissions.iter().any(|p| p == permission)).unwrap_or(false);
     if has { Ok(()) } else { Err(format!("the plugin lacks the {permission:?} permission")) }
+}
+
+/// A server's field boss timers, as players' meters reported them
+/// (a2tools.app's feed, `boss_report.rs`), for plugins with
+/// `feed:boss-timers`: the published file as it is, or None when the server
+/// has none yet. Kept a minute, so plugins asking often fetch it once.
+#[tauri::command]
+pub async fn plugin_boss_timers(app: tauri::AppHandle, window: tauri::WebviewWindow, server: u32) -> Result<Option<Value>, String> {
+    let id = window_plugin(&window)?;
+    require(&app, &id, "feed:boss-timers")?;
+    if !(1000..10000).contains(&server) {
+        return Err("not a server id".into());
+    }
+    boss_timers(&app, server).await
+}
+
+#[cfg(feature = "online")]
+async fn boss_timers(app: &tauri::AppHandle, server: u32) -> Result<Option<Value>, String> {
+    static CACHE: std::sync::OnceLock<Mutex<HashMap<u32, (Instant, Option<Value>)>>> = std::sync::OnceLock::new();
+    let cache = CACHE.get_or_init(Mutex::default);
+    if let Some((at, value)) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&server) {
+        if at.elapsed() < Duration::from_secs(60) {
+            return Ok(value.clone());
+        }
+    }
+    let state = app.try_state::<AppState>().ok_or("no app state")?;
+    let url = format!("https://cdn.a2tools.app/feeds/boss-timers/{server}.json");
+    let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
+    let value = match res.status() {
+        s if s == reqwest::StatusCode::NOT_FOUND => None,
+        s if s.is_success() => Some(serde_json::from_str(&res.text().await.map_err(|e| e.to_string())?).map_err(|e| e.to_string())?),
+        s => return Err(format!("the feed answered {s}")),
+    };
+    cache.lock().unwrap_or_else(|p| p.into_inner()).insert(server, (Instant::now(), value.clone()));
+    Ok(value)
+}
+
+#[cfg(not(feature = "online"))]
+async fn boss_timers(_app: &tauri::AppHandle, _server: u32) -> Result<Option<Value>, String> {
+    Err("this meter is built without network features".into())
 }
 
 #[tauri::command]
@@ -1372,9 +1595,9 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{base64, content_policy, inline_page, inlined_policy, prompt_texts, take_ready, update_prompt, updates_to_offer};
-    use super::{within_reach, Pending, PluginAvailable, LANGUAGES, SETTLE};
-    use std::collections::HashMap;
+    use super::{base64, content_policy, inline_page, inlined_policy, prompt_texts, should_start, take_ready};
+    use super::{update_prompt, updates_to_offer, within_reach, Pending, PluginAvailable, PluginInfo, LANGUAGES, SETTLE};
+    use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
 
     fn available(id: &str, from: &str, to: &str, new_permissions: &[&str]) -> PluginAvailable {
@@ -1426,6 +1649,27 @@ mod tests {
             }
         }
         assert_eq!(prompt_texts(None, "ko").update_now, en.update_now, "no data: the built-in English");
+    }
+
+    #[test]
+    fn a_reload_starts_enabled_plugins_but_not_one_closed_with_x_or_turned_off() {
+        let plugin = |id: &str, error: Option<&str>| PluginInfo {
+            id: id.into(),
+            name: id.into(),
+            version: "1.0.0".into(),
+            description: String::new(),
+            path: String::new(),
+            permissions: Vec::new(),
+            reviewed: true,
+            error: error.map(str::to_string),
+        };
+        let off = vec!["off".to_string()];
+        let closed = HashSet::from(["closed".to_string()]);
+        assert!(should_start(&plugin("a", None), &off, &closed, false));
+        assert!(!should_start(&plugin("a", None), &off, &closed, true), "already running");
+        assert!(!should_start(&plugin("off", None), &off, &closed, false), "turned off");
+        assert!(!should_start(&plugin("closed", None), &off, &closed, false), "closed with × this run");
+        assert!(!should_start(&plugin("a", Some("bad manifest")), &off, &closed, false), "failed to load");
     }
 
     #[test]

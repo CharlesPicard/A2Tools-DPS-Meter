@@ -97,6 +97,13 @@
       "healPct": "H%",
       "healPctTooltip": "Healing %"
     },
+    "peak": {
+      "label": "Party list",
+      "show": "Show peak DPS (best 5 s) beside the average"
+    },
+    "party": {
+      "activeDps": "Active-time DPS: {dps} ({active} of the fight's {total})"
+    },
     "stats": {
       "totalDamage": "Total Damage",
       "contribution": "Contribution",
@@ -111,7 +118,11 @@
       "multiHitDamage": "Multi-Hit Damage",
       "multiHitHits": "Multi-Hits",
       "maxHp": "Max HP",
-      "deaths": "Deaths"
+      "damageReceived": "Damage Taken",
+      "deaths": "Deaths",
+      "avgDps": "Avg DPS",
+      "peakDps": "Peak DPS",
+      "peakDpsTip": "The highest DPS over any 5 seconds of the fight"
     },
     "titleFor": "for",
     "titleVs": "vs",
@@ -260,6 +271,7 @@
     "playerLimit": {
       "label": "Max players shown"
     },
+    "shareBossTimers": "Share field boss timers",
     "debugLogging": "Debug logging",
     "quit": "Quit",
     "discord": {
@@ -383,6 +395,7 @@
       "options": {
         "combatPower": "Combat power",
         "gearScore": "Gear score",
+        "both": "Both",
         "off": "Off"
       }
     },
@@ -446,6 +459,7 @@
       "trainingMode": "In Train mode, which dummies the Details window shows: all of them together, or only the one you hit hardest.",
       "allTargetsWindow": "In All Targets mode, the meter adds up every target hit within this time of the latest hit.",
       "updateRate": "How often the meter's numbers refresh. Faster shows hits sooner but uses more CPU.",
+      "shareBossTimers": "When you open your map, the field boss timers on it are shared with other players through a2tools.app, for their Event Timers. Only the server, the bosses and their times are sent.",
       "debugLogging": "Writes a diagnostic log the developer can use to track down problems.",
       "saveRawPackets": "Records raw game traffic for bug reports. Debug logging turns on with it.",
       "globalHotkeys": "The keys below work anywhere, even while the game is in front. Off, they are released for other programs. On Linux your desktop registers them and may ask you to approve them.",
@@ -488,7 +502,7 @@
       "installing": "Installing…",
       "installDone": "{name} {version} is installed.",
       "updatesAvailable": "Updates available: {list}",
-      "unreviewed": "Unreviewed",
+      "unreviewed": "Dev",
       "by": "by {author}",
       "consentTitle": "Install {name}?",
       "consentUpdateTitle": "Update {name}?",
@@ -498,9 +512,12 @@
       "permStorage": "Save its own data on this computer",
       "permNotify": "Show short messages in its window",
       "permWindow": "Show and hide its own window, without taking focus from the game",
+      "permBossTimers": "Read the field boss timers players share through a2tools.app",
       "permCharacter": "See your character's name, server, class and level",
       "permDecoder": "Read your own game data: {name}",
-      "permNone": "Nothing beyond showing its window"
+      "permNone": "Nothing beyond showing its window",
+      "enabled": "Enabled",
+      "enabledTip": "On: starts with the meter. Off: stays installed but doesn't run."
     }
   },
   "support": {

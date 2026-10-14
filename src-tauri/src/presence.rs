@@ -99,7 +99,7 @@ fn run(app: tauri::AppHandle) {
         let since = *game_since.get_or_insert_with(crate::clock::now_ms);
 
         let lang = state.settings.get("dpsMeter.language").unwrap_or_else(|| "en".into());
-        let text = Texts::load(state.i18n_data_dir.as_ref(), &lang);
+        let text = Texts::load(i18n_dir(&state).as_ref(), &lang);
         let next = describe(&state.data_storage, &state, &text, &lang);
         if shown.as_ref() == Some(&next) && client.is_some() {
             continue;
@@ -183,7 +183,7 @@ fn describe(storage: &Arc<DataStorage>, state: &AppState, text: &Texts, lang: &s
 
     let state_line = fighting(storage, state)
         .map(|boss| text.get("fighting", "Fighting {boss}").replace("{boss}", &boss))
-        .or_else(|| in_dungeon(storage.current_dungeon_id(), state.i18n_data_dir.as_ref(), text, lang))
+        .or_else(|| in_dungeon(storage.current_dungeon_id(), i18n_dir(state).as_ref(), text, lang))
         .unwrap_or_else(|| where_from(&profile, text, lang));
 
     Shown {
@@ -193,6 +193,12 @@ fn describe(storage: &Arc<DataStorage>, state: &AppState, text: &Texts, lang: &s
         class_key: profile.class.map(class_key),
         class_name,
     }
+}
+
+/// The meter's translations: `i18n` inside its data folder. Without it the
+/// class showed under its code name ("Elementalist" for a Spiritmaster).
+fn i18n_dir(state: &AppState) -> Option<PathBuf> {
+    state.i18n_data_dir.as_ref().map(|d| d.join("i18n"))
 }
 
 /// The boss being fought right now, by name, if any.
@@ -299,6 +305,22 @@ fn where_from(profile: &LocalProfile, text: &Texts, lang: &str) -> String {
     out
 }
 
+/// A class as the Global game names it in English, for when the meter's
+/// strings can't be read.
+fn english_class(class: JobClass) -> &'static str {
+    match class {
+        JobClass::Gladiator => "Gladiator",
+        JobClass::Templar => "Templar",
+        JobClass::Ranger => "Ranger",
+        JobClass::Assassin => "Assassin",
+        JobClass::Sorcerer => "Sorcerer",
+        JobClass::Cleric => "Cleric",
+        JobClass::Elementalist => "Spiritmaster",
+        JobClass::Chanter => "Chanter",
+        JobClass::Fighter => "Brawler",
+    }
+}
+
 /// The `presence` and `classes` sections of the meter's own UI strings.
 struct Texts {
     presence: HashMap<String, String>,
@@ -331,7 +353,7 @@ impl Texts {
             JobClass::Elementalist => "ELEMENTALIST".to_string(),
             other => class_key(other).to_uppercase(),
         };
-        self.classes.get(&key).cloned().unwrap_or_else(|| format!("{class:?}"))
+        self.classes.get(&key).cloned().unwrap_or_else(|| english_class(class).to_string())
     }
 }
 
@@ -358,6 +380,16 @@ mod tests {
         assert_eq!(in_dungeon(600012, Some(&dir), &texts(), "en").as_deref(), Some("Urugugu Canyon · Conquest (Normal)"));
         assert_eq!(in_dungeon(600091, Some(&dir), &texts(), "en").as_deref(), Some("Ferocious Horn Den · Expedition"));
         assert_eq!(in_dungeon(0, Some(&dir), &texts(), "en"), None);
+    }
+
+    #[test]
+    fn classes_are_named_as_the_game_names_them() {
+        let dir = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../src/data/i18n"));
+        assert_eq!(Texts::load(Some(&dir), "en").class(JobClass::Elementalist), "Spiritmaster");
+        assert_eq!(Texts::load(Some(&dir), "en").class(JobClass::Fighter), "Brawler");
+        assert_eq!(Texts::load(Some(&dir), "ko").class(JobClass::Elementalist), "정령성");
+        // Without the strings: still the game's English name, not the code's.
+        assert_eq!(texts().class(JobClass::Elementalist), "Spiritmaster");
     }
 
     #[test]

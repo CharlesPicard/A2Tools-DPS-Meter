@@ -144,6 +144,20 @@
                         aria-label="Skill icon size" />
                       <span class="detailsIconSizeValue">36px</span>
                     </div>
+                    <div class="detailsSettingsLabel" data-i18n="details.peak.label">
+                      Party list
+                    </div>
+                    <label class="detailsSettingsToggle">
+                      <span
+                        class="detailsSettingsToggleLabel"
+                        data-i18n="details.peak.show">
+                        Show peak DPS (best 5 s) beside the average
+                      </span>
+                      <span class="detailsSettingsToggleControl">
+                        <input type="checkbox" class="detailsShowPeakCheckbox" />
+                        <span class="detailsSettingsToggleTrack" aria-hidden="true"></span>
+                      </span>
+                    </label>
                     <div class="detailsSettingsLabel" data-i18n="details.screenshots.label">
                       Screenshots
                     </div>
@@ -1023,6 +1037,15 @@
                       <div class="settingsDropdownMenu updateRateDropdownMenu" role="menu"></div>
                     </div>
                   </div>
+                </div>
+                <div class="settingsGroupBody">
+                  <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.shareBossTimers" title="When you open your map, the field boss timers on it are shared with other players through a2tools.app, for their Event Timers. Only the server, the bosses and their times are sent." data-i18n-title="settings.tips.shareBossTimers">Share field boss timers</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="shareBossTimersCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
                 </div>
                 <h3 class="settingsSubTitle" data-i18n="settings.diagnostics">Diagnostics</h3>
                 <div class="settingsGroupBody">

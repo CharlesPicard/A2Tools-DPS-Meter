@@ -92,6 +92,13 @@
       "healPct": "H%",
       "healPctTooltip": "Heilung %"
     },
+    "peak": {
+      "label": "Gruppenliste",
+      "show": "Spitzen-DPS (beste 5 s) neben dem Durchschnitt zeigen"
+    },
+    "party": {
+      "activeDps": "DPS in aktiver Zeit: {dps} ({active} von {total} des Kampfes)"
+    },
     "stats": {
       "totalDamage": "Gesamtschaden",
       "contribution": "Anteil",
@@ -106,7 +113,11 @@
       "multiHitDamage": "Mehrfachtreffer-Schaden",
       "multiHitHits": "Mehrfachtreffer",
       "maxHp": "Max. LP",
-      "deaths": "Tode"
+      "damageReceived": "Erlittener Schaden",
+      "deaths": "Tode",
+      "avgDps": "Ø DPS",
+      "peakDps": "Spitzen-DPS",
+      "peakDpsTip": "Die höchsten DPS über beliebige 5 Sekunden des Kampfes"
     },
     "titleFor": "für",
     "titleVs": "gegen",
@@ -250,6 +261,7 @@
     "playerLimit": {
       "label": "Max. angezeigte Spieler"
     },
+    "shareBossTimers": "Feldboss-Timer teilen",
     "debugLogging": "Debug-Protokoll",
     "quit": "Beenden",
     "discord": {
@@ -373,6 +385,7 @@
       "options": {
         "combatPower": "Kampfkraft",
         "gearScore": "Ausrüstungswert",
+        "both": "Beides",
         "off": "Aus"
       }
     },
@@ -434,6 +447,7 @@
       "trainingMode": "Im Trainingsmodus: welche Puppen das Detailfenster zeigt – alle zusammen oder nur die, die du am stärksten triffst.",
       "allTargetsWindow": "Im Modus „Alle Ziele“ zählt das Meter alle Ziele, die innerhalb dieser Zeit vor dem letzten Treffer getroffen wurden.",
       "updateRate": "Wie oft sich die Zahlen des Meters aktualisieren. Schneller zeigt Treffer früher, braucht aber mehr CPU.",
+      "shareBossTimers": "Wenn du deine Karte öffnest, werden die Feldboss-Timer darauf über a2tools.app mit anderen Spielern für ihre Event-Timer geteilt. Gesendet werden nur Server, Bosse und Zeiten.",
       "debugLogging": "Schreibt ein Diagnoseprotokoll, mit dem der Entwickler Probleme finden kann.",
       "saveRawPackets": "Zeichnet rohen Spielverkehr für Fehlerberichte auf. Das Debug-Protokoll wird mit eingeschaltet.",
       "globalHotkeys": "Die Tasten unten funktionieren überall, auch wenn das Spiel im Vordergrund ist. Aus: Sie werden für andere Programme freigegeben. Unter Linux registriert der Desktop sie und fragt eventuell, ob du sie erlaubst.",
@@ -476,7 +490,7 @@
       "installing": "Wird installiert…",
       "installDone": "{name} {version} ist installiert.",
       "updatesAvailable": "Updates verfügbar: {list}",
-      "unreviewed": "Ungeprüft",
+      "unreviewed": "Dev",
       "by": "von {author}",
       "consentTitle": "{name} installieren?",
       "consentUpdateTitle": "{name} aktualisieren?",
@@ -486,9 +500,12 @@
       "permStorage": "Eigene Daten auf diesem Computer speichern",
       "permNotify": "Kurze Meldungen in seinem Fenster anzeigen",
       "permWindow": "Sein eigenes Fenster ein- und ausblenden, ohne dem Spiel den Fokus zu nehmen",
+      "permBossTimers": "Die Feldboss-Timer lesen, die Spieler über a2tools.app teilen",
       "permCharacter": "Name, Server, Klasse und Stufe deines Charakters sehen",
       "permDecoder": "Deine eigenen Spieldaten lesen: {name}",
-      "permNone": "Nichts außer sein Fenster anzuzeigen"
+      "permNone": "Nichts außer sein Fenster anzuzeigen",
+      "enabled": "Aktiviert",
+      "enabledTip": "An: startet mit dem Meter. Aus: bleibt installiert, läuft aber nicht."
     }
   },
   "support": {

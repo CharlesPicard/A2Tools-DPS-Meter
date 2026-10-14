@@ -75,6 +75,9 @@ pub struct DpsCalculator {
     /// `DataStorage::names_generation` at the last computed snapshot: a name
     /// that arrives after the last hit must still reach the meter.
     last_names_gen: u64,
+    /// `DataStorage::party_placeholders_wanted` at the last computed snapshot:
+    /// the party rows go when it turns false, ten minutes after the roster.
+    last_party_rows: bool,
     target_selection_mode: TargetSelectionMode,
     last_known_local_id: Option<i64>,
     all_targets_window_ms: i64,
@@ -103,6 +106,7 @@ impl DpsCalculator {
             last_dps_snapshot: None,
             last_damage_gen: -1,
             last_names_gen: 0,
+            last_party_rows: false,
             target_selection_mode: TargetSelectionMode::BossTargets,
             last_known_local_id: None,
             all_targets_window_ms: 120_000,
@@ -186,11 +190,19 @@ impl DpsCalculator {
         // `#id` until someone hit something.
         let current_gen = self.data_storage.damage_generation();
         let names_gen = self.data_storage.names_generation();
-        if current_gen == self.last_damage_gen && names_gen == self.last_names_gen && self.last_dps_snapshot.is_some() {
-            return self.last_dps_snapshot.as_ref().unwrap().clone();
+        let party_rows = self.data_storage.party_placeholders_wanted();
+        if current_gen == self.last_damage_gen
+            && names_gen == self.last_names_gen
+            && party_rows == self.last_party_rows
+            && self.last_dps_snapshot.is_some()
+        {
+            let mut snap = self.last_dps_snapshot.as_ref().unwrap().clone();
+            self.finalize_rows(&mut snap);
+            return snap;
         }
         self.last_damage_gen = current_gen;
         self.last_names_gen = names_gen;
+        self.last_party_rows = party_rows;
 
         // Get pre-computed aggregates (cheap — small map, not 17K packets).
         // Light snapshot: skips per-hit timestamps (unused here, grows unbounded).
@@ -203,7 +215,7 @@ impl DpsCalculator {
         dps_data.dungeon_id = self.data_storage.current_dungeon_id();
 
         // Decide target
-        let (target_ids, target_name, tracking_id) = self.decide_target(&combat_data, &nickname_data, &summon_data);
+        let (target_ids, target_name, tracking_id) = self.decide_target(&combat_data, &summon_data);
         dps_data.target_name = target_name;
         dps_data.target_mode = self.target_selection_mode.id().to_string();
         self.current_target = tracking_id;
@@ -290,8 +302,8 @@ impl DpsCalculator {
                 self.finalize_rows(&mut snap);
                 return snap;
             }
-            self.finalize_rows(&mut dps_data);
             self.last_dps_snapshot = Some(dps_data.clone());
+            self.finalize_rows(&mut dps_data);
             return dps_data;
         }
 
@@ -501,8 +513,6 @@ impl DpsCalculator {
             dps_data.map.remove(&uid);
         }
 
-        self.finalize_rows(&mut dps_data);
-
         dps_data.battle_time = battle_time;
         // total_damage here is the cumulative damage to the selected target(s).
         // Paired with target_max_hp it yields remaining = max(0, max_hp - dealt).
@@ -518,6 +528,7 @@ impl DpsCalculator {
             dps_data.target_current_hp = 0;
         }
         self.last_dps_snapshot = Some(dps_data.clone());
+        self.finalize_rows(&mut dps_data);
         dps_data
     }
 
@@ -532,7 +543,11 @@ impl DpsCalculator {
     /// non-positive ids as junk.
     /// Everything that has to happen to a row set before it goes on screen,
     /// in one place so a new return path cannot quietly skip half of it.
+    /// Run on every result, the cached one too, and never saved into
+    /// `last_dps_snapshot`: a party row kept there outlived the party, and
+    /// one added only on a fresh result vanished on the next cached one.
     fn finalize_rows(&self, dps_data: &mut DpsData) {
+        dps_data.party_generation = self.data_storage.party_generation();
         self.add_party_rows(dps_data);
         self.mark_supporters(dps_data);
     }
@@ -616,7 +631,6 @@ impl DpsCalculator {
     fn decide_target(
         &mut self,
         combat_data: &HashMap<i32, TargetCombatData>,
-        nickname_data: &HashMap<i32, String>,
         summon_data: &HashMap<i32, i32>,
     ) -> (HashSet<i32>, String, i32) {
         let mob_data = self.data_storage.get_mob_data();
@@ -665,38 +679,18 @@ impl DpsCalculator {
                 {
                     let name = self.resolve_target_name(best);
                     (HashSet::from([best]), name, best)
-                } else if self.data_storage.current_dungeon_id() > 0 {
-                    // No boss yet in a dungeon: show nothing. Every mob in an
-                    // instance is on the way to a boss, so the fallback below
-                    // put the first trash pull of each run on the meter.
-                    (HashSet::new(), String::new(), 0)
                 } else {
-                    // No boss: the mob with the most damage that you or your
-                    // party hit, and nothing until the meter knows who you
-                    // are. Any mob within range used to count then, and in
-                    // the open world that put strangers fighting their own
-                    // mobs on your meter (2026-10-04: one player, then
-                    // another, each alone on a mob you never touched), and
-                    // still did for the seconds after opening the meter or
-                    // entering a zone, before you were identified.
-                    let ours = self.resolve_local_ids(summon_data).map(|mut ids| {
-                        let party = self.data_storage.get_party_members();
-                        ids.extend(nickname_data.iter()
-                            .filter(|(_, name)| party.contains_key(name.as_str()))
-                            .map(|(&id, _)| id));
-                        ids
-                    });
-                    let best = ours.as_ref().and_then(|ids| combat_data.iter()
-                        .filter(|(_, td)| td.actors.keys()
-                            .any(|&a| ids.contains(&summon_resolver::resolve(a, summon_data))))
-                        .max_by_key(|(_, td)| td.total_damage));
-                    match best {
-                        Some((&id, _)) => {
-                            let name = self.resolve_target_name(id);
-                            (HashSet::from([id]), name, id)
-                        }
-                        None => (HashSet::new(), String::new(), 0),
-                    }
+                    // No boss: show nothing ("Waiting for a boss"). Boss mode
+                    // used to fall back to the mob you or your party hit
+                    // hardest outside a dungeon, and "outside a dungeon"
+                    // includes any instance the meter cannot place: one it
+                    // was opened inside (no map load seen), or one that is not
+                    // a party dungeon. On 2026-10-14 that put Grandios's
+                    // spirit adds on the meter before the boss was hit, and
+                    // after leaving, every open-world mob the player one-shot
+                    // (Mutated Dratonas, mobs whose spawn was never seen).
+                    // Single non-boss targets are what Target mode is for.
+                    (HashSet::new(), String::new(), 0)
                 }
             }
             TargetSelectionMode::AllTargets => {
@@ -1894,6 +1888,7 @@ mod tests {
         storage.set_local_player_id(Some(2259));
         storage.append_damage(hit(2259, 50_000, 1_000));
         let mut calc = meter(&storage);
+        calc.set_target_selection_mode("lastHitByMe");
         let shown = calc.get_dps();
         assert_eq!(shown.detail_target_ids, vec![50_000]);
         assert!(!calc.get_target_details(50_000, Some(&[2259])).skills.is_empty());
@@ -2019,31 +2014,28 @@ mod tests {
         assert!(calc.is_our_fight(&combat[&60_000]));
     }
 
+    /// Boss mode shows bosses only: never a trash mob, in the open world or
+    /// in an instance the meter cannot place (2026-10-14: Grandios's spirit
+    /// adds before the boss was hit, the meter having been opened inside the
+    /// instance; open-world mobs one-shot after leaving).
     #[test]
-    fn boss_mode_shows_your_trash_mob_in_the_open_world_only() {
+    fn boss_mode_never_shows_a_trash_mob() {
         let open_world = Arc::new(DataStorage::new());
         open_world.set_local_player_id(Some(2259));
         open_world.append_damage(hit(2259, 50_000, 1_000));
-        // A stranger alone on a bigger fight of their own stays off the meter.
         for t in 0..5 {
             open_world.append_damage(hit(11_345, 60_000, 1_000 + t));
         }
         let shown = meter(&open_world).get_dps();
-        assert_eq!(shown.target_id, 50_000);
-        assert_eq!(shown.map.keys().copied().collect::<Vec<_>>(), vec![2259]);
+        assert_eq!(shown.target_id, 0, "your own trash mob is not a boss");
+        assert!(shown.map.is_empty());
 
-        // Before you are identified (a meter just opened, a new zone), no
-        // mob is anyone's: a stranger's fight is not put up in your place.
         let unknown = Arc::new(DataStorage::new());
         unknown.append_damage(hit(2259, 50_000, 1_000));
-        for t in 0..5 {
-            unknown.append_damage(hit(11_345, 60_000, 1_000 + t));
-        }
         let shown = meter(&unknown).get_dps();
         assert_eq!(shown.target_id, 0);
         assert!(shown.map.is_empty());
 
-        // In a dungeon, a mob that is not a boss is not shown at all.
         let dungeon = Arc::new(DataStorage::new());
         dungeon.set_local_player_id(Some(2259));
         dungeon.set_current_dungeon(600_011);
@@ -2051,6 +2043,14 @@ mod tests {
         let shown = meter(&dungeon).get_dps();
         assert_eq!(shown.target_id, 0);
         assert!(shown.map.is_empty());
+
+        // Your trash mob next to your boss: the boss, whichever was hit last.
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(7983));
+        let mut calc = boss_meter(&storage);
+        storage.append_damage(hit(7983, 44_090, 1_000));
+        storage.append_damage(hit(7983, 51_473, 2_000));
+        assert_eq!(calc.get_dps().target_id, 44_090);
     }
 
     /// A Boss-mode meter over `storage`, with 2100708 a boss (open world)
@@ -2066,8 +2066,8 @@ mod tests {
 
     /// A world boss strangers fought out of your sight (2026-10-08: eight
     /// players never spawned near you, so eight `#id` rows) is not put on
-    /// your meter in Boss mode, nor kept there for hours after; your own
-    /// trash mob is. Once you hit the boss it is yours, with everyone on it.
+    /// your meter in Boss mode, nor kept there for hours after. Once you hit
+    /// the boss it is yours, with everyone on it.
     #[test]
     fn boss_mode_shows_a_boss_only_once_you_or_your_party_hit_it() {
         let storage = Arc::new(DataStorage::new());
@@ -2078,8 +2078,8 @@ mod tests {
             storage.append_damage(hit(stranger, 44_090, 2_000 + i as i64));
         }
         let shown = calc.get_dps();
-        assert_eq!(shown.target_id, 51_473, "your mob, not a stranger's boss");
-        assert_eq!(shown.map.keys().copied().collect::<Vec<_>>(), vec![7983]);
+        assert_eq!(shown.target_id, 0, "not a stranger's boss, nor your trash mob");
+        assert!(shown.map.is_empty());
 
         // Only strangers on the boss and nothing of yours: nothing at all.
         let alone = Arc::new(DataStorage::new());
@@ -2096,6 +2096,43 @@ mod tests {
         let mut rows: Vec<i32> = shown.map.keys().copied().collect();
         rows.sort_unstable();
         assert_eq!(rows, vec![2653, 7983, 13179, 15468]);
+    }
+
+    /// Someone joining between fights shows at once, not at the next hit:
+    /// the roster changes no damage and binds no name, and the cached
+    /// result was returned until one of those did (2026-10-13: Boushii
+    /// joined in town and stayed off the meter).
+    #[test]
+    fn a_new_party_member_shows_without_a_hit() {
+        use crate::combat::data_storage::PartyMember;
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(7983));
+        let member = |slot| PartyMember { slot, ..Default::default() };
+        storage.set_party_roster(vec![("Nullception".into(), member(1)), ("Real".into(), member(2))], true);
+        let mut calc = meter(&storage);
+        let names = |calc: &mut DpsCalculator| {
+            let mut n: Vec<String> = calc.get_dps().map.values().map(|d| d.nickname.clone()).collect();
+            n.sort();
+            n
+        };
+        assert_eq!(names(&mut calc), ["Nullception", "Real"]);
+        // The same party again (a map load) is no party change.
+        let party = calc.get_dps().party_generation;
+        storage.set_party_roster(vec![("Nullception".into(), member(1)), ("Real".into(), member(2))], true);
+        assert_eq!(calc.get_dps().party_generation, party);
+        storage.set_party_roster(
+            vec![("Nullception".into(), member(1)), ("Real".into(), member(2)), ("Boushii".into(), member(3))],
+            true,
+        );
+        assert_ne!(calc.get_dps().party_generation, party, "someone joined");
+        assert_eq!(names(&mut calc), ["Boushii", "Nullception", "Real"]);
+        // And on the next update, a cached one: the row was added only to the
+        // fresh result, so it showed for one tick.
+        assert_eq!(names(&mut calc), ["Boushii", "Nullception", "Real"]);
+
+        // Leaving: the roster has you alone, and the others' rows go.
+        storage.set_party_roster(vec![("Nullception".into(), member(1))], true);
+        assert!(!names(&mut calc).contains(&"Boushii".to_string()));
     }
 
     #[test]

@@ -92,6 +92,13 @@
       "healPct": "C%",
       "healPctTooltip": "Cura %"
     },
+    "peak": {
+      "label": "Lista do grupo",
+      "show": "Mostrar o DPS máximo (melhores 5 s) ao lado da média"
+    },
+    "party": {
+      "activeDps": "DPS no tempo ativo: {dps} ({active} dos {total} da luta)"
+    },
     "stats": {
       "totalDamage": "Dano total",
       "contribution": "Contribuição",
@@ -106,7 +113,11 @@
       "multiHitDamage": "Dano de golpes múltiplos",
       "multiHitHits": "Golpes múltiplos",
       "maxHp": "HP máx.",
-      "deaths": "Mortes"
+      "damageReceived": "Dano recebido",
+      "deaths": "Mortes",
+      "avgDps": "DPS médio",
+      "peakDps": "DPS máximo",
+      "peakDpsTip": "O maior DPS em qualquer trecho de 5 segundos da luta"
     },
     "titleFor": "de",
     "titleVs": "contra",
@@ -250,6 +261,7 @@
     "playerLimit": {
       "label": "Máx. de jogadores exibidos"
     },
+    "shareBossTimers": "Compartilhar timers de chefes de campo",
     "debugLogging": "Registro de depuração",
     "quit": "Sair",
     "discord": {
@@ -373,6 +385,7 @@
       "options": {
         "combatPower": "Poder de combate",
         "gearScore": "Pontuação de equipamento",
+        "both": "Ambos",
         "off": "Desativado"
       }
     },
@@ -434,6 +447,7 @@
       "trainingMode": "No modo treino, quais bonecos a janela de detalhes mostra: todos juntos ou só o que você mais acerta.",
       "allTargetsWindow": "No modo Todos os alvos, o medidor soma cada alvo atingido dentro deste tempo antes do último golpe.",
       "updateRate": "Com que frequência os números do medidor atualizam. Mais rápido mostra os golpes antes, mas usa mais CPU.",
+      "shareBossTimers": "Ao abrir seu mapa, os timers dos chefes de campo mostrados são compartilhados com outros jogadores pelo a2tools.app, para os Event Timers deles. Só o servidor, os chefes e os horários são enviados.",
       "debugLogging": "Grava um registro de diagnóstico que o desenvolvedor pode usar para encontrar problemas.",
       "saveRawPackets": "Grava o tráfego bruto do jogo para relatórios de erro. O registro de depuração liga junto.",
       "globalHotkeys": "As teclas abaixo funcionam em qualquer lugar, mesmo com o jogo em primeiro plano. Desligado, ficam livres para outros programas. No Linux, o ambiente de trabalho as registra e pode pedir que você as aprove.",
@@ -476,7 +490,7 @@
       "installing": "Instalando…",
       "installDone": "{name} {version} está instalado.",
       "updatesAvailable": "Atualizações disponíveis: {list}",
-      "unreviewed": "Não revisado",
+      "unreviewed": "Dev",
       "by": "por {author}",
       "consentTitle": "Instalar {name}?",
       "consentUpdateTitle": "Atualizar {name}?",
@@ -486,9 +500,12 @@
       "permStorage": "Salvar os próprios dados neste computador",
       "permNotify": "Mostrar mensagens curtas na sua janela",
       "permWindow": "Mostrar e ocultar a própria janela, sem tirar o foco do jogo",
+      "permBossTimers": "Ler os timers de chefes de campo que os jogadores compartilham pelo a2tools.app",
       "permCharacter": "Ver nome, servidor, classe e nível do seu personagem",
       "permDecoder": "Ler seus próprios dados do jogo: {name}",
-      "permNone": "Nada além de mostrar sua janela"
+      "permNone": "Nada além de mostrar sua janela",
+      "enabled": "Ativado",
+      "enabledTip": "Ligado: inicia com o medidor. Desligado: continua instalado, mas não é executado."
     }
   },
   "support": {

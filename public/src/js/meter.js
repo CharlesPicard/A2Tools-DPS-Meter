@@ -1,18 +1,20 @@
 // The figure beside a player's name, in the meter and in Details: combat
 // power in thousands the way players quote it ("889k"; below 500 the raw
-// number, since "0k" says nothing) or gear score in full. Empty when the party
-// roster never named the player: only your own party's members are on it.
-// Shared with details.js, which loads after this file.
+// number, since "0k" says nothing), gear score in full, or both ("889k ·
+// 2,410"). Empty when the party roster never named the player: only your own
+// party's members are on it. Shared with details.js, which loads after this
+// file.
 const partyStatText = (row, stat) => {
   if (stat === "off") return "";
-  if (stat === "gearScore") {
-    const gearScore = Number(row?.gearScore) || 0;
-    return gearScore > 0 ? gearScore.toLocaleString() : "";
-  }
+  const gearScore = Number(row?.gearScore) || 0;
+  const gearScoreText = gearScore > 0 ? gearScore.toLocaleString() : "";
+  if (stat === "gearScore") return gearScoreText;
   const combatPower = Number(row?.combatPower) || 0;
-  if (combatPower <= 0) return "";
   const thousands = Math.round(combatPower / 1000);
-  return thousands > 0 ? `${thousands.toLocaleString()}k` : combatPower.toLocaleString();
+  const combatPowerText =
+    combatPower <= 0 ? "" : thousands > 0 ? `${thousands.toLocaleString()}k` : combatPower.toLocaleString();
+  if (stat === "both") return [combatPowerText, gearScoreText].filter(Boolean).join(" · ");
+  return combatPowerText;
 };
 
 // A row's texture offset, 0-719px, the same every time for the same id.
@@ -20,6 +22,30 @@ const textureOffsetFor = (id) => {
   let hash = 2166136261;
   for (const ch of String(id)) hash = Math.imul(hash ^ ch.charCodeAt(0), 16777619);
   return (hash >>> 0) % 720;
+};
+
+// Whether a bar colour is bright (gold, yellow, pale): a supporter's gold name
+// gets a firmer edge there (styles.css .onBright). The colour is the bar's
+// --bar as the theme resolves it, read through a canvas so any CSS colour
+// works; remembered per colour.
+const brightBars = new Map();
+let colorProbe = null;
+const isBrightColor = (value) => {
+  const key = String(value || "").trim();
+  if (!key) return false;
+  if (brightBars.has(key)) return brightBars.get(key);
+  let bright = false;
+  try {
+    colorProbe ||= document.createElement("canvas").getContext("2d");
+    colorProbe.fillStyle = "#000";
+    colorProbe.fillStyle = key;
+    colorProbe.fillRect(0, 0, 1, 1);
+    const [r, g, b] = colorProbe.getImageData(0, 0, 1, 1).data;
+    const lin = (c) => ((c /= 255) <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+    bright = 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b) > 0.3;
+  } catch {}
+  brightBars.set(key, bright);
+  return bright;
 };
 
 const createMeterUI = ({
@@ -102,9 +128,10 @@ const createMeterUI = ({
     supporterBadgeEl.style.display = "none";
     supporterBadgeEl.setAttribute("aria-hidden", "true");
     supporterBadgeEl.innerHTML =
-      '<svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor" ' +
-      'aria-hidden="true"><path d="M3 7l4.2 3L12 4l4.8 6L21 7l-1.8 10H4.8L3 7z"/>' +
-      '</svg>';
+      '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor" stroke="rgba(28,16,0,0.9)" ' +
+      'stroke-width="1.3" stroke-linejoin="round" paint-order="stroke" aria-hidden="true">' +
+      '<path d="M3 9l4.6 3.4L12 6l4.4 6.4L21 9l-1.9 8.6H4.9z"/><rect x="4.6" y="18.6" width="14.8" height="2.4" rx="0.6"/>' +
+      '<circle cx="3" cy="8.4" r="1.7"/><circle cx="12" cy="5" r="1.9"/><circle cx="21" cy="8.4" r="1.7"/></svg>';
 
     // Party combat power, shown beside the name. Hidden unless the party roster
     // packet supplied a value for this player.
@@ -364,6 +391,16 @@ const createMeterUI = ({
         if (classColor) view.rowEl.style.setProperty("--class-fill", classColor);
         else view.rowEl.style.removeProperty("--class-fill");
         view.lastClassColor = classColor;
+      }
+      // A supporter's name on a bright bar: a firmer edge. Looked at again only
+      // when what decides the bar's colour changes (theme, class, own row).
+      const barKey = isSupporter
+        ? `${document.documentElement.dataset.theme || ""}|${row.job || ""}|${!!row.isUser}`
+        : "";
+      if (view.lastBarKey !== barKey) {
+        view.lastBarKey = barKey;
+        const bright = !!barKey && isBrightColor(getComputedStyle(view.fillEl).getPropertyValue("--bar"));
+        view.nameEl.classList.toggle("onBright", bright);
       }
 
       if (row.job && row.job !== "Unknown") {

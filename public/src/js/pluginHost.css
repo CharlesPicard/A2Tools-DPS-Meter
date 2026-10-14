@@ -24,15 +24,6 @@ body {
   cursor: grab;
   user-select: none;
 }
-.pluginBadge {
-  flex: none;
-  white-space: nowrap;
-  padding: 1px 7px;
-  border: 1px solid #d9a13c;
-  border-radius: 3px;
-  color: #f0c46c;
-  font-size: 11px;
-}
 .pluginName {
   font-weight: 600;
   flex: 1 1 auto;

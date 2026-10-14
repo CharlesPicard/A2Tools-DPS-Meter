@@ -92,6 +92,13 @@
       "healPct": "치유%",
       "healPctTooltip": "치유량 %"
     },
+    "peak": {
+      "label": "파티 목록",
+      "show": "평균 옆에 최고 DPS(최고 5초) 표시"
+    },
+    "party": {
+      "activeDps": "활동 시간 DPS: {dps} (전투 {total} 중 {active})"
+    },
     "stats": {
       "totalDamage": "총 피해",
       "contribution": "기여도",
@@ -106,7 +113,11 @@
       "maxHp": "최대 HP",
       "hits": "타격",
       "selfHealing": "자가 회복",
-      "deaths": "사망"
+      "damageReceived": "받은 피해",
+      "deaths": "사망",
+      "avgDps": "평균 DPS",
+      "peakDps": "최고 DPS",
+      "peakDpsTip": "전투 중 5초 동안의 최고 DPS"
     },
     "titleFor": "대상",
     "titleVs": "vs",
@@ -255,6 +266,7 @@
     "playerLimit": {
       "label": "최대 표시 인원"
     },
+    "shareBossTimers": "필드 보스 타이머 공유",
     "debugLogging": "디버그 로그",
     "quit": "종료",
     "discord": {
@@ -378,6 +390,7 @@
       "options": {
         "combatPower": "전투력",
         "gearScore": "장비 점수",
+        "both": "둘 다",
         "off": "끄기"
       }
     },
@@ -441,6 +454,7 @@
       "trainingMode": "훈련 모드에서 상세 정보 창이 보여 줄 허수아비입니다: 전부 함께, 또는 가장 많이 때린 하나만.",
       "allTargetsWindow": "전체 대상 모드에서 마지막 타격 전 이 시간 안에 맞힌 모든 대상을 합산합니다.",
       "updateRate": "미터 수치를 새로 고치는 간격입니다. 빠를수록 피해가 빨리 보이지만 CPU를 더 사용합니다.",
+      "shareBossTimers": "지도를 열면 표시된 필드 보스 타이머가 a2tools.app을 통해 다른 플레이어의 이벤트 타이머와 공유됩니다. 서버, 보스, 시간만 전송됩니다.",
       "debugLogging": "개발자가 문제를 찾는 데 쓸 수 있는 진단 로그를 기록합니다.",
       "saveRawPackets": "버그 보고용으로 원시 게임 트래픽을 기록합니다. 디버그 로그도 함께 켜집니다.",
       "globalHotkeys": "아래 키는 게임 화면이 앞에 있을 때도 작동합니다. 끄면 다른 프로그램이 이 키를 쓸 수 있습니다. 리눅스에서는 데스크톱이 키를 등록하며 승인을 요청할 수 있습니다.",
@@ -483,7 +497,7 @@
       "installing": "설치 중…",
       "installDone": "{name} {version}이(가) 설치되었습니다.",
       "updatesAvailable": "업데이트 가능: {list}",
-      "unreviewed": "검토되지 않음",
+      "unreviewed": "개발",
       "by": "제작: {author}",
       "consentTitle": "{name}을(를) 설치할까요?",
       "consentUpdateTitle": "{name}을(를) 업데이트할까요?",
@@ -493,9 +507,12 @@
       "permStorage": "이 컴퓨터에 자체 데이터 저장",
       "permNotify": "자체 창에 짧은 메시지 표시",
       "permWindow": "게임의 포커스를 빼앗지 않고 자체 창을 표시하거나 숨기기",
+      "permBossTimers": "a2tools.app에서 플레이어들이 공유하는 필드 보스 타이머 읽기",
       "permCharacter": "캐릭터의 이름, 서버, 클래스, 레벨 보기",
       "permDecoder": "내 게임 데이터 읽기: {name}",
-      "permNone": "창을 표시하는 것 외에는 없음"
+      "permNone": "창을 표시하는 것 외에는 없음",
+      "enabled": "사용",
+      "enabledTip": "켜짐: 미터와 함께 시작됩니다. 꺼짐: 설치된 상태로 남지만 실행되지 않습니다."
     }
   },
   "support": {

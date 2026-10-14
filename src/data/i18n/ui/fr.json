@@ -92,6 +92,13 @@
       "healPct": "S%",
       "healPctTooltip": "Soins %"
     },
+    "peak": {
+      "label": "Liste du groupe",
+      "show": "Afficher le DPS max (meilleures 5 s) à côté de la moyenne"
+    },
+    "party": {
+      "activeDps": "DPS en temps actif : {dps} ({active} sur les {total} du combat)"
+    },
     "stats": {
       "totalDamage": "Dégâts totaux",
       "contribution": "Contribution",
@@ -106,7 +113,11 @@
       "multiHitDamage": "Dégâts des coups multiples",
       "multiHitHits": "Coups multiples",
       "maxHp": "PV max.",
-      "deaths": "Morts"
+      "damageReceived": "Dégâts subis",
+      "deaths": "Morts",
+      "avgDps": "DPS moyen",
+      "peakDps": "DPS max",
+      "peakDpsTip": "Le DPS le plus élevé sur 5 secondes du combat"
     },
     "titleFor": "pour",
     "titleVs": "contre",
@@ -250,6 +261,7 @@
     "playerLimit": {
       "label": "Joueurs affichés max."
     },
+    "shareBossTimers": "Partager les minuteurs des boss de terrain",
     "debugLogging": "Journal de débogage",
     "quit": "Quitter",
     "discord": {
@@ -373,6 +385,7 @@
       "options": {
         "combatPower": "Puissance de combat",
         "gearScore": "Score d'équipement",
+        "both": "Les deux",
         "off": "Désactivé"
       }
     },
@@ -434,6 +447,7 @@
       "trainingMode": "En mode entraînement, quels mannequins la fenêtre Détails affiche : tous ensemble, ou seulement celui que tu frappes le plus.",
       "allTargetsWindow": "En mode Toutes les cibles, le compteur additionne chaque cible touchée dans ce délai avant le dernier coup.",
       "updateRate": "À quelle fréquence les chiffres du compteur se rafraîchissent. Plus rapide affiche les coups plus tôt mais utilise plus de CPU.",
+      "shareBossTimers": "Quand vous ouvrez votre carte, les minuteurs des boss de terrain qu'elle affiche sont partagés avec les autres joueurs via a2tools.app, pour leurs Event Timers. Seuls le serveur, les boss et leurs heures sont envoyés.",
       "debugLogging": "Écrit un journal de diagnostic que le développeur peut utiliser pour trouver les problèmes.",
       "saveRawPackets": "Enregistre le trafic brut du jeu pour les rapports de bug. Le journal de débogage s'active avec.",
       "globalHotkeys": "Les touches ci-dessous fonctionnent partout, même quand le jeu est au premier plan. Désactivé, elles sont libérées pour d'autres programmes. Sous Linux, le bureau les enregistre et peut vous demander de les approuver.",
@@ -476,7 +490,7 @@
       "installing": "Installation…",
       "installDone": "{name} {version} est installé.",
       "updatesAvailable": "Mises à jour disponibles : {list}",
-      "unreviewed": "Non vérifié",
+      "unreviewed": "Dev",
       "by": "par {author}",
       "consentTitle": "Installer {name} ?",
       "consentUpdateTitle": "Mettre à jour {name} ?",
@@ -486,9 +500,12 @@
       "permStorage": "Enregistrer ses propres données sur cet ordinateur",
       "permNotify": "Afficher de courts messages dans sa fenêtre",
       "permWindow": "Afficher et masquer sa propre fenêtre, sans retirer le focus au jeu",
+      "permBossTimers": "Lire les minuteurs des boss de terrain partagés par les joueurs via a2tools.app",
       "permCharacter": "Voir le nom, le serveur, la classe et le niveau de votre personnage",
       "permDecoder": "Lire vos propres données de jeu : {name}",
-      "permNone": "Rien d'autre qu'afficher sa fenêtre"
+      "permNone": "Rien d'autre qu'afficher sa fenêtre",
+      "enabled": "Activé",
+      "enabledTip": "Activé : démarre avec le compteur. Désactivé : reste installé mais ne s'exécute pas."
     }
   },
   "support": {
