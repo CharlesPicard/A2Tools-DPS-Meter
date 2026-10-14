@@ -15,7 +15,7 @@
 pub mod catalog;
 pub mod decoder;
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -150,6 +150,7 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
         return Err("not a plugin id".into());
     }
     set_disabled(&app, &id, !enabled);
+    reopened(&app, &id);
     if enabled {
         open_window(&app, &id, true)?;
         remember_window(&app, &id, Some("shown"));
@@ -195,6 +196,9 @@ pub struct PluginHost {
     seq: Mutex<u64>,
     run: String,
     flusher: AtomicBool,
+    /// Plugins closed with their window's ×, this run: a reload (an install,
+    /// Check for updates, a folder added) does not start them again.
+    closed: Mutex<HashSet<String>>,
 }
 
 impl Default for PluginHost {
@@ -212,6 +216,7 @@ impl Default for PluginHost {
             seq: Mutex::new(0),
             run,
             flusher: AtomicBool::new(false),
+            closed: Mutex::default(),
         }
     }
 }
@@ -895,22 +900,38 @@ pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String
     if disabled(&app).contains(&id) {
         return Err("that plugin is turned off".into());
     }
+    reopened(&app, &id);
     open_window(&app, &id, true)?;
     remember_window(&app, &id, Some("shown"));
     Ok(())
 }
 
+/// A plugin opened by hand (Open, or turned on) starts again after reloads.
+fn reopened(app: &tauri::AppHandle, id: &str) {
+    if let Ok(host) = host(app) {
+        host.closed.lock().unwrap_or_else(|e| e.into_inner()).remove(id);
+    }
+}
+
+/// Whether a plugin should be started now: loaded, turned on, not closed with
+/// × this run, and not already running.
+fn should_start(p: &PluginInfo, off: &[String], closed: &HashSet<String>, running: bool) -> bool {
+    p.error.is_none() && !off.contains(&p.id) && !closed.contains(&p.id) && !running
+}
+
 /// Start every plugin that is turned on and not running, its window shown or
 /// hidden as it was last left (shown the first time): at start, and when a
-/// plugin is installed or its folder loaded.
+/// plugin is installed or its folder loaded. One closed with × this run stays
+/// closed.
 pub fn restore_windows(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else { return };
     let Ok(host) = host(app) else { return };
     let windows: serde_json::Map<String, Value> =
         state.settings.get(WINDOWS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
     let off = disabled(app);
-    for p in host.list().into_iter().filter(|p| p.error.is_none() && !off.contains(&p.id)) {
-        if app.get_webview_window(&format!("plugin-{}", p.id)).is_some() {
+    let closed = host.closed.lock().unwrap_or_else(|e| e.into_inner()).clone();
+    for p in host.list() {
+        if !should_start(&p, &off, &closed, app.get_webview_window(&format!("plugin-{}", p.id)).is_some()) {
             continue;
         }
         let visible = windows.get(&p.id).and_then(Value::as_str) != Some("hidden");
@@ -939,8 +960,9 @@ pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visibl
 /// The window's close button: close it until the next start (turning the
 /// plugin off in Settings keeps it closed).
 #[tauri::command]
-pub fn plugin_close(window: tauri::WebviewWindow) -> Result<(), String> {
-    window_plugin(&window)?;
+pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    let id = window_plugin(&window)?;
+    host(&app)?.closed.lock().unwrap_or_else(|e| e.into_inner()).insert(id);
     let _ = window.close();
     Ok(())
 }
@@ -1256,8 +1278,31 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{base64, content_policy, inline_page, inlined_policy, take_ready, within_reach, Pending, SETTLE};
+    use super::{base64, content_policy, inline_page, inlined_policy, should_start, take_ready, within_reach};
+    use super::{Pending, PluginInfo, SETTLE};
+    use std::collections::HashSet;
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn a_reload_starts_enabled_plugins_but_not_one_closed_with_x_or_turned_off() {
+        let plugin = |id: &str, error: Option<&str>| PluginInfo {
+            id: id.into(),
+            name: id.into(),
+            version: "1.0.0".into(),
+            description: String::new(),
+            path: String::new(),
+            permissions: Vec::new(),
+            reviewed: true,
+            error: error.map(str::to_string),
+        };
+        let off = vec!["off".to_string()];
+        let closed = HashSet::from(["closed".to_string()]);
+        assert!(should_start(&plugin("a", None), &off, &closed, false));
+        assert!(!should_start(&plugin("a", None), &off, &closed, true), "already running");
+        assert!(!should_start(&plugin("off", None), &off, &closed, false), "turned off");
+        assert!(!should_start(&plugin("closed", None), &off, &closed, false), "closed with × this run");
+        assert!(!should_start(&plugin("a", Some("bad manifest")), &off, &closed, false), "failed to load");
+    }
 
     #[test]
     fn a_window_left_on_a_screen_goes_back_there_and_one_off_every_screen_does_not() {
