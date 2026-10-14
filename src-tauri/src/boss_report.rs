@@ -14,6 +14,10 @@
 //! player's own server's maps: an enemy map viewed from the menu carries
 //! nothing, and a map read from inside a rift (its header not 0) isn't sent
 //! until it is known whose server it shows.
+//!
+//! Field boss kills and HP milestones (75 / 50 / 25 %) in the open world go
+//! too, as they happen (`spawn_events`): the boss, the server and the time or
+//! percent. a2tools.app passes them on to Aion 2 Timers.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -23,6 +27,7 @@ use tauri::Manager;
 
 use crate::app::AppState;
 use crate::capture::boss_map::BossMap;
+use crate::combat::data_storage::{BossEvent, BossEventKind};
 
 pub const SETTING_KEY: &str = "dpsMeter.shareBossTimers";
 const CHECK: Duration = Duration::from_secs(10);
@@ -55,7 +60,65 @@ pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
     })
 }
 
+/// A kill or HP milestone not sent yet waits this long for the server to be
+/// known (the meter started mid-game).
+const EVENT_WAIT_MS: i64 = 5 * 60_000;
+
+/// The request for a field boss event: (path, body), or None for a boss
+/// a2tools.app doesn't know.
+pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str, serde_json::Value)> {
+    let id = crate::capture::field_bosses::world_map_id(event.npc)?;
+    Some(match event.kind {
+        BossEventKind::Killed { at_ms } => (
+            "/api/boss-timers/kill",
+            json!({ "format": 1, "server": server_id, "id": id, "diedAt": at_ms / 1000 }),
+        ),
+        BossEventKind::Hp { percent } => (
+            "/api/boss-timers/hp",
+            json!({ "format": 1, "server": server_id, "id": id, "hp": percent }),
+        ),
+    })
+}
+
+/// Kills and HP milestones, sent within a second of happening.
+fn spawn_events(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let mut waiting: Vec<(i64, BossEvent)> = Vec::new();
+        loop {
+            tokio::time::sleep(Duration::from_secs(1)).await;
+            let Some(state) = app.try_state::<AppState>() else { continue };
+            let now = crate::clock::now_ms();
+            waiting.extend(state.data_storage.take_boss_events().into_iter().map(|e| (now, e)));
+            if waiting.is_empty() {
+                continue;
+            }
+            if state.settings.get(SETTING_KEY).as_deref() == Some("false") {
+                waiting.clear();
+                continue;
+            }
+            let server = state.data_storage.local_profile().server_id;
+            if server == 0 {
+                waiting.retain(|(at, _)| now - at < EVENT_WAIT_MS);
+                continue;
+            }
+            for (_, event) in std::mem::take(&mut waiting) {
+                let Some((path, body)) = event_request(server, &event) else { continue };
+                let url = format!("{}{path}", crate::account::base_url());
+                let request = state.http.post(&url)
+                    .header(reqwest::header::CONTENT_TYPE, "application/json")
+                    .body(body.to_string())
+                    .timeout(Duration::from_secs(15));
+                match request.send().await {
+                    Ok(res) => tracing::info!("Boss timers: {:?} of {} sent ({})", event.kind, event.npc, res.status()),
+                    Err(e) => tracing::info!("Boss timers: could not send {:?} of {}: {e}", event.kind, event.npc),
+                }
+            }
+        }
+    });
+}
+
 pub fn spawn(app: tauri::AppHandle) {
+    spawn_events(app.clone());
     tauri::async_runtime::spawn(async move {
         let mut seq = 0u64;
         // (server, map) -> when sent, and what it said.
@@ -108,6 +171,17 @@ pub fn spawn(app: tauri::AppHandle) {
 mod tests {
     use super::*;
     use crate::capture::boss_map::BossOnMap;
+
+    #[test]
+    fn a_kill_and_an_hp_milestone_name_the_boss_by_its_world_map_id() {
+        let kill = BossEvent { npc: 2100079, kind: BossEventKind::Killed { at_ms: 1_791_993_638_495 } };
+        let (path, body) = event_request(1301, &kill).unwrap();
+        assert_eq!(path, "/api/boss-timers/kill");
+        assert_eq!(body, json!({ "format": 1, "server": 1301, "id": 101006, "diedAt": 1_791_993_638 }));
+        let hp = BossEvent { npc: 2100079, kind: BossEventKind::Hp { percent: 49 } };
+        assert_eq!(event_request(1301, &hp).unwrap().1["hp"], 49);
+        assert!(event_request(1301, &BossEvent { npc: 1, kind: BossEventKind::Hp { percent: 50 } }).is_none());
+    }
 
     #[test]
     fn a_report_names_the_server_map_and_each_bosss_state_and_time() {

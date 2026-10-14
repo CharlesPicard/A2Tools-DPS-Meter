@@ -411,6 +411,33 @@ impl TargetCombatData {
 
 // ───── Main storage ─────
 
+/// A field boss kill or HP milestone in the open world, for
+/// `boss_report.rs` to share.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BossEvent {
+    /// The boss's NPC code (`capture::field_bosses`).
+    pub npc: i32,
+    pub kind: BossEventKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BossEventKind {
+    /// Killed at this moment (unix ms).
+    Killed { at_ms: i64 },
+    /// Its HP first dropped through 75, 50 or 25 %: the percent then.
+    Hp { percent: u8 },
+}
+
+/// Unsent boss events kept at most (the sender drains them every second).
+const MAX_BOSS_EVENTS: usize = 64;
+
+fn push_boss_event(inner: &mut Inner, event: BossEvent) {
+    inner.boss_events.push_back(event);
+    while inner.boss_events.len() > MAX_BOSS_EVENTS {
+        inner.boss_events.pop_front();
+    }
+}
+
 pub struct DataStorage {
     inner: RwLock<Inner>,
     damage_generation: AtomicI64,
@@ -521,6 +548,15 @@ struct Inner {
     /// and a count that moves with each, for `boss_maps_since`.
     boss_maps: Vec<crate::capture::boss_map::BossMap>,
     boss_map_seq: u64,
+    /// Entities whose max HP came from their spawn record, so a percentage of
+    /// it can be trusted (a peak seen later may be below the real max).
+    spawn_hp_ids: HashSet<i32>,
+    /// A field boss's lowest HP milestone reported so far (100, 75, 50, 25),
+    /// per entity.
+    boss_hp_band: HashMap<i32, u8>,
+    /// Field boss kills and HP milestones in the open world, not yet sent
+    /// (`boss_report.rs`).
+    boss_events: VecDeque<BossEvent>,
     /// Each party member's last HP (`1b 92`): falling to 0 from above is a
     /// death. The game sends no `42 36` death for a player (Ultimate Berk,
     /// 2026-10-11: 184 monster deaths, not one of the four that died).
@@ -649,6 +685,9 @@ impl DataStorage {
                 death_log: VecDeque::new(),
                 boss_maps: Vec::new(),
                 boss_map_seq: 0,
+                spawn_hp_ids: HashSet::new(),
+                boss_hp_band: HashMap::new(),
+                boss_events: VecDeque::new(),
                 last_hp: HashMap::new(),
                 despawned_summon_ids: HashSet::new(),
                 boss_entity_ids: HashSet::new(),
@@ -1322,12 +1361,28 @@ impl DataStorage {
 
     pub fn append_mob_hp(&self, mid: i32, hp: i32) {
         if hp > 0 {
-            self.inner.write().mob_hp_data.insert(mid, hp);
+            let mut inner = self.inner.write();
+            inner.mob_hp_data.insert(mid, hp);
+            inner.spawn_hp_ids.insert(mid);
+            inner.boss_hp_band.remove(&mid);
         }
+    }
+
+    /// The field boss kills and HP milestones seen since the last call.
+    pub fn take_boss_events(&self) -> Vec<BossEvent> {
+        self.inner.write().boss_events.drain(..).collect()
     }
 
     pub fn mark_entity_dead(&self, entity_id: i32) {
         let mut inner = self.inner.write();
+        // A field boss killed in the open world: its exact time, to share.
+        if inner.current_dungeon_id <= 0 && !inner.dead_entity_ids.contains(&entity_id) {
+            if let Some(&code) = inner.mob_storage.get(&entity_id) {
+                if crate::capture::field_bosses::is_field_boss(code) {
+                    push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Killed { at_ms: now_ms() } });
+                }
+            }
+        }
         inner.dead_entity_ids.insert(entity_id);
         inner.hp_floored_ids.remove(&entity_id);
         inner.death_log.push_back((entity_id, now_ms(), None));
@@ -1814,6 +1869,21 @@ impl DataStorage {
         let max = inner.mob_hp_data.entry(id).or_insert(0);
         if hp > *max {
             *max = hp;
+        }
+        let max = *max;
+        // A field boss in the open world whose max HP is known from its spawn:
+        // the first time it drops through 75, 50 or 25 %, its percent then.
+        if inner.current_dungeon_id <= 0 && max > 0 && inner.spawn_hp_ids.contains(&id) {
+            if let Some(&code) = inner.mob_storage.get(&id) {
+                if crate::capture::field_bosses::is_field_boss(code) {
+                    let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
+                    let band = inner.boss_hp_band.get(&id).copied().unwrap_or(100);
+                    if let Some(&crossed) = [25u8, 50, 75].iter().find(|&&m| pct <= m && band > m) {
+                        inner.boss_hp_band.insert(id, crossed);
+                        push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Hp { percent: pct } });
+                    }
+                }
+            }
         }
     }
 
@@ -2929,6 +2999,46 @@ mod tests {
 
     fn dealt(s: &DataStorage, target: i32, actor: i32) -> i64 {
         s.get_combat_snapshot().get(&target).and_then(|t| t.actors.get(&actor)).map_or(0, |a| a.total_damage)
+    }
+
+    /// Bodyguard Teegant (NPC 2100079), a Verteron field boss.
+    #[test]
+    fn a_field_boss_kill_in_the_open_world_is_queued_with_its_time() {
+        let s = DataStorage::new();
+        s.append_mob(500, 2100079);
+        s.mark_entity_dead(500);
+        s.mark_entity_dead(500); // the same death again: once
+        let events = s.take_boss_events();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(events[0], BossEvent { npc: 2100079, kind: BossEventKind::Killed { .. } }));
+        // Not a field boss, or inside a dungeon: nothing.
+        s.append_mob(501, 2100080);
+        s.mark_entity_dead(501);
+        s.set_current_dungeon(600012);
+        s.append_mob(502, 2100079);
+        s.mark_entity_dead(502);
+        assert!(s.take_boss_events().is_empty());
+    }
+
+    #[test]
+    fn a_field_boss_hp_milestone_goes_once_per_band_and_only_with_its_spawn_hp() {
+        let s = DataStorage::new();
+        s.append_mob(500, 2100079);
+        s.append_mob_hp(500, 1000);
+        for hp in [900, 760, 740, 700, 400, 380, 120] {
+            s.set_mob_current_hp(500, hp);
+        }
+        let pct: Vec<u8> = s.take_boss_events().into_iter().map(|e| match e.kind {
+            BossEventKind::Hp { percent } => percent,
+            _ => 0,
+        }).collect();
+        // 74 % crosses 75, 40 % crosses 50, 12 % crosses 25 (each once).
+        assert_eq!(pct, vec![74, 40, 12]);
+        // Its spawn unseen: its max is a guess, so no percentages.
+        s.append_mob(501, 2100079);
+        s.set_mob_current_hp(501, 800);
+        s.set_mob_current_hp(501, 300);
+        assert!(s.take_boss_events().is_empty());
     }
 
     #[test]
