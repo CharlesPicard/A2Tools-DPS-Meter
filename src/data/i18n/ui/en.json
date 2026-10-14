@@ -523,6 +523,7 @@
   "support": {
     "button": "Support Me",
     "title": "Support the author on Ko-fi",
+    "linksHint": "Ko-fi, Afdian and PayPal open their site in your browser. The crypto buttons copy an address.",
     "titleWechat": "Support the author on WeChat",
     "label": {
       "wechat": "WeChat"

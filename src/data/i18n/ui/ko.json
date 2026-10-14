@@ -518,6 +518,7 @@
   "support": {
     "button": "지원하기",
     "title": "Support the author on Ko-fi",
+    "linksHint": "Ko-fi, 爱发电, PayPal은 브라우저에서 해당 사이트를 엽니다. 암호화폐 버튼은 주소를 복사합니다.",
     "titleWechat": "Support the author on WeChat",
     "label": {
       "wechat": "WeChat"

@@ -516,6 +516,7 @@
   "support": {
     "button": "Поддержать",
     "title": "Поддержать автора на Ko-fi",
+    "linksHint": "Ko-fi, Afdian и PayPal открывают свой сайт в браузере. Кнопки криптовалют копируют адрес.",
     "titleWechat": "Поддержать автора через WeChat",
     "label": {
       "wechat": "WeChat"

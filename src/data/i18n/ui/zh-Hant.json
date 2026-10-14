@@ -518,6 +518,7 @@
   "support": {
     "button": "支持我一下",
     "title": "在愛發電支持作者",
+    "linksHint": "Ko-fi、爱发电與 PayPal 會在瀏覽器中開啟其網站；加密貨幣按鈕會複製地址。",
     "titleWechat": "在微信支持作者",
     "label": {
       "wechat": "微信"

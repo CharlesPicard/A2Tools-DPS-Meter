@@ -511,6 +511,7 @@
   "support": {
     "button": "支援する",
     "title": "Ko-fiで作者を支援",
+    "linksHint": "Ko-fi・爱发电・PayPal はブラウザでそのサイトを開きます。暗号資産のボタンはアドレスをコピーします。",
     "titleWechat": "WeChatで作者を支援",
     "label": {
       "wechat": "WeChat"

@@ -511,6 +511,7 @@
   "support": {
     "button": "Me soutenir",
     "title": "Soutenir l'auteur sur Ko-fi",
+    "linksHint": "Ko-fi, Afdian et PayPal ouvrent leur site dans votre navigateur. Les boutons crypto copient une adresse.",
     "titleWechat": "Soutenir l'auteur sur WeChat",
     "label": {
       "wechat": "WeChat"
