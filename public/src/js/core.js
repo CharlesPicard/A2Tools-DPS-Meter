@@ -1271,7 +1271,12 @@ class DpsApp {
 
     this.lastJson = raw;
     this.applyLocalPlayerIdUpdate(localPlayerId, "backend local id update");
-    this.updateLocalPlayerIdentity(rows);
+    // The backend's id, once it has one, is who you are. A row still under
+    // your name from before an id change (a dungeon's second run, with the
+    // first run's rows on screen) took you back to the old id on every
+    // update, and the window asked the backend for it twice a poll
+    // (2026-10-14: "ignored 1566", 228 times in two minutes).
+    if (!(Number(localPlayerId) > 0)) this.updateLocalPlayerIdentity(rows);
     this._lastBattleTimeMs = battleTimeMs;
     const targetChanged = targetId !== previousTargetId || targetMode !== previousTargetMode;
     this.lastTargetMode = targetMode;
