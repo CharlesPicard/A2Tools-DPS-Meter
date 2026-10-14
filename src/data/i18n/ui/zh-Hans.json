@@ -495,7 +495,9 @@
       "permWindow": "显示和隐藏自己的窗口，不会抢走游戏的焦点",
       "permCharacter": "查看你角色的名称、服务器、职业和等级",
       "permDecoder": "读取你自己的游戏数据：{name}",
-      "permNone": "除显示窗口外不做其他事"
+      "permNone": "除显示窗口外不做其他事",
+      "enabled": "启用",
+      "enabledTip": "开启：随计量器启动。关闭：保持安装，但不运行。"
     }
   },
   "support": {

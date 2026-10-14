@@ -109,8 +109,8 @@
     invoke("start_tool_drag").catch(() => {});
   });
   document.querySelector(".pluginClose").addEventListener("click", () => {
-    // Closed here, it stays closed at the next start (unlike a window the
-    // plugin hid, which comes back hidden and keeps watching).
+    // Closed until the next start; turning the plugin off in Settings keeps
+    // it closed.
     invoke("plugin_close").catch(() => {});
   });
 

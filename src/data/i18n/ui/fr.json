@@ -488,7 +488,9 @@
       "permWindow": "Afficher et masquer sa propre fenêtre, sans retirer le focus au jeu",
       "permCharacter": "Voir le nom, le serveur, la classe et le niveau de votre personnage",
       "permDecoder": "Lire vos propres données de jeu : {name}",
-      "permNone": "Rien d'autre qu'afficher sa fenêtre"
+      "permNone": "Rien d'autre qu'afficher sa fenêtre",
+      "enabled": "Activé",
+      "enabledTip": "Activé : démarre avec le compteur. Désactivé : reste installé mais ne s'exécute pas."
     }
   },
   "support": {

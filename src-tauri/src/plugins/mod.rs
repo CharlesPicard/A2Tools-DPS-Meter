@@ -46,6 +46,9 @@ const MIN_PANEL_HEIGHT: f64 = 60.0;
 /// ran: a JSON object of id → "shown" | "hidden". They open again at start, so
 /// a plugin that watches in the background (hidden) keeps doing so.
 pub const WINDOWS_KEY: &str = "dpsMeter.pluginWindows";
+/// Plugins turned off in Settings, a JSON array of ids: they stay installed
+/// but don't run. Every other plugin starts with the meter.
+pub const DISABLED_KEY: &str = "dpsMeter.pluginsDisabled";
 /// Largest value one storage key may hold.
 const MAX_STORED: usize = 1024 * 1024;
 /// How long a decoded event waits before it is stamped with the character and
@@ -109,13 +112,53 @@ pub struct PluginsView {
     /// Whether this build can reach the catalog (not the offline build).
     pub online: bool,
     pub plugins: Vec<PluginInfo>,
+    /// Ids of the plugins turned off.
+    pub disabled: Vec<String>,
 }
 
 fn view(app: &tauri::AppHandle, host: &PluginHost) -> PluginsView {
     let dev_mode = app
         .try_state::<AppState>()
         .is_some_and(|s| s.settings.get(DEV_MODE_KEY).as_deref() == Some("true"));
-    PluginsView { dev_mode, online: cfg!(feature = "online"), plugins: host.list() }
+    PluginsView { dev_mode, online: cfg!(feature = "online"), plugins: host.list(), disabled: disabled(app) }
+}
+
+/// The plugins turned off.
+fn disabled(app: &tauri::AppHandle) -> Vec<String> {
+    app.try_state::<AppState>()
+        .and_then(|s| s.settings.get(DISABLED_KEY))
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+fn set_disabled(app: &tauri::AppHandle, id: &str, off: bool) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let mut ids = disabled(app);
+    ids.retain(|x| x != id);
+    if off {
+        ids.push(id.to_string());
+    }
+    state.settings.set(DISABLED_KEY, &serde_json::to_string(&ids).unwrap_or_default());
+}
+
+/// Turn a plugin on (it starts now and with every start of the meter) or off
+/// (its window closes; it stays installed, with its data).
+/// Async: on Windows, building a window from a synchronous command deadlocks.
+#[tauri::command]
+pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool) -> Result<PluginsView, String> {
+    if !valid_id(&id) {
+        return Err("not a plugin id".into());
+    }
+    set_disabled(&app, &id, !enabled);
+    if enabled {
+        open_window(&app, &id, true)?;
+        remember_window(&app, &id, Some("shown"));
+    } else if let Some(window) = app.get_webview_window(&format!("plugin-{id}")) {
+        let _ = window.close();
+    }
+    tracing::info!("Plugins: {id} {}", if enabled { "enabled" } else { "disabled" });
+    let host = host(&app)?;
+    Ok(view(&app, &host))
 }
 
 /// Where reviewed plugins are installed.
@@ -452,12 +495,15 @@ pub fn plugin_list(app: tauri::AppHandle) -> Result<PluginsView, String> {
 }
 
 /// Turn developer mode on or off, and load or unload its plugins.
+/// Async: it may start plugins, and building a window from a synchronous
+/// command deadlocks on Windows.
 #[tauri::command]
-pub fn plugin_set_dev_mode(app: tauri::AppHandle, enabled: bool) -> Result<PluginsView, String> {
+pub async fn plugin_set_dev_mode(app: tauri::AppHandle, enabled: bool) -> Result<PluginsView, String> {
     let state = app.try_state::<AppState>().ok_or("no app state")?;
     state.settings.set(DEV_MODE_KEY, if enabled { "true" } else { "false" });
     let host = host(&app)?;
     host.reload(&app);
+    restore_windows(&app);
     Ok(view(&app, &host))
 }
 
@@ -478,6 +524,7 @@ pub async fn plugin_add_folder(app: tauri::AppHandle, window: tauri::WebviewWind
     state.settings.set(DEV_FOLDERS_KEY, &serde_json::to_string(&folders).unwrap_or_default());
     let host = host(&app)?;
     host.reload(&app);
+    restore_windows(&app);
     Ok(view(&app, &host))
 }
 
@@ -566,6 +613,7 @@ pub async fn plugin_check_updates(app: tauri::AppHandle) -> Result<UpdateCheck, 
         .map(|p| PluginUpdate { id: p.id.clone(), name: p.name.clone(), from: before.get(&p.id).cloned(), to: p.version.clone() })
         .collect();
     refresh_windows(&app, &host);
+    restore_windows(&app);
     #[cfg(feature = "online")]
     let (available, catalog_error) = match available_updates(&app, &host).await {
         Ok(available) => (available, None),
@@ -639,6 +687,7 @@ pub async fn plugin_install(app: tauri::AppHandle, id: String) -> Result<Plugins
         tracing::info!("Plugins: installed {} {}", entry.id, entry.version);
         host.reload(&app);
         refresh_windows(&app, &host);
+        restore_windows(&app);
         Ok(view(&app, &host))
     }
     #[cfg(not(feature = "online"))]
@@ -658,6 +707,7 @@ pub fn plugin_uninstall(app: tauri::AppHandle, id: String) -> Result<PluginsView
         let _ = window.close();
     }
     remember_window(&app, &id, None);
+    set_disabled(&app, &id, false);
     let dir = plugins_dir(&app)?.join(&id);
     if dir.is_dir() {
         std::fs::remove_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -842,21 +892,30 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
 /// Async: on Windows, building a window from a synchronous command deadlocks.
 #[tauri::command]
 pub async fn plugin_open(app: tauri::AppHandle, id: String) -> Result<(), String> {
+    if disabled(&app).contains(&id) {
+        return Err("that plugin is turned off".into());
+    }
     open_window(&app, &id, true)?;
     remember_window(&app, &id, Some("shown"));
     Ok(())
 }
 
-/// Open again the plugin windows that were open when the meter last closed.
+/// Start every plugin that is turned on and not running, its window shown or
+/// hidden as it was last left (shown the first time): at start, and when a
+/// plugin is installed or its folder loaded.
 pub fn restore_windows(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else { return };
+    let Ok(host) = host(app) else { return };
     let windows: serde_json::Map<String, Value> =
         state.settings.get(WINDOWS_KEY).and_then(|s| serde_json::from_str(&s).ok()).unwrap_or_default();
-    for (id, how) in windows {
-        let visible = how.as_str() != Some("hidden");
-        if let Err(e) = open_window(app, &id, visible) {
-            tracing::info!("Plugins: not reopening {id}: {e}");
-            remember_window(app, &id, None);
+    let off = disabled(app);
+    for p in host.list().into_iter().filter(|p| p.error.is_none() && !off.contains(&p.id)) {
+        if app.get_webview_window(&format!("plugin-{}", p.id)).is_some() {
+            continue;
+        }
+        let visible = windows.get(&p.id).and_then(Value::as_str) != Some("hidden");
+        if let Err(e) = open_window(app, &p.id, visible) {
+            tracing::info!("Plugins: not starting {}: {e}", p.id);
         }
     }
 }
@@ -877,11 +936,11 @@ pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visibl
     Ok(())
 }
 
-/// The window's close button: close it, and don't reopen it at the next start.
+/// The window's close button: close it until the next start (turning the
+/// plugin off in Settings keeps it closed).
 #[tauri::command]
-pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
-    let id = window_plugin(&window)?;
-    remember_window(&app, &id, None);
+pub fn plugin_close(window: tauri::WebviewWindow) -> Result<(), String> {
+    window_plugin(&window)?;
     let _ = window.close();
     Ok(())
 }

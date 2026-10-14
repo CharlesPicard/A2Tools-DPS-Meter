@@ -488,7 +488,9 @@
       "permWindow": "Mostrar y ocultar su propia ventana, sin quitarle el foco al juego",
       "permCharacter": "Ver el nombre, servidor, clase y nivel de tu personaje",
       "permDecoder": "Leer tus propios datos del juego: {name}",
-      "permNone": "Nada más que mostrar su ventana"
+      "permNone": "Nada más que mostrar su ventana",
+      "enabled": "Activado",
+      "enabledTip": "Activado: se inicia con el medidor. Desactivado: sigue instalado, pero no se ejecuta."
     }
   },
   "support": {

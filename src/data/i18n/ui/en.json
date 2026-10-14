@@ -500,7 +500,9 @@
       "permWindow": "Show and hide its own window, without taking focus from the game",
       "permCharacter": "See your character's name, server, class and level",
       "permDecoder": "Read your own game data: {name}",
-      "permNone": "Nothing beyond showing its window"
+      "permNone": "Nothing beyond showing its window",
+      "enabled": "Enabled",
+      "enabledTip": "On: starts with the meter. Off: stays installed but doesn't run."
     }
   },
   "support": {
