@@ -533,12 +533,12 @@
     }
   },
   "battleTime": {
-    "analysing": "Daten werden überwacht...",
+    "analysing": "Überwache",
     "ttkTooltip": "Geschätzte Dauer des ganzen Bosskampfs, aus den verbleibenden HP und dem Schaden der Gruppe",
     "idle": "Inaktiv",
-    "notRunning": "AION2 läuft nicht",
-    "suspended": "App pausiert",
-    "waitingBoss": "Warte auf einen Boss"
+    "notRunning": "AION2 beendet",
+    "suspended": "Pausiert",
+    "waitingBoss": "Kein Boss"
   },
   "meter": {
     "identifyingPlayer": "#{id}",
@@ -560,7 +560,7 @@
   },
   "connection": {
     "auto": "Auto",
-    "detecting": "AION2-Verbindung wird erkannt...",
+    "detecting": "Verbinde...",
     "loopback": "Lokales Loopback"
   },
   "target": {

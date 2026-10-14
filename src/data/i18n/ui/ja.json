@@ -533,11 +533,11 @@
     }
   },
   "battleTime": {
-    "analysing": "データを監視中...",
+    "analysing": "監視中",
     "ttkTooltip": "ボスの残りHPとパーティの与ダメージから予測した戦闘全体の長さ",
     "idle": "待機中",
-    "notRunning": "AION2が起動していません",
-    "suspended": "アプリを一時停止中",
+    "notRunning": "AION2未起動",
+    "suspended": "一時停止中",
     "waitingBoss": "ボス待機中"
   },
   "meter": {
@@ -560,7 +560,7 @@
   },
   "connection": {
     "auto": "自動",
-    "detecting": "AION2の接続を検出中...",
+    "detecting": "接続中...",
     "loopback": "ローカルループバック"
   },
   "target": {

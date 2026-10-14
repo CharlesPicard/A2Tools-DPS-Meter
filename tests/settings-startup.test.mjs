@@ -825,7 +825,7 @@ test('the settings window shows "detecting" while the game runs without a port',
   app.i18n = { t: (key, fallback) => fallback };
   app.start();
   assert.equal(app.aionRunning, true);
-  assert.equal(app.lockedPort.textContent, 'Detecting AION2 connection...');
+  assert.equal(app.lockedPort.textContent, 'Connecting...');
   window.javaBridge.getAion2WindowTitle = () => null;
   app.refreshSettingsStatus();
   assert.equal(app.lockedPort.textContent, 'Auto');

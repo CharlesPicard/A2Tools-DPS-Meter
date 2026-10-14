@@ -533,12 +533,12 @@
     }
   },
   "battleTime": {
-    "analysing": "Monitorando dados...",
+    "analysing": "Monitorando",
     "ttkTooltip": "Duração estimada da luta inteira contra o chefe, pela vida restante e o dano do grupo",
     "idle": "Ocioso",
-    "notRunning": "AION2 não está em execução",
-    "suspended": "Aplicativo pausado",
-    "waitingBoss": "Aguardando um chefe"
+    "notRunning": "AION2 fechado",
+    "suspended": "Pausado",
+    "waitingBoss": "Sem chefe"
   },
   "meter": {
     "identifyingPlayer": "#{id}",
@@ -560,7 +560,7 @@
   },
   "connection": {
     "auto": "Auto",
-    "detecting": "Detectando a conexão do AION2...",
+    "detecting": "Conectando...",
     "loopback": "Loopback local"
   },
   "target": {

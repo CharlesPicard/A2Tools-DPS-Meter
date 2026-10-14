@@ -540,11 +540,11 @@
     }
   },
   "battleTime": {
-    "analysing": "데이터 모니터링 중...",
+    "analysing": "모니터링 중",
     "ttkTooltip": "보스의 남은 생명력과 파티 피해량으로 예상한 전체 전투 시간",
     "idle": "대기 중",
-    "notRunning": "AION2 not running",
-    "suspended": "앱 일시정지됨",
+    "notRunning": "AION2 꺼짐",
+    "suspended": "일시정지됨",
     "waitingBoss": "보스 대기 중"
   },
   "meter": {
@@ -567,7 +567,7 @@
   },
   "connection": {
     "auto": "자동",
-    "detecting": "Detecting AION2 connection...",
+    "detecting": "연결 중...",
     "loopback": "로컬 루프백"
   },
   "target": {
