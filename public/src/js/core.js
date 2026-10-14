@@ -732,6 +732,11 @@ class DpsApp {
       this.aionRunning = running;
       this.refreshConnectionInfo();
       this.updateConnectionStatusUi();
+    } else if (running && this.isDetectingPort) {
+      // The port locks a moment after the game is seen, and nothing else may
+      // ask again: in Boss mode no row appears until a boss is hit, so
+      // "Detecting AION2 connection..." stayed up. Ask on each poll until it locks.
+      this.refreshConnectionInfo({ skipSettingsRefresh: true });
     }
     if (!running) return;
     this.syncCharacterNameFromGame();
