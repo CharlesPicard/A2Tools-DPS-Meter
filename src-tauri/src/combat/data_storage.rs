@@ -556,6 +556,10 @@ struct Inner {
     has_boss_in_segment: bool,
     current_target: i32,
 
+    /// Odyle energy, (basic, charged), as the game last sent it. See
+    /// `StreamProcessor::parse_odyle_energy_packet`.
+    odyle_energy: Option<(u32, u32)>,
+
     // Local player
     local_player_id: Option<i64>,
     /// Behind an Arc because `get_dps` reads it every 500ms and the set can hold
@@ -658,6 +662,7 @@ impl DataStorage {
                 held_dot_ticks: HashMap::new(),
                 has_boss_in_segment: false,
                 current_target: 0,
+                odyle_energy: None,
                 local_player_id: None,
                 supporters: std::sync::Arc::new(crate::supporters::Roster::default()),
                 local_character_name: None,
@@ -1147,6 +1152,20 @@ impl DataStorage {
 
     pub fn local_player_id(&self) -> Option<i64> {
         self.inner.read().local_player_id
+    }
+
+    /// The Odyle energy the game sent: basic (spent first, recharged every
+    /// cycle) and charged (from items).
+    pub fn set_odyle_energy(&self, basic: u32, charged: u32) {
+        let mut inner = self.inner.write();
+        if inner.odyle_energy != Some((basic, charged)) {
+            tracing::info!("Odyle energy: {basic} basic, {charged} charged");
+            inner.odyle_energy = Some((basic, charged));
+        }
+    }
+
+    pub fn odyle_energy(&self) -> Option<(u32, u32)> {
+        self.inner.read().odyle_energy
     }
 
     pub fn append_damage(&self, pdp: ParsedDamagePacket) {

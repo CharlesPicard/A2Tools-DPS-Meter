@@ -276,6 +276,7 @@ impl StreamProcessor {
         let parsed_hp = self.parse_hp_mp_update_packet(packet);
         self.parse_party_scope_packet(packet);
         self.parse_party_left_packet(packet);
+        self.parse_odyle_energy_packet(packet);
         self.parse_self_stats_packet(packet);
         self.parse_death_packet(packet);
         self.parse_zone_change_packet(packet);
@@ -331,6 +332,35 @@ impl StreamProcessor {
         let record = packet.get(offset..);
         if record == Some(&[0x13, 0x92, 0x00, 0x00][..]) || record == Some(&[0x1D, 0x97, 0x00, 0x00][..]) {
             self.data_storage.note_party_left();
+        }
+    }
+
+    // ===== ODYLE ENERGY (0B 61, 0C 61) =====
+
+    /// Odyle energy, the first entry of the game's list of entry counts. An
+    /// entry is `<kind> <slot> <key varint> <value varint>...`: kind `04` has
+    /// one value (a dungeon's entries left), `0c` two; Odyle energy is
+    /// `0c 01 <key> <basic> <charged>`. `0b 61` holds the whole list, at
+    /// login and after a server transfer, among other things before it;
+    /// `0c 61 <count> <entries>` the entries that changed.
+    ///
+    /// Seen on 2026-10-14: the list at 03:18:42 (15 basic, 605 charged, after
+    /// a raid) and at 21:16:50 (30, 840, at login; the game's tooltip said
+    /// 30/840 and 840/2000); a recharge item at 21:24:45 sent
+    /// `0c 61 01 0c 01 87 93 03 1e f0 06 01 28 00 00 00` (charged 880).
+    fn parse_odyle_energy_packet(&self, packet: &[u8]) {
+        let length_info = read_varint(packet, 0);
+        if length_info.length <= 0 {
+            return;
+        }
+        let offset = length_info.length as usize;
+        let energy = match packet.get(offset..offset + 2) {
+            Some([0x0B, 0x61]) => odyle_energy_in_list(&packet[offset + 2..]),
+            Some([0x0C, 0x61]) => odyle_energy_in_update(&packet[offset + 2..]),
+            _ => None,
+        };
+        if let Some((basic, charged)) = energy {
+            self.data_storage.set_odyle_energy(basic, charged);
         }
     }
 
@@ -1961,6 +1991,63 @@ pub fn read_varint(bytes: &[u8], offset: usize) -> VarIntResult {
     }
 }
 
+/// One entry of the game's entry counts (see
+/// `StreamProcessor::parse_odyle_energy_packet`) at `at`: its kind, slot, key
+/// and values, and where the next begins.
+fn entry_count_at(body: &[u8], at: usize) -> Option<(u8, u8, i32, [i32; 2], usize)> {
+    let kind = *body.get(at)?;
+    let values = match kind {
+        0x04 => 1,
+        0x0C => 2,
+        _ => return None,
+    };
+    let slot = *body.get(at + 1)?;
+    let mut o = at + 2;
+    let key = try_read_varint(body, &mut o)?;
+    let mut v = [0; 2];
+    for value in v.iter_mut().take(values) {
+        *value = try_read_varint(body, &mut o)?;
+    }
+    Some((kind, slot, key, v, o))
+}
+
+/// Odyle energy as `(basic, charged)` from an entry, when it is that entry.
+fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
+    // Generous bounds (the game's are 840 and 2000): only to turn away bytes
+    // that merely look like the entry.
+    let ok = |n: i32| (0..=100_000).contains(&n);
+    (kind == 0x0C && slot == 1 && ok(v[0]) && ok(v[1])).then(|| (v[0] as u32, v[1] as u32))
+}
+
+/// Odyle energy in a `0b 61` list: the `0c 01` entry that the list's second
+/// entry follows with the same key.
+fn odyle_energy_in_list(body: &[u8]) -> Option<(u32, u32)> {
+    (0..body.len().saturating_sub(1))
+        .filter(|&i| body[i] == 0x0C && body[i + 1] == 0x01)
+        .find_map(|i| {
+            let (kind, slot, key, v, next) = entry_count_at(body, i)?;
+            let (_, next_slot, next_key, _, _) = entry_count_at(body, next)?;
+            if next_slot != 2 || next_key != key {
+                return None;
+            }
+            odyle_energy_of(kind, slot, v)
+        })
+}
+
+/// Odyle energy in a `0c 61` update, if among the entries that changed.
+fn odyle_energy_in_update(body: &[u8]) -> Option<(u32, u32)> {
+    let count = *body.first()?;
+    let mut at = 1;
+    for _ in 0..count {
+        let (kind, slot, _, v, next) = entry_count_at(body, at)?;
+        if let Some(energy) = odyle_energy_of(kind, slot, v) {
+            return Some(energy);
+        }
+        at = next;
+    }
+    None
+}
+
 fn try_read_varint(bytes: &[u8], offset: &mut usize) -> Option<i32> {
     let result = read_varint(bytes, *offset);
     if result.length <= 0 {
@@ -3525,6 +3612,39 @@ mod tests {
         p.consume_stream(&scope);
         assert_eq!(storage.local_player_id(), Some(2737));
         assert!(storage.local_id_from_scope());
+    }
+
+    /// Odyle energy (2026-10-14): the login list at 21:16:50 (30 basic, 840
+    /// charged, as the game's tooltip said), then a recharge item's update at
+    /// 21:24:45 (charged 880). A `0c 61` without the energy entry changes
+    /// nothing.
+    #[test]
+    fn odyle_energy_from_the_login_list_and_its_updates() {
+        let (storage, mut p) = processor();
+        assert_eq!(storage.odyle_energy(), None);
+        let list = [
+            "f1030b61490c010000000a010103000000a0c01b01000000000004000000000600000004070000002004080000000501",
+            "090000008085800100000000040a0000000e040b00000002040c0000000e010d0000008085800100000000040e000000",
+            "0e040f0000000e04650000000e04660000000704670000000701c9000000808580010000000001ca0000008085800100",
+            "00000001cb000000808580010000000001cc000000808580010000000001cd000000808580010000000001ce00000080",
+            "858001000000000081969800008296980000839698000084969800008596980000869698000087969800008896980000",
+            "89969800008a969800008b969800008c9698000c018793031ec80604028793030e04038793030e04048793030e040587",
+            "93030e04068793031504078793032304088793031c040987930309040a8793030704658793030e04c987930307044d8b",
+            "93030704b18b93030e04358f93030704998f93030e041d9393030704819393030e04059793030704699793030704b59b",
+            "930304049d9f93030404bda29303070421a393030e048daa93030704f1aa93030e0445b693030704a9b6930307042dba",
+            "9303070415be93030704fdc193030704811d2c04030401b4c4040304814a5d050404824a5d050104834a5d050404844a",
+            "5d050204854a5d050404864a5d0502",
+        ]
+        .concat();
+        p.parse_perfect_packet(&hex(&list));
+        assert_eq!(storage.odyle_energy(), Some((30, 840)));
+
+        p.parse_perfect_packet(&hex("140c61010c018793031ef0060128000000"));
+        assert_eq!(storage.odyle_energy(), Some((30, 880)));
+
+        // The `0c 61` that followed the list at 03:18:42.
+        p.parse_perfect_packet(&hex("0d0c6100000987930303"));
+        assert_eq!(storage.odyle_energy(), Some((30, 880)));
     }
 
     /// Leaving an open-world party (2026-10-13, 23:43:42): `1f 92 03`, then

@@ -3032,6 +3032,40 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   }
 }
 
+/* Odyle energy — below the meter beside the ping, as the game writes it:
+   basic (+charged)/840, the charged part in the game's cyan. */
+.odyleDisplay {
+  display: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 600, "wdth" 87.5;
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+  line-height: 1;
+  pointer-events: none;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+  align-items: center;
+  gap: 4px;
+}
+.odyleDisplay.isVisible {
+  display: flex;
+}
+.odyleDisplay .odyleIcon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.7));
+}
+.odyleDisplay .odyleCharged {
+  color: #4fd8ff;
+}
+.meter.slim .odyleDisplay { font-size: 10px; }
+.meter.slim .odyleDisplay .odyleIcon { width: 12px; height: 12px; }
+
 /* Ping display — sits below the meter, outside the meter viewport */
 .pingDisplay {
   display: none;
@@ -6420,6 +6454,7 @@ html.detailsWindow .list,
 html.detailsWindow .meterFooter,
 html.detailsWindow .resizeHandle,
 html.detailsWindow .pingDisplay,
+html.detailsWindow .odyleDisplay,
 html.detailsWindow .settingsPanel,
 /* History has its own window again, so it never draws over a fight. */
 html.detailsWindow .historyPanel,

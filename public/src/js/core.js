@@ -37,6 +37,7 @@ const REMOTE_APPLIED_SETTING_CONTROLS = {
   "dpsMeter.mainPlayerNamesBold": ".playerNamesBoldCheckbox",
   "dpsMeter.mainPlayerDpsBold": ".playerDpsBoldCheckbox",
   "dpsMeter.showPing": ".showPingCheckbox",
+  "dpsMeter.showOdyle": ".showOdyleCheckbox",
   "dpsMeter.showTtk": ".showTtkCheckbox",
   "dpsMeter.bossNameSize": ".bossNameSizeInput",
   "dpsMeter.showSupporterColors": ".showSupporterColorsCheckbox",
@@ -95,6 +96,7 @@ class DpsApp {
       showSupporterColors: "dpsMeter.showSupporterColors",
       mainPlayerDpsBold: "dpsMeter.mainPlayerDpsBold",
       showPing: "dpsMeter.showPing",
+      showOdyle: "dpsMeter.showOdyle",
       showTtk: "dpsMeter.showTtk",
       showTotalDps: "dpsMeter.showTotalDps",
       roundDps: "dpsMeter.roundDps",
@@ -307,6 +309,7 @@ class DpsApp {
     if (window.A2_VIEW === "settings") {
       // Opening settings must not construct or lay out the hidden combat views.
       this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
+      this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
       this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
       this.showTotalDps = this.safeGetSetting(this.storageKeys.showTotalDps) !== "false";
       this.roundDps = this.safeGetSetting(this.storageKeys.roundDps) !== "false";
@@ -455,6 +458,12 @@ class DpsApp {
 
     this.pingEl = document.querySelector(".pingDisplay");
     this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
+    // Odyle energy, pushed by the backend ("odyle-energy") once the game has
+    // sent it: at login, after a server transfer, and when it changes. Off
+    // unless turned on in Settings.
+    this.odyleEl = document.querySelector(".odyleDisplay");
+    this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
+    this.odyleEnergy = null;
     // Time to kill beside the battle timer, for bosses; on unless turned off.
     this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
     this.ttk = typeof createTtkEstimator === "function" ? createTtkEstimator() : null;
@@ -2489,6 +2498,7 @@ class DpsApp {
     this.debugLoggingCheckbox = document.querySelector(".debugLoggingCheckbox");
     this.shareBossTimersCheckbox = document.querySelector(".shareBossTimersCheckbox");
     this.showPingCheckbox = document.querySelector(".showPingCheckbox");
+    this.showOdyleCheckbox = document.querySelector(".showOdyleCheckbox");
     this.saveRawPacketsCheckbox = document.querySelector(".saveRawPacketsCheckbox");
     this.sendLogsBtn = document.querySelector(".sendLogsBtn");
     this.sendLogsStatus = document.querySelector(".sendLogsStatus");
@@ -2730,6 +2740,14 @@ class DpsApp {
       this.showPingCheckbox.addEventListener("change", (event) => {
         this.showPing = !!event.target?.checked;
         this.safeSetSetting(this.storageKeys.showPing, String(this.showPing));
+      });
+    }
+    if (this.showOdyleCheckbox) {
+      this.showOdyleCheckbox.checked = this.showOdyle;
+      this.showOdyleCheckbox.addEventListener("change", (event) => {
+        this.showOdyle = !!event.target?.checked;
+        this.safeSetSetting(this.storageKeys.showOdyle, String(this.showOdyle));
+        this.updateOdyle();
       });
     }
     this.showTtkCheckbox = document.querySelector(".showTtkCheckbox");
@@ -5637,6 +5655,23 @@ class DpsApp {
       el.style.fontSize = `${fs}px`;
       if (el.scrollWidth <= container.clientWidth) return;
     }
+  }
+
+  // Odyle energy as the game shows it: basic (+charged)/840. The game's
+  // maximums (840 basic, 2000 charged) are not in its records.
+  updateOdyle(energy) {
+    if (energy && typeof energy === "object") this.odyleEnergy = energy;
+    const el = this.odyleEl;
+    if (!el) return;
+    const { basic, charged } = this.odyleEnergy || {};
+    if (!this.showOdyle || typeof basic !== "number" || typeof charged !== "number") {
+      el.classList.remove("isVisible");
+      return;
+    }
+    el.querySelector(".odyleBasic").textContent = String(basic);
+    el.querySelector(".odyleCharged").textContent = charged > 0 ? `(+${charged})` : "";
+    el.querySelector(".odyleMax").textContent = "/840";
+    el.classList.add("isVisible");
   }
 
   updatePing(pushedMs) {
