@@ -18,9 +18,9 @@
 //! until it is known whose server it shows.
 //!
 //! Field boss kills in the open world go too, as they happen, and a field
-//! boss's HP every 3 seconds while it changes (`spawn_events`): the boss, the
-//! server and the time or percent. a2tools.app passes them on to Aion 2
-//! Timers when a boss's HP has dropped by a percent or more.
+//! boss's HP every 3 seconds while it is fought (changed or not), and when it
+//! changes; a jump back up is marked as a reset (`spawn_events`). a2tools.app
+//! passes a drop of a percent or more, and a reset, on to Aion 2 Timers.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -30,7 +30,7 @@ use tauri::Manager;
 
 use crate::app::AppState;
 use crate::capture::boss_map::BossMap;
-use crate::combat::data_storage::{BossEvent, BossEventKind};
+use crate::combat::data_storage::{BossEvent, BossEventKind, BossHp};
 
 pub const SETTING_KEY: &str = "dpsMeter.shareBossTimers";
 const CHECK: Duration = Duration::from_secs(2);
@@ -82,11 +82,14 @@ pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str,
     })
 }
 
-/// The HP request for the bosses that changed: (NPC code, percent) each.
-pub fn hp_request(server_id: u16, changed: &[(i32, u8)]) -> Option<serde_json::Value> {
-    let bosses: Vec<_> = changed
+/// The HP request for the bosses to report now.
+pub fn hp_request(server_id: u16, bosses: &[BossHp]) -> Option<serde_json::Value> {
+    let bosses: Vec<_> = bosses
         .iter()
-        .filter_map(|&(npc, pct)| crate::capture::field_bosses::world_map_id(npc).map(|id| json!({ "id": id, "hp": pct })))
+        .filter_map(|b| {
+            let id = crate::capture::field_bosses::world_map_id(b.npc)?;
+            Some(if b.reset { json!({ "id": id, "hp": b.percent, "reset": true }) } else { json!({ "id": id, "hp": b.percent }) })
+        })
         .collect();
     (!bosses.is_empty()).then(|| json!({ "format": 1, "server": server_id, "bosses": bosses }))
 }
@@ -104,7 +107,7 @@ fn spawn_events(app: tauri::AppHandle) {
             // when it can't go (HP is only worth anything now).
             if last_hp.elapsed() >= HP_EVERY {
                 last_hp = std::time::Instant::now();
-                let changed = state.data_storage.take_boss_hp();
+                let changed = state.data_storage.take_boss_hp(now);
                 let server = state.data_storage.local_profile().server_id;
                 let off = state.settings.get(SETTING_KEY).as_deref() == Some("false");
                 if let (false, false, Some(body)) = (off, server == 0, hp_request(server, &changed)) {
@@ -209,9 +212,12 @@ mod tests {
         assert_eq!(path, "/api/boss-timers/kill");
         assert_eq!(body, json!({ "format": 1, "server": 1301, "id": 101006, "diedAt": 1_791_993_638 }));
         assert!(event_request(1301, &BossEvent { npc: 1, kind: BossEventKind::Killed { at_ms: 0 } }).is_none());
-        let hp = hp_request(1301, &[(2100079, 49), (1, 50)]).unwrap();
+        let b = |npc, percent, reset| BossHp { npc, percent, reset };
+        let hp = hp_request(1301, &[b(2100079, 49, false), b(1, 50, false)]).unwrap();
         assert_eq!(hp, json!({ "format": 1, "server": 1301, "bosses": [{ "id": 101006, "hp": 49 }] }));
-        assert!(hp_request(1301, &[(1, 50)]).is_none());
+        let reset = hp_request(1301, &[b(2100079, 100, true)]).unwrap();
+        assert_eq!(reset["bosses"][0], json!({ "id": 101006, "hp": 100, "reset": true }));
+        assert!(hp_request(1301, &[b(1, 50, false)]).is_none());
     }
 
     #[test]

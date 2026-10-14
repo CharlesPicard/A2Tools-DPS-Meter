@@ -430,6 +430,24 @@ pub enum BossEventKind {
 #[cfg(feature = "online")]
 const MAX_BOSS_EVENTS: usize = 64;
 
+/// A field boss counts as being fought while its HP changed, or it took
+/// damage, this recently: its HP goes every 3 seconds then, changed or not.
+const IN_COMBAT_MS: i64 = 10_000;
+/// A field boss's HP back up by this many points or more has reset (kited
+/// out of range, or left alone until it recovered).
+const RESET_RISE: u8 = 5;
+
+/// A field boss's HP for the sender (`take_boss_hp`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BossHp {
+    /// The boss's NPC code.
+    pub npc: i32,
+    /// Whole percent left.
+    pub percent: u8,
+    /// Back up from what was last sent: it reset.
+    pub reset: bool,
+}
+
 
 #[cfg(feature = "online")]
 fn push_boss_event(inner: &mut Inner, event: BossEvent) {
@@ -552,9 +570,9 @@ struct Inner {
     /// Entities whose max HP came from their spawn record, so a percentage of
     /// it can be trusted (a peak seen later may be below the real max).
     spawn_hp_ids: HashSet<i32>,
-    /// A field boss's HP now (NPC code, whole percent), per entity, and the
-    /// percent last handed to the sender (`take_boss_hp`).
-    boss_hp_now: HashMap<i32, (i32, u8)>,
+    /// A field boss's HP now (NPC code, whole percent, when it last changed),
+    /// per entity, and the percent last handed to the sender (`take_boss_hp`).
+    boss_hp_now: HashMap<i32, (i32, u8, i64)>,
     boss_hp_sent: HashMap<i32, u8>,
     /// Field boss kills and HP milestones in the open world, not yet sent
     /// (`boss_report.rs`).
@@ -1384,17 +1402,27 @@ impl DataStorage {
         self.inner.read().a2tools_users.clone()
     }
 
-    /// The field bosses whose HP changed since the last call: (NPC code,
-    /// whole percent). `boss_report.rs` sends them every 3 seconds.
-    pub fn take_boss_hp(&self) -> Vec<(i32, u8)> {
+    /// The field bosses to report now (`boss_report.rs`, every 3 seconds):
+    /// each whose HP changed since the last call, and each still being
+    /// fought (its HP moving or it taking damage in the last IN_COMBAT_MS),
+    /// changed or not. One whose HP came back up RESET_RISE points or more
+    /// is marked as reset. A boss out of range sends nothing (no HP, no
+    /// damage); back in range after resetting, its first reading is the jump.
+    pub fn take_boss_hp(&self, now_ms: i64) -> Vec<BossHp> {
         let mut inner = self.inner.write();
-        let now: Vec<(i32, i32, u8)> = inner.boss_hp_now.iter().map(|(&id, &(npc, pct))| (id, npc, pct)).collect();
+        let bosses: Vec<(i32, i32, u8, i64)> =
+            inner.boss_hp_now.iter().map(|(&id, &(npc, pct, changed))| (id, npc, pct, changed)).collect();
         let mut out = Vec::new();
-        for (id, npc, pct) in now {
-            if inner.boss_hp_sent.get(&id) != Some(&pct) {
-                inner.boss_hp_sent.insert(id, pct);
-                out.push((npc, pct));
+        for (id, npc, pct, changed) in bosses {
+            let hit = inner.target_combat.get(&id).map_or(0, |t| t.last_damage_time);
+            let fought = now_ms - changed.max(hit) < IN_COMBAT_MS;
+            let sent = inner.boss_hp_sent.get(&id).copied();
+            if sent == Some(pct) && !fought {
+                continue;
             }
+            let reset = sent.is_some_and(|s| pct >= s.saturating_add(RESET_RISE));
+            inner.boss_hp_sent.insert(id, pct);
+            out.push(BossHp { npc, percent: pct, reset });
         }
         out
     }
@@ -1916,7 +1944,11 @@ impl DataStorage {
             if let Some(&code) = inner.mob_storage.get(&id) {
                 if crate::capture::field_bosses::is_field_boss(code) {
                     let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
-                    inner.boss_hp_now.insert(id, (code, pct));
+                    let changed = match inner.boss_hp_now.get(&id) {
+                        Some(&(_, before, at)) if before == pct => at,
+                        _ => now_ms(),
+                    };
+                    inner.boss_hp_now.insert(id, (code, pct, changed));
                 }
             }
         }
@@ -3058,23 +3090,30 @@ mod tests {
 
     #[cfg(feature = "online")]
     #[test]
-    fn a_field_boss_hp_goes_when_it_changed_and_only_with_its_spawn_hp() {
+    fn a_fought_boss_goes_every_pass_and_a_reset_is_marked() {
         let s = DataStorage::new();
         s.append_mob(500, 2100079);
         s.append_mob_hp(500, 1000);
         s.set_mob_current_hp(500, 950);
-        assert_eq!(s.take_boss_hp(), vec![(2100079, 95)]);
-        assert!(s.take_boss_hp().is_empty(), "unchanged: nothing");
-        s.set_mob_current_hp(500, 948); // still 94 %... 94.8 -> 94
-        s.set_mob_current_hp(500, 700);
-        assert_eq!(s.take_boss_hp(), vec![(2100079, 70)], "the percent now, once");
+        let t = now_ms();
+        let pct = |v: Vec<BossHp>| v.into_iter().map(|h| (h.percent, h.reset)).collect::<Vec<_>>();
+        assert_eq!(pct(s.take_boss_hp(t)), vec![(95, false)]);
+        // Still being fought (its HP moved a moment ago): again, unchanged.
+        assert_eq!(pct(s.take_boss_hp(t + 3_000)), vec![(95, false)]);
+        // Left alone: nothing once the fight has gone quiet.
+        assert!(s.take_boss_hp(t + 60_000).is_empty());
+        s.set_mob_current_hp(500, 400);
+        assert_eq!(pct(s.take_boss_hp(now_ms())), vec![(40, false)]);
+        // Kited away and reset: back at full, marked.
+        s.set_mob_current_hp(500, 1000);
+        assert_eq!(pct(s.take_boss_hp(now_ms())), vec![(100, true)]);
         // Dead: no more HP for it.
         s.mark_entity_dead(500);
-        assert!(s.take_boss_hp().is_empty());
+        assert!(s.take_boss_hp(now_ms()).is_empty());
         // Its spawn unseen: its max is a guess, so no percentages.
         s.append_mob(501, 2100079);
         s.set_mob_current_hp(501, 800);
-        assert!(s.take_boss_hp().is_empty());
+        assert!(s.take_boss_hp(now_ms()).is_empty());
     }
 
     #[test]
