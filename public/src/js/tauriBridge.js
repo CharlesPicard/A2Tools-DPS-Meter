@@ -271,6 +271,10 @@
     }).catch(() => {});
   }
 
+  if (viewMode !== "settings") listen("odyle-energy", (event) => {
+    window._dpsApp?.updateOdyle?.(event.payload);
+  });
+
   if (viewMode !== "settings") listen("ping-update", (event) => {
     cachedPing = event.payload;
     // Push directly to the app instance for immediate display update

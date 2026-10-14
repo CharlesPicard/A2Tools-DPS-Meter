@@ -251,6 +251,8 @@
       "dps": "DPS"
     },
     "showPing": "Mostrar ping",
+    "showOdyle": "Mostrar energía de Odyle",
+    "odyleEnergy": "Energía de Odyle",
     "showTtk": "Mostrar tiempo estimado para matar",
     "showTotalDps": "Mostrar total del grupo",
     "roundDps": "Abreviar DPS en miles (13k)",
@@ -425,6 +427,7 @@
     },
     "debugLoggingLocked": "Activado mientras el registro de paquetes esté activo: los registros de paquetes necesitan el registro de depuración.",
     "tips": {
+      "showOdyle": "Bajo el medidor, tu energía de Odyle como la muestra el juego: básica (+cargada). Se actualiza al conectarte, tras un cambio de servidor y cuando cambia la energía.",
       "characterName": "Tu nombre e ID en el juego, para que el medidor sepa qué fila eres tú. Normalmente se detecta solo.",
       "device": "La conexión de red de la que el medidor lee el tráfico del juego. La detección automática la encuentra; con VPN, elígela a mano.",
       "lockedPort": "El adaptador y el puerto en que se encontró el juego.",

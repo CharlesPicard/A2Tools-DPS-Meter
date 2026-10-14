@@ -2942,6 +2942,7 @@ pub fn run() {
                 let mut tick_count: u64 = 0;
                 let mut hide_delay: u64 = 0; // ticks to wait before hiding
                 let mut last_ping: Option<u64> = None;
+                let mut last_odyle: Option<(u32, u32)> = None;
                 loop {
                     interval.tick().await;
                     tick_count += 1;
@@ -2953,6 +2954,18 @@ pub fn run() {
                             if last_ping != Some(ping as u64) || tick_count % 4 == 0 {
                                 last_ping = Some(ping as u64);
                                 let _ = handle.emit("ping-update", ping);
+                            }
+                        }
+
+                        // Odyle energy: sent when it changes, and every 2 s
+                        // for a window opened since.
+                        if let Some(energy) = state.data_storage.odyle_energy() {
+                            if last_odyle != Some(energy) || tick_count % 4 == 0 {
+                                last_odyle = Some(energy);
+                                let _ = handle.emit(
+                                    "odyle-energy",
+                                    serde_json::json!({ "basic": energy.0, "charged": energy.1 }),
+                                );
                             }
                         }
 

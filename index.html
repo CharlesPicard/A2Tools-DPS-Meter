@@ -641,6 +641,13 @@
                     </span>
                   </label>
                   <label class="settingsToggle">
+                    <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showOdyle" title="Below the meter, your Odyle energy as the game shows it: basic (+charged). It updates at login, after a server transfer and when the energy changes." data-i18n-title="settings.tips.showOdyle">Show Odyle energy</span>
+                    <span class="settingsToggleControl">
+                      <input type="checkbox" class="showOdyleCheckbox" />
+                      <span class="settingsToggleTrack" aria-hidden="true"></span>
+                    </span>
+                  </label>
+                  <label class="settingsToggle">
                     <span class="settingsToggleLabel settingsLabel" data-i18n="settings.showTtk" title="Beside the battle timer, an estimate of how long the whole boss fight will take." data-i18n-title="settings.tips.showTtk">Show time to kill estimate</span>
                     <span class="settingsToggleControl">
                       <input type="checkbox" class="showTtkCheckbox" />
@@ -1253,6 +1260,10 @@
                 class="collapseIcon"
                 data-lucide="arrow-up-wide-narrow"></i>
             </div>
+          </div>
+          <div class="odyleDisplay" role="status" aria-label="Odyle Energy" data-i18n-aria-label="settings.odyleEnergy">
+            <img src="/src/assets/odyle.png" class="odyleIcon" alt="" />
+            <span class="odyleText"><span class="odyleBasic"></span><span class="odyleCharged"></span></span>
           </div>
           <div class="pingDisplay">
             <i data-lucide="wifi" class="pingIcon"></i>

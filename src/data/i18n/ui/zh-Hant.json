@@ -256,6 +256,8 @@
       "dps": "DPS"
     },
     "showPing": "顯示延遲",
+    "showOdyle": "顯示奧德能量",
+    "odyleEnergy": "奧德能量",
     "showTtk": "顯示預估擊殺時間",
     "showTotalDps": "顯示隊伍總計",
     "roundDps": "DPS 以千為單位顯示 (13k)",
@@ -432,6 +434,7 @@
     },
     "debugLoggingLocked": "開啟封包記錄時保持開啟：分析封包記錄需要除錯記錄。",
     "tips": {
+      "showOdyle": "在計量器下方以遊戲中的格式顯示奧德能量：基本（+充能）。登入、伺服器轉移及能量變化時更新。",
       "characterName": "你的遊戲角色名稱和 ID，讓計量器知道哪一列是你。通常會自動識別。",
       "device": "計量器讀取遊戲流量的網路連線。自動偵測會找到它；使用 VPN 時請手動選擇。",
       "lockedPort": "發現遊戲所用的介面卡和連接埠。",

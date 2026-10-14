@@ -261,6 +261,8 @@
       "dps": "DPS"
     },
     "showPing": "Show ping",
+    "showOdyle": "Show Odyle energy",
+    "odyleEnergy": "Odyle Energy",
     "showTtk": "Show time to kill estimate",
     "showTotalDps": "Show party total",
     "roundDps": "Shorten DPS to thousands (13k)",
@@ -437,6 +439,7 @@
     },
     "debugLoggingLocked": "On while packet logging is on: packet logs need the debug log to be read.",
     "tips": {
+      "showOdyle": "Below the meter, your Odyle energy as the game shows it: basic (+charged). It updates at login, after a server transfer and when the energy changes.",
       "characterName": "Your in-game name and ID, so the meter knows which row is you. It is usually found on its own.",
       "device": "The network connection the meter reads game traffic from. Auto-detect finds it; pick one by hand if you use a VPN.",
       "lockedPort": "The adapter and port the game was found on.",
