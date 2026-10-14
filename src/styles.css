@@ -686,9 +686,15 @@ body.linuxOverlay .meter {
 /* AION2 (class colours): each bar in its player's class colour, yours too
    (the rail on the left still marks your row). A row whose class isn't
    known yet keeps the theme's colour. */
-:root[data-theme="aion2-classes"] .list .item .fill { --bar: var(--class-fill, var(--row-fill)); }
+.detailsPanel .detailsPartyBar.isUser .detailsPartyBarFill { --bar: var(--isUser-fill); }
+:root[data-theme="aion2-classes"] .list .item .fill,
+:root[data-theme="aion2-classes"] .detailsPanel .detailsPartyBarFill { --bar: var(--class-fill, var(--row-fill)); }
 /* AION2 (class colours, vivid): the same, drawn stronger (55-88% of the
    colour where the other themes' bars use 30-62%), less pastel. */
+:root[data-theme="aion2-classes-vivid"] .detailsPanel .detailsPartyBarFill {
+  --bar: var(--class-fill, var(--row-fill));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--bar) 45%, transparent) 0%, color-mix(in srgb, var(--bar) 78%, transparent) 100%);
+}
 :root[data-theme="aion2-classes-vivid"] .list .item .fill {
   --bar: var(--class-fill, var(--row-fill));
   --bar-base: linear-gradient(
@@ -701,13 +707,16 @@ body.linuxOverlay .meter {
    its place from the top (meter.js sets --row-pos): the rainbow, red first;
    a cool sweep from teal through blue and violet to pink; or a warm one from
    gold through orange, red and pink to violet. */
-:root[data-theme="aion2-spectrum"] .list .item:not(.warning):not(.error) .fill {
+:root[data-theme="aion2-spectrum"] .list .item:not(.warning):not(.error) .fill,
+:root[data-theme="aion2-spectrum"] .detailsPanel .detailsPartyBarFill {
   --bar: hsl(calc(var(--row-pos, 0) * 52deg) 82% 58%);
 }
-:root[data-theme="aion2-aurora"] .list .item:not(.warning):not(.error) .fill {
+:root[data-theme="aion2-aurora"] .list .item:not(.warning):not(.error) .fill,
+:root[data-theme="aion2-aurora"] .detailsPanel .detailsPartyBarFill {
   --bar: hsl(calc(168deg + var(--row-pos, 0) * 32deg) 72% 60%);
 }
-:root[data-theme="aion2-sunset"] .list .item:not(.warning):not(.error) .fill {
+:root[data-theme="aion2-sunset"] .list .item:not(.warning):not(.error) .fill,
+:root[data-theme="aion2-sunset"] .detailsPanel .detailsPartyBarFill {
   --bar: hsl(calc(46deg - var(--row-pos, 0) * 30deg) 84% 58%);
 }
 .list .item.warning .fill { --bar: var(--warning-fill); }
@@ -737,61 +746,52 @@ body.linuxOverlay .meter {
 :root[data-texture-offset] .list .item .fill { --tex-x-used: var(--tex-x, 0px); }
 /* Flames: greys and white blended over the bar, so the fire burns in its colour. */
 :root[data-bar-texture="flames"] .list .item .fill,
-:root[data-bar-texture="flames"] .bossHpFill,
-:root[data-bar-texture="flames"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="flames"] .bossHpFill {
   background: var(--tex-flames) var(--tex-x-used) 100% / 200px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Frost crystal: pale cut facets. */
 :root[data-bar-texture="crystal"] .list .item .fill,
-:root[data-bar-texture="crystal"] .bossHpFill,
-:root[data-bar-texture="crystal"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="crystal"] .bossHpFill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 50%), var(--tex-crystal) var(--tex-x-used) 50% / 120px 40px repeat-x, var(--bar-base);
 }
 /* Glacier: dark facets over the bar's own colour drawn stronger. */
 :root[data-bar-texture="glacier"] .list .item .fill,
-:root[data-bar-texture="glacier"] .bossHpFill,
-:root[data-bar-texture="glacier"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="glacier"] .bossHpFill {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0) 45%, rgba(0, 0, 0, 0.3)), var(--tex-glacier) var(--tex-x-used) 50% / 120px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
 }
 /* Feathers: one feather along the bar, in its colour. */
 :root[data-bar-texture="feathers"] .list .item .fill,
-:root[data-bar-texture="feathers"] .bossHpFill,
-:root[data-bar-texture="feathers"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="feathers"] .bossHpFill {
   background: var(--tex-feathers) var(--tex-x-used) 50% / 240px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Wing: blade-like feathers stacked down from the bar's top edge. */
 :root[data-bar-texture="wing"] .list .item .fill,
-:root[data-bar-texture="wing"] .bossHpFill,
-:root[data-bar-texture="wing"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="wing"] .bossHpFill {
   background: var(--tex-wing) var(--tex-x-used) 0 / 200px 40px repeat-x, linear-gradient(90deg, color-mix(in srgb, var(--bar) 62%, rgb(var(--hud-bg))), color-mix(in srgb, var(--bar) 92%, rgb(var(--hud-bg))));
   background-blend-mode: overlay, normal;
 }
 /* Storm: forked lightning. */
 :root[data-bar-texture="storm"] .list .item .fill,
-:root[data-bar-texture="storm"] .bossHpFill,
-:root[data-bar-texture="storm"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="storm"] .bossHpFill {
   background: var(--tex-storm) var(--tex-x-used) 50% / 220px 40px repeat-x, var(--bar-base);
 }
 /* Nebula: clouds and dust lanes in the bar's own colour. */
 :root[data-bar-texture="nebula"] .list .item .fill,
-:root[data-bar-texture="nebula"] .bossHpFill,
-:root[data-bar-texture="nebula"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="nebula"] .bossHpFill {
   background: var(--tex-nebula) var(--tex-x-used) 50% / 240px 40px repeat-x, var(--bar-base);
   background-blend-mode: overlay, normal;
 }
 /* Galaxy: a band in the bar's colour, its stars drawn plainly over it. */
 :root[data-bar-texture="galaxy"] .list .item .fill,
-:root[data-bar-texture="galaxy"] .bossHpFill,
-:root[data-bar-texture="galaxy"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="galaxy"] .bossHpFill {
   background: var(--tex-galaxy-stars) var(--tex-x-used) 50% / 300px 40px repeat-x, var(--tex-galaxy) var(--tex-x-used) 50% / 300px 40px repeat-x, var(--bar-base);
   background-blend-mode: normal, overlay, normal;
 }
 /* Aura: ribbons of light and wisps of smoke in the bar's own colour. */
 :root[data-bar-texture="aura"] .list .item .fill,
-:root[data-bar-texture="aura"] .bossHpFill,
-:root[data-bar-texture="aura"] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture="aura"] .bossHpFill {
   background: var(--tex-aura) var(--tex-x-used) 50% / 720px 40px repeat-x, var(--bar-base);
   background-blend-mode: overlay, normal;
 }
@@ -858,10 +858,9 @@ body.linuxOverlay .meter {
   background-blend-mode: overlay, normal;
 }
 
-/* The same textures on the boss's HP bar and Details' party bars. Each has
-   its own colour as --bar (the boss bar's by how much HP is left), the
-   pattern starts at its left end, and the tile is scaled to the bar's
-   height rather than its length. */
+/* The same textures on the boss's HP bar, in its own colour as --bar (by
+   how much HP is left): the pattern starts at its left end, and the tile is
+   scaled to the bar's height rather than its length. */
 .bossHpFill {
   --bar: #3fbf6e;
   --bar-base: linear-gradient(180deg, #47d47d 0%, #2ea75f 100%);
@@ -875,16 +874,7 @@ body.linuxOverlay .meter {
   --bar: #de5252;
   --bar-base: linear-gradient(180deg, #f06a6a 0%, #c93c3c 100%);
 }
-.detailsPanel .detailsPartyBarFill {
-  --bar-base: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--bar) 26%, transparent) 0%,
-    color-mix(in srgb, var(--bar) 55%, transparent) 100%
-  );
-  --tex-x-used: 0px;
-}
-:root[data-bar-texture] .bossHpFill,
-:root[data-bar-texture] .detailsPanel .detailsPartyBarFill {
+:root[data-bar-texture] .bossHpFill {
   background-size: auto 100%;
 }
 
@@ -3690,7 +3680,8 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   background: rgba(0, 0, 0, 0.3);
   border-radius: 6px;
 }
-.detailsPanel .detailsHeader .detailsModeBtn {
+.detailsPanel .detailsHeader .detailsModeBtn,
+.detailsPanel .detailsHeader .detailsPeakBtn {
   appearance: none;
   border: none;
   background: transparent;
@@ -3703,11 +3694,16 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.detailsPanel .detailsHeader .detailsModeBtn:hover {
+.detailsPanel .detailsHeader .detailsModeBtn:hover,
+.detailsPanel .detailsHeader .detailsPeakBtn:hover {
   color: rgba(255, 255, 255, 0.85);
 }
 .detailsPanel .detailsHeader .detailsModeBtn[data-mode="dmg"].isActive {
   background: #e0a23c;
+  color: #0c1628;
+}
+.detailsPanel .detailsHeader .detailsPeakBtn[aria-pressed="true"] {
+  background: #8fc2ff;
   color: #0c1628;
 }
 .detailsPanel .detailsHeader .detailsModeBtn[data-mode="heal"].isActive {
@@ -4019,6 +4015,15 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 }
 .detailsPanel .detailsPartyBarDps {
   width: 62px;
+}
+/* With each player's peak beside the average (the PEAK toggle): a wider
+   column, the peak smaller and dimmer. */
+.detailsPanel .withPeak .detailsPartyBarDps {
+  width: 112px;
+}
+.detailsPanel .detailsPartyBarPeak {
+  font-size: 0.86em;
+  opacity: 0.7;
 }
 .detailsPanel .detailsPartyBarDmg {
   width: 56px;

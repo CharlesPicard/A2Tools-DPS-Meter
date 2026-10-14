@@ -92,6 +92,10 @@
       "healPct": "回復%",
       "healPctTooltip": "回復量 %"
     },
+    "peak": {
+      "toggle": "最大",
+      "toggleTip": "各プレイヤーの最大DPS（最高の5秒）を平均の横に表示"
+    },
     "party": {
       "activeDps": "攻撃時間DPS: {dps}（戦闘 {total} 中 {active}）"
     },

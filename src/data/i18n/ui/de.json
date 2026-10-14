@@ -92,6 +92,10 @@
       "healPct": "H%",
       "healPctTooltip": "Heilung %"
     },
+    "peak": {
+      "toggle": "SPITZE",
+      "toggleTip": "Spitzen-DPS jedes Spielers (beste 5 s) neben dem Durchschnitt zeigen"
+    },
     "party": {
       "activeDps": "DPS in aktiver Zeit: {dps} ({active} von {total} des Kampfes)"
     },

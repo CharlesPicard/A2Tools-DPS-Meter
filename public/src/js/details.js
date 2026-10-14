@@ -209,9 +209,7 @@ const createDetailsUI = ({
   // The most damage done in any 5 seconds of the fight, per second: the
   // selected players' together (everyone's for the fight as a whole).
   const BURST_WINDOW_MS = 5000;
-  const peakDps = (d) => {
-    const hits = hitsOf(d?.skills);
-    if (!hits.length) return "-";
+  const peakOf = (hits) => {
     let best = 0;
     let sum = 0;
     let lo = 0;
@@ -220,8 +218,21 @@ const createDetailsUI = ({
       while (hits[lo].ts <= hit.ts - BURST_WINDOW_MS) sum -= hits[lo++].dmg;
       if (sum > best) best = sum;
     }
-    return `${formatDamageCompact(best / (BURST_WINDOW_MS / 1000))}${labelText("meter.dpsSuffix", "/s")}`;
+    // Hits spanning less than the window (a short fight, a single hit) are
+    // over that span, at least a second, not over 5 s they didn't last.
+    const span = hits.length ? hits[hits.length - 1].ts - hits[0].ts : 0;
+    return best / (Math.min(BURST_WINDOW_MS, Math.max(1000, span)) / 1000);
   };
+  const peakDps = (d) => {
+    const hits = hitsOf(d?.skills);
+    return hits.length ? `${formatDamageCompact(peakOf(hits))}${labelText("meter.dpsSuffix", "/s")}` : "-";
+  };
+
+  // The party list can show each player's peak beside their average (the
+  // toggle at the top of Details; this viewer's choice, kept here).
+  const PEAK_KEY = "a2.details.showPeak";
+  let showPeak = false;
+  try { showPeak = localStorage.getItem(PEAK_KEY) === "1"; } catch {}
 
   // Each player's first and last hit (ms into the fight), for the DPS over
   // the time they were hitting.
@@ -246,6 +257,7 @@ const createDetailsUI = ({
       getValue: (d) => formatDamageCompact(d?.totalDmg),
     },
     { key: "details.stats.contribution", fallback: "Contribution", getValue: (d) => pctText(d?.contributionPct) },
+    { key: "details.stats.peakDps", fallback: "Peak DPS (5 s)", getValue: (d) => peakDps(d) },
     { key: "details.stats.combatTime", fallback: "Combat Time", getValue: (d) => d?.combatTime ?? "-" },
     { key: "details.skills.hits", fallback: "Hits", getValue: (d) => formatCount(d?.totalHits) },
     { key: "details.stats.multiHitHits", fallback: "Multi-Hits", getValue: (d) => pctText(d?.multiHitPct) },
@@ -260,7 +272,6 @@ const createDetailsUI = ({
     { key: "details.stats.parryRate", fallback: "Parry Rate", getValue: (d) => pctText(d?.totalParryPct) },
     { key: "details.stats.regen", fallback: "Regen", getValue: (d) => formatDamageCompact(d?.totalRegen) },
     { key: "details.stats.deaths", fallback: "Deaths", getValue: (d) => deathCount(d) },
-    { key: "details.stats.peakDps", fallback: "Peak DPS (5 s)", getValue: (d) => peakDps(d) },
   ];
 
   // Stats shown when the DMG/HEAL toggle is on HEAL. Fewer, healing-relevant rows;
@@ -600,6 +611,14 @@ const createDetailsUI = ({
     const btMs = Number(battleTimeMs) || Number(lastDetails?.battleTimeMs) || 0;
     const dpsSuffix = labelText("meter.dpsSuffix", "/s");
     const spans = hitSpans(lastUnfilteredDetails || lastDetails);
+    const peaks = new Map();
+    const fightSkills = (lastUnfilteredDetails || lastDetails)?.skills;
+    const peakFor = (actorId) => {
+      if (!peaks.has(actorId)) peaks.set(actorId, peakOf(hitsOf(fightSkills, (s) => Number(s.actorId) === actorId)));
+      return peaks.get(actorId);
+    };
+    const localId = Number(window._dpsApp?.localPlayerId);
+    detailsPartyListEl.classList.toggle("withPeak", showPeak);
 
     const rerender = () => {
       const ctx = buildPartyBarStats();
@@ -629,7 +648,11 @@ const createDetailsUI = ({
       const isSelected = Array.isArray(selectedAttackerIds) && selectedAttackerIds.includes(actorId);
 
       const bar = document.createElement("div");
-      bar.className = "detailsPartyBar" + (isSelected ? " isSelected" : "");
+      bar.className = "detailsPartyBar" + (isSelected ? " isSelected" : "") + (actorId === localId ? " isUser" : "");
+      // The meter's colour theme: the class colour, and the place from the
+      // top (for the spectrum themes).
+      if (color) bar.style.setProperty("--class-fill", color);
+      bar.style.setProperty("--row-pos", String(actors.indexOf(actor)));
 
       const fillEl = document.createElement("div");
       fillEl.className = "detailsPartyBarFill";
@@ -662,17 +685,29 @@ const createDetailsUI = ({
 
       const dpsEl = document.createElement("span");
       dpsEl.className = "detailsPartyBarDps";
+      const peak = peakFor(actorId);
+      const peakText = peak > 0 ? `${formatDamageCompact(peak)}${dpsSuffix}` : "";
       dpsEl.textContent = btMs > 0 ? `${formatDamageCompact(dmg / btMs * 1000)}${dpsSuffix}` : "-";
+      if (showPeak && btMs > 0 && peak > 0) {
+        const peakEl = document.createElement("span");
+        peakEl.className = "detailsPartyBarPeak";
+        peakEl.textContent = ` (${formatDamageCompact(peak)})`;
+        dpsEl.appendChild(peakEl);
+      }
       // The figure is over the whole fight; the tooltip gives it over the time
-      // this player was hitting (first hit to last; at least a second).
+      // this player was hitting (first hit to last; at least a second), and
+      // their best 5 seconds.
       const span = spans.get(actorId);
+      const tip = [];
       if (span && btMs > 0) {
         const activeMs = Math.max(1000, span.last - span.first);
-        dpsEl.title = labelText("details.party.activeDps", "Active-time DPS: {dps} ({active} of the fight's {total})")
+        tip.push(labelText("details.party.activeDps", "Active-time DPS: {dps} ({active} of the fight's {total})")
           .replace("{dps}", `${formatDamageCompact(dmg / activeMs * 1000)}${dpsSuffix}`)
           .replace("{active}", ftlTime(activeMs / 1000))
-          .replace("{total}", ftlTime(btMs / 1000));
+          .replace("{total}", ftlTime(btMs / 1000)));
       }
+      if (peakText) tip.push(`${labelText("details.stats.peakDps", "Peak DPS (5 s)")}: ${peakText}`);
+      if (tip.length) dpsEl.title = tip.join("\n");
 
       const dmgEl = document.createElement("span");
       dmgEl.className = "detailsPartyBarDmg";
@@ -3236,6 +3271,17 @@ const createDetailsUI = ({
     btn.addEventListener("click", () => setDetailsMode(btn?.dataset?.mode));
   });
   syncModeButtons();
+
+  const peakBtn = detailsPanel?.querySelector?.(".detailsPeakBtn");
+  peakBtn?.setAttribute?.("aria-pressed", String(showPeak));
+  peakBtn?.addEventListener?.("click", () => {
+    showPeak = !showPeak;
+    peakBtn.setAttribute("aria-pressed", String(showPeak));
+    try { localStorage.setItem(PEAK_KEY, showPeak ? "1" : "0"); } catch {}
+    if (!lastDetails && !detailsContext) return;
+    const ctx = buildPartyBarStats();
+    renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
+  });
 
   // The party stat setting changed: redraw the party list.
   const refreshPartyStat = () => {

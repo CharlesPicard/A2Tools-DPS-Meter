@@ -97,6 +97,10 @@
       "healPct": "Л%",
       "healPctTooltip": "Лечение %"
     },
+    "peak": {
+      "toggle": "ПИК",
+      "toggleTip": "Показывать пиковый DPS каждого игрока (лучшие 5 с) рядом со средним"
+    },
     "party": {
       "activeDps": "DPS за активное время: {dps} ({active} из {total} боя)"
     },
