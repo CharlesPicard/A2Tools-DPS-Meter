@@ -2944,7 +2944,7 @@ pub fn run() {
                 let mut tick_count: u64 = 0;
                 let mut hide_delay: u64 = 0; // ticks to wait before hiding
                 let mut last_ping: Option<u64> = None;
-                let mut last_odyle: Option<(u32, u32)> = None;
+                let mut last_odyle: Option<((u32, u32), Option<String>)> = None;
                 loop {
                     interval.tick().await;
                     tick_count += 1;
@@ -2961,13 +2961,17 @@ pub fn run() {
 
                         // Odyle energy: sent when it changes, and every 2 s
                         // for a window opened since.
+                        // With the character it belongs to, once the game
+                        // has named it, for the window to remember.
                         if let Some(energy) = state.data_storage.odyle_energy() {
-                            if last_odyle != Some(energy) || tick_count % 4 == 0 {
-                                last_odyle = Some(energy);
+                            let owner = state.data_storage.odyle_owner();
+                            let now = (energy, owner);
+                            if last_odyle.as_ref() != Some(&now) || tick_count % 4 == 0 {
                                 let _ = handle.emit(
                                     "odyle-energy",
-                                    serde_json::json!({ "basic": energy.0, "charged": energy.1 }),
+                                    serde_json::json!({ "basic": energy.0, "charged": energy.1, "name": now.1 }),
                                 );
+                                last_odyle = Some(now);
                             }
                         }
 
