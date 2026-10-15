@@ -427,7 +427,7 @@
     },
     "debugLoggingLocked": "Ativo enquanto o registro de pacotes estiver ativo: os registros de pacotes precisam do registro de depuração.",
     "tips": {
-      "showOdyle": "Abaixo do medidor, sua energia de Odyle como o jogo mostra: básica (+carregada). Atualiza ao entrar, após uma troca de servidor e quando a energia muda.",
+      "showOdyle": "Abaixo do medidor, sua energia de Odyle como o jogo mostra: básica (+carregada). Atualiza ao entrar, após uma troca de servidor e quando a energia muda. Até lá, por exemplo após reiniciar o medidor, o último valor visto aparece esmaecido.",
       "characterName": "Seu nome e ID no jogo, para o medidor saber qual linha é você. Normalmente é detectado sozinho.",
       "device": "A conexão de rede da qual o medidor lê o tráfego do jogo. A detecção automática a encontra; com VPN, escolha manualmente.",
       "lockedPort": "O adaptador e a porta em que o jogo foi encontrado.",

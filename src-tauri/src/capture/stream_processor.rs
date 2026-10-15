@@ -354,13 +354,13 @@ impl StreamProcessor {
             return;
         }
         let offset = length_info.length as usize;
-        let energy = match packet.get(offset..offset + 2) {
-            Some([0x0B, 0x61]) => odyle_energy_in_list(&packet[offset + 2..]),
-            Some([0x0C, 0x61]) => odyle_energy_in_update(&packet[offset + 2..]),
-            _ => None,
+        let (energy, whole_list) = match packet.get(offset..offset + 2) {
+            Some([0x0B, 0x61]) => (odyle_energy_in_list(&packet[offset + 2..]), true),
+            Some([0x0C, 0x61]) => (odyle_energy_in_update(&packet[offset + 2..]), false),
+            _ => return,
         };
         if let Some((basic, charged)) = energy {
-            self.data_storage.set_odyle_energy(basic, charged);
+            self.data_storage.set_odyle_energy(basic, charged, whole_list);
         }
     }
 
@@ -3645,6 +3645,40 @@ mod tests {
         // The `0c 61` that followed the list at 03:18:42.
         p.parse_perfect_packet(&hex("0d0c6100000987930303"));
         assert_eq!(storage.odyle_energy(), Some((30, 880)));
+    }
+
+    /// Whose the energy is, for the window to remember it by: a login's list
+    /// (21:16:50) came 7 s before the self record (21:16:57), so after a
+    /// character switch the name still known is the previous character's.
+    /// The list waits for the self record; an update in a session the game
+    /// has named takes that name.
+    #[test]
+    fn odyle_energy_belongs_to_the_character_the_next_self_record_names() {
+        let storage = DataStorage::new();
+        storage.set_local_identity_from_game(15997, Some("Nullception".into()));
+        storage.set_odyle_energy(30, 840, true);
+        assert_eq!(storage.odyle_owner(), None);
+        storage.set_odyle_energy(30, 880, false);
+        assert_eq!(storage.odyle_owner(), None, "still waiting for the self record");
+        storage.set_local_identity_from_game(4294, Some("Alt".into()));
+        assert_eq!(storage.odyle_owner().as_deref(), Some("Alt"));
+        storage.set_local_identity_from_game(15784, Some("Alt".into()));
+        storage.set_odyle_energy(20, 880, false);
+        assert_eq!(storage.odyle_owner().as_deref(), Some("Alt"));
+
+        // A meter started mid-session: named first, then an update.
+        let storage = DataStorage::new();
+        storage.set_local_identity_from_game(1030, Some("Nullception".into()));
+        storage.set_odyle_energy(25, 840, false);
+        assert_eq!(storage.odyle_owner().as_deref(), Some("Nullception"));
+
+        // An update before anyone is named has no owner yet; the next self
+        // record gives it one.
+        let storage = DataStorage::new();
+        storage.set_odyle_energy(25, 840, false);
+        assert_eq!(storage.odyle_owner(), None);
+        storage.set_local_identity_from_game(1030, Some("Nullception".into()));
+        assert_eq!(storage.odyle_owner().as_deref(), Some("Nullception"));
     }
 
     /// Leaving an open-world party (2026-10-13, 23:43:42): `1f 92 03`, then

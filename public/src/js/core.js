@@ -97,6 +97,7 @@ class DpsApp {
       mainPlayerDpsBold: "dpsMeter.mainPlayerDpsBold",
       showPing: "dpsMeter.showPing",
       showOdyle: "dpsMeter.showOdyle",
+      odyleLast: "dpsMeter.odyleLast",
       showTtk: "dpsMeter.showTtk",
       showTotalDps: "dpsMeter.showTotalDps",
       roundDps: "dpsMeter.roundDps",
@@ -462,10 +463,12 @@ class DpsApp {
     this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
     // Odyle energy, pushed by the backend ("odyle-energy") once the game has
     // sent it: at login, after a server transfer, and when it changes. Off
-    // unless turned on in Settings.
+    // unless turned on in Settings. Until then, the last value seen for this
+    // character, dimmed.
     this.odyleEl = document.querySelector(".odyleDisplay");
     this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
     this.odyleEnergy = null;
+    this.updateOdyle();
     // Time to kill beside the battle timer, for bosses; on unless turned off.
     this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
     this.ttk = typeof createTtkEstimator === "function" ? createTtkEstimator() : null;
@@ -794,6 +797,7 @@ class DpsApp {
       const id = Number(info.localPlayerId);
       if (Number.isFinite(id) && id > 0) this.rememberLocalIdForName(name, id);
     }
+    this.updateOdyle();
     this.renderCurrentRows();
     return true;
   }
@@ -4358,6 +4362,7 @@ class DpsApp {
     if (persist) {
       localStorage.setItem(this.storageKeys.userName, trimmed);
     }
+    this.updateOdyle();
     if (syncBackend) {
       window.javaBridge?.setCharacterName?.(trimmed, manual);
     }
@@ -5167,6 +5172,7 @@ class DpsApp {
       if (this.characterNameInput && document.activeElement !== this.characterNameInput) {
         this.characterNameInput.value = name;
       }
+      this.updateOdyle();
       this.renderCurrentRows();
       return;
     }
@@ -5678,18 +5684,48 @@ class DpsApp {
   // Odyle energy: basic (+charged), as the game writes it. Without the
   // game's maximum: it is 840 with a membership and 560 without, and the
   // records read so far don't say which applies.
+  //
+  // The game sends it only at login, after a server transfer and when it
+  // changes, so a meter started mid-session would have nothing to show for a
+  // long while. Each value the backend names an owner for is kept by that
+  // character's name, and shown dimmed until the game sends one again.
   updateOdyle(energy) {
-    if (energy && typeof energy === "object") this.odyleEnergy = energy;
+    if (energy && typeof energy === "object") {
+      this.odyleEnergy = energy;
+      this.rememberOdyle(energy);
+    }
     const el = this.odyleEl;
     if (!el) return;
-    const { basic, charged } = this.odyleEnergy || {};
-    if (!this.showOdyle || typeof basic !== "number" || typeof charged !== "number") {
+    const isEnergy = (e) => typeof e?.basic === "number" && typeof e?.charged === "number";
+    const live = isEnergy(this.odyleEnergy);
+    const shown = live ? this.odyleEnergy : this.rememberedOdyle()[this.USER_NAME];
+    if (!this.showOdyle || !isEnergy(shown)) {
       el.classList.remove("isVisible");
       return;
     }
-    el.querySelector(".odyleBasic").textContent = String(basic);
-    el.querySelector(".odyleCharged").textContent = charged > 0 ? `(+${charged})` : "";
+    el.querySelector(".odyleBasic").textContent = String(shown.basic);
+    el.querySelector(".odyleCharged").textContent = shown.charged > 0 ? `(+${shown.charged})` : "";
+    el.classList.toggle("isRemembered", !live);
     el.classList.add("isVisible");
+  }
+
+  rememberedOdyle() {
+    const saved = this.safeParseJSON(this.safeGetStorage(this.storageKeys.odyleLast) || "{}", {});
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  }
+
+  rememberOdyle({ basic, charged, name }) {
+    const owner = String(name ?? "").trim();
+    if (!owner || typeof basic !== "number" || typeof charged !== "number") return;
+    const saved = this.rememberedOdyle();
+    const was = saved[owner];
+    if (was?.basic === basic && was?.charged === charged) return;
+    delete saved[owner];
+    saved[owner] = { basic, charged };
+    // The most recent characters only.
+    const names = Object.keys(saved);
+    for (const old of names.slice(0, Math.max(0, names.length - 20))) delete saved[old];
+    this.safeSetStorage(this.storageKeys.odyleLast, JSON.stringify(saved));
   }
 
   updatePing(pushedMs) {
