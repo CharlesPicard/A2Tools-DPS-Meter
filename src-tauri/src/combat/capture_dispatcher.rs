@@ -173,6 +173,8 @@ impl CaptureDispatcher {
         // signature rate of that port on other devices (see DEVICE_MOVE_QUIET_MS).
         let mut last_on_locked_device_ms: i64 = 0;
         let mut elsewhere: HashMap<String, (u32, i64)> = HashMap::new();
+        // The game server's address, as last told to DataStorage.
+        let mut last_game_host: Option<std::net::Ipv4Addr> = None;
 
         while let Some(cap) = receiver.recv().await {
             if self.suspended.load(Ordering::SeqCst) {
@@ -312,6 +314,10 @@ impl CaptureDispatcher {
             if let Some(port) = current_port {
                 if cap.src_port != port {
                     continue;
+                }
+                if cap.src_ip.is_some() && cap.src_ip != last_game_host {
+                    last_game_host = cap.src_ip;
+                    self.data_storage.set_game_host(cap.src_ip);
                 }
             }
 

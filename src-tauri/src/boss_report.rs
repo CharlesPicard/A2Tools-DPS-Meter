@@ -63,6 +63,18 @@ pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
     })
 }
 
+/// Korea and Taiwan number their servers the same (10xx Elyos, 20xx
+/// Asmodian), so a report from one of them names the game server's address
+/// too, which a2tools.app tells the two regions apart by. Global ids say
+/// their region already and go without it.
+pub fn with_host(mut body: serde_json::Value, server_id: u16, host: Option<std::net::Ipv4Addr>) -> serde_json::Value {
+    let shared_id = (1000..1100).contains(&server_id) || (2000..2100).contains(&server_id);
+    if let (true, Some(host), Some(obj)) = (shared_id, host, body.as_object_mut()) {
+        obj.insert("host".into(), json!(host.to_string()));
+    }
+    body
+}
+
 /// A kill or HP milestone not sent yet waits this long for the server to be
 /// known (the meter started mid-game).
 const EVENT_WAIT_MS: i64 = 5 * 60_000;
@@ -111,6 +123,7 @@ fn spawn_events(app: tauri::AppHandle) {
                 let server = state.data_storage.local_profile().server_id;
                 let off = state.settings.get(SETTING_KEY).as_deref() == Some("false");
                 if let (false, false, Some(body)) = (off, server == 0, hp_request(server, &changed)) {
+                    let body = with_host(body, server, state.data_storage.game_host());
                     let url = format!("{}/api/boss-timers/hp", crate::account::base_url());
                     let request = state.http.post(&url)
                         .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -136,6 +149,7 @@ fn spawn_events(app: tauri::AppHandle) {
             }
             for (_, event) in std::mem::take(&mut waiting) {
                 let Some((path, body)) = event_request(server, &event) else { continue };
+                let body = with_host(body, server, state.data_storage.game_host());
                 let url = format!("{}{path}", crate::account::base_url());
                 let request = state.http.post(&url)
                     .header(reqwest::header::CONTENT_TYPE, "application/json")
@@ -181,7 +195,7 @@ pub fn spawn(app: tauri::AppHandle) {
                 }
                 sent.insert((server, map.map_id), (now, said));
                 let url = format!("{}/api/boss-timers/report", crate::account::base_url());
-                let body = report(server, map, now);
+                let body = with_host(report(server, map, now), server, state.data_storage.game_host());
                 let request = state.http.post(&url)
                     .header(reqwest::header::CONTENT_TYPE, "application/json")
                     .body(body.to_string())
@@ -218,6 +232,20 @@ mod tests {
         let reset = hp_request(1301, &[b(2100079, 100, true)]).unwrap();
         assert_eq!(reset["bosses"][0], json!({ "id": 101006, "hp": 100, "reset": true }));
         assert!(hp_request(1301, &[b(1, 50, false)]).is_none());
+    }
+
+    /// Korea and Taiwan share 10xx/20xx: their reports name the game
+    /// server's address (Taiwan's 1016 was 210.242.123.144). Global ids,
+    /// or no address known yet, go as before.
+    #[test]
+    fn a_shared_korea_taiwan_id_names_the_game_server() {
+        let host = Some(std::net::Ipv4Addr::new(210, 242, 123, 144));
+        let body = || json!({ "format": 1, "server": 1016 });
+        assert_eq!(with_host(body(), 1016, host)["host"], "210.242.123.144");
+        assert_eq!(with_host(body(), 2018, host)["host"], "210.242.123.144");
+        assert!(with_host(body(), 1016, None).get("host").is_none());
+        assert!(with_host(body(), 1301, host).get("host").is_none());
+        assert!(with_host(body(), 1101, host).get("host").is_none());
     }
 
     #[test]

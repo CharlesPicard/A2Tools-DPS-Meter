@@ -614,6 +614,12 @@ struct Inner {
     has_boss_in_segment: bool,
     current_target: i32,
 
+    /// The address of the game server the locked connection reads from.
+    /// Korea and Taiwan share their server ids (10xx/20xx), so field boss
+    /// reports from them carry it for a2tools.app to tell the two apart
+    /// (`boss_report::with_host`).
+    game_host: Option<std::net::Ipv4Addr>,
+
     /// Odyle energy, (basic, charged), as the game last sent it. See
     /// `StreamProcessor::parse_odyle_energy_packet`.
     odyle_energy: Option<(u32, u32)>,
@@ -732,6 +738,7 @@ impl DataStorage {
                 held_dot_ticks: HashMap::new(),
                 has_boss_in_segment: false,
                 current_target: 0,
+                game_host: None,
                 odyle_energy: None,
                 odyle_owner: None,
                 odyle_awaits_self_record: false,
@@ -1250,6 +1257,15 @@ impl DataStorage {
 
     pub fn odyle_energy(&self) -> Option<(u32, u32)> {
         self.inner.read().odyle_energy
+    }
+
+    /// The game server the locked connection reads from (see `game_host`).
+    pub fn set_game_host(&self, host: Option<std::net::Ipv4Addr>) {
+        self.inner.write().game_host = host;
+    }
+
+    pub fn game_host(&self) -> Option<std::net::Ipv4Addr> {
+        self.inner.read().game_host
     }
 
     /// Whose the Odyle energy is, once the game has said (see `odyle_owner`).
