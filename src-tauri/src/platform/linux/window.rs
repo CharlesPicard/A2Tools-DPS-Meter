@@ -210,6 +210,61 @@ pub fn hide_without_focus(window: &tauri::WebviewWindow) {
 /// Here a window can be built hidden and shown later as it is.
 pub const HIDE_AFTER_BUILD: bool = false;
 
+/// The windows `hide_in_place` has hidden, by label.
+fn hidden_in_place() -> &'static std::sync::Mutex<std::collections::HashSet<String>> {
+    static HIDDEN: std::sync::OnceLock<std::sync::Mutex<std::collections::HashSet<String>>> = std::sync::OnceLock::new();
+    HIDDEN.get_or_init(Default::default)
+}
+
+/// Hide a window without unmapping it: fully transparent, click-through and
+/// out of the taskbar. A compositor places a window anew each time it is
+/// mapped (KWin under the pointer, as a CachyOS player saw an alert bring a
+/// plugin window up, 2026-10-16), and Wayland lets no client move its own
+/// window back, so a window that stays mapped is the only one that stays where
+/// it was left. Without a compositor nothing can be transparent, and it is
+/// hidden as before.
+pub fn hide_in_place(window: &tauri::WebviewWindow) {
+    use gtk::prelude::*;
+    let target = window.clone();
+    let concealed = super::dialog::on_gtk_thread(move || {
+        let gtk_window = target.gtk_window().ok()?;
+        if !WidgetExt::screen(&gtk_window)?.is_composited() {
+            return None;
+        }
+        gtk_window.set_opacity(0.0);
+        Some(())
+    })
+    .flatten()
+    .is_some();
+    if !concealed {
+        hide_without_focus(window);
+        return;
+    }
+    let _ = window.set_ignore_cursor_events(true);
+    let _ = window.set_skip_taskbar(true);
+    hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string());
+}
+
+/// Show a window `hide_in_place` hid, where it is; false if it was not hidden
+/// that way (then it is shown as usual).
+pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
+    let was = hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label());
+    if !was {
+        return false;
+    }
+    let _ = window.set_ignore_cursor_events(false);
+    let _ = window.set_skip_taskbar(false);
+    let target = window.clone();
+    super::dialog::on_gtk_thread(move || {
+        use gtk::prelude::*;
+        if let Ok(gtk_window) = target.gtk_window() {
+            gtk_window.set_opacity(1.0);
+        }
+    });
+    let _ = window.set_always_on_top(true);
+    true
+}
+
 pub fn minimize_off_top(window: &tauri::WebviewWindow) {
     let _ = window.set_always_on_top(false);
     let _ = window.minimize();

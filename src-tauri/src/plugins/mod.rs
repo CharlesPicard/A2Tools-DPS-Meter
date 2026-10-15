@@ -1137,7 +1137,9 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
     let label = format!("plugin-{id}");
     if let Some(window) = app.get_webview_window(&label) {
         if visible {
-            show_in_place(app, &window, id, || crate::platform::window::show_on_top_without_focus(&window));
+            if !crate::platform::window::reveal_in_place(&window) {
+                show_in_place(app, &window, id, || crate::platform::window::show_on_top_without_focus(&window));
+            }
             let _ = window.set_focus();
         }
         return Ok(());
@@ -1224,10 +1226,14 @@ pub fn restore_windows(app: &tauri::AppHandle) {
 pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visible: bool) -> Result<(), String> {
     let id = window_plugin(&window)?;
     require(&app, &id, "window")?;
+    // Hidden in place where the window manager would place it anew on
+    // showing (Linux), so it comes back where it was left.
     if visible {
-        show_in_place(&app, &window, &id, || crate::platform::window::show_on_top_without_focus(&window));
+        if !crate::platform::window::reveal_in_place(&window) {
+            show_in_place(&app, &window, &id, || crate::platform::window::show_on_top_without_focus(&window));
+        }
     } else {
-        crate::platform::window::hide_without_focus(&window);
+        crate::platform::window::hide_in_place(&window);
     }
     remember_window(&app, &id, Some(if visible { "shown" } else { "hidden" }));
     Ok(())
