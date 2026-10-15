@@ -693,8 +693,12 @@ impl StreamProcessor {
             {
                 let h = disc + 3;
                 let cur = u32::from_le_bytes([data[h], data[h + 1], data[h + 2], data[h + 3]]);
-                // Sanity bound: real HP is well under this; rejects misparses.
-                if cur <= 100_000_000 {
+                // Sanity bound against misparses: 100 million, or the max HP
+                // the spawn gave, whichever is higher. World bosses have more
+                // (Watcher Kaira and Argo 810 million) and sent no live HP
+                // until under 100 million, about 12% left (#70).
+                let bound = self.data_storage.spawn_max_hp(id_info.value).unwrap_or(0).max(100_000_000);
+                if cur <= bound as u32 {
                     self.data_storage.set_mob_current_hp(id_info.value, cur as i32);
                     // The same record carries players' HP, your own included
                     // (`1b 92` has only the party's): their deaths and revives.
@@ -3612,6 +3616,28 @@ mod tests {
         assert!(!storage.is_hp_reset_dummy(25839), "at the floor: a mob about to die looks the same");
         hp(&mut p, "8F380100");
         assert!(storage.is_hp_reset_dummy(25839), "back up from 1 without dying");
+    }
+
+    /// A world boss has more HP than the 100 million bound against misparses
+    /// (Watcher Kaira and Argo: 810 million). Its live HP is read up to the
+    /// max HP its spawn gave; without a spawn, the bound stays (#70).
+    #[test]
+    fn a_world_bosss_hp_over_100_million_is_read_up_to_its_spawn_max() {
+        let (storage, mut p) = processor();
+        let hp = |p: &mut StreamProcessor, hp: &str| {
+            p.consume_stream(&hex(&format!("1400 8DEFC901 020100 {hp} 00000000").replace(' ', "")))
+        };
+        // 800,000,000 with no spawn known: refused.
+        hp(&mut p, "0008AF2F");
+        assert_eq!(storage.get_mob_current_hp(25839), None);
+        storage.append_mob_hp(25839, 810_000_000);
+        hp(&mut p, "0008AF2F");
+        assert_eq!(storage.get_mob_current_hp(25839), Some(800_000_000));
+        hp(&mut p, "00E1F505"); // 100,000,000
+        // Over the spawn's max: a misread, refused.
+        assert_eq!(storage.get_mob_current_hp(25839), Some(100_000_000));
+        hp(&mut p, "00E9A435"); // 900,000,000, over the spawn's 810 million
+        assert_eq!(storage.get_mob_current_hp(25839), Some(100_000_000));
     }
 
     /// A Wind Spirit's Malicious Whirlwind ticks on after the spirit is

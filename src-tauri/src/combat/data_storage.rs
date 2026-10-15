@@ -1444,6 +1444,12 @@ impl DataStorage {
         }
     }
 
+    /// The max HP an entity's spawn record gave, if one came.
+    pub fn spawn_max_hp(&self, id: i32) -> Option<i32> {
+        let inner = self.inner.read();
+        inner.spawn_hp_ids.contains(&id).then(|| inner.mob_hp_data.get(&id).copied()).flatten()
+    }
+
     pub fn append_mob_hp(&self, mid: i32, hp: i32) {
         if hp > 0 {
             let mut inner = self.inner.write();
