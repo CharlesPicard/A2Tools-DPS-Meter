@@ -6889,14 +6889,14 @@ html.linux:lang(zh-Hant), html.linux:lang(zh-Hant) body {
   font-family: sans-serif;
 }
 
-/* The main meter window is a HUD: dragging across it, or a stray double-click,
-   should not highlight names and numbers. Settings, History and Details keep
-   selectable text (skill names, log ids), and fields stay editable. */
-body:not(.isSettingsWindow):not(.isHistoryWindow):not(.isDetailsWindow) {
+/* The main meter window and Details are HUDs: dragging across them, or a
+   stray double-click, should not highlight names and numbers. Settings and
+   History keep selectable text (log ids), and fields stay editable. */
+body:not(.isSettingsWindow):not(.isHistoryWindow) {
   -webkit-user-select: none;
   user-select: none;
 }
-body:not(.isSettingsWindow):not(.isHistoryWindow):not(.isDetailsWindow) :is(input, textarea, [contenteditable="true"]) {
+body:not(.isSettingsWindow):not(.isHistoryWindow) :is(input, textarea, [contenteditable="true"]) {
   -webkit-user-select: text;
   user-select: text;
 }
