@@ -92,3 +92,9 @@ pub fn resize_pointer_down(_window: &tauri::WebviewWindow) -> Option<bool> {
 pub async fn prepare_resize(_window: &tauri::WebviewWindow, _min: tauri::LogicalSize<f64>) -> Result<(), String> {
     Err("Compositor resize is unavailable".into())
 }
+
+/// The click-through lock as an input region, on Linux only (see
+/// `linux/window.rs`). Here the pointer watch in `app.rs` does it instead.
+pub fn click_through_except(_window: &tauri::WebviewWindow, _ignore: bool, _keep: Option<(f64, f64, f64, f64, f64)>) -> bool {
+    false
+}

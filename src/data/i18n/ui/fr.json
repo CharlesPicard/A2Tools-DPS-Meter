@@ -427,7 +427,7 @@
     },
     "debugLoggingLocked": "Activé tant que la journalisation des paquets l'est : les journaux de paquets ont besoin du journal de débogage.",
     "tips": {
-      "showOdyle": "Sous le compteur, votre énergie d'Odyle comme le jeu l'affiche : base (+chargée). Mise à jour à la connexion, après un changement de serveur et quand l'énergie change.",
+      "showOdyle": "Sous le compteur, votre énergie d'Odyle comme le jeu l'affiche : base (+chargée). Mise à jour à la connexion, après un changement de serveur et quand l'énergie change. D'ici là, par exemple après un redémarrage du compteur, la dernière valeur vue s'affiche en grisé.",
       "characterName": "Ton nom et ton ID en jeu, pour que le compteur sache quelle ligne est la tienne. Il est en général trouvé tout seul.",
       "device": "La connexion réseau dont le compteur lit le trafic du jeu. La détection automatique la trouve ; avec un VPN, choisis-la à la main.",
       "lockedPort": "La carte et le port sur lesquels le jeu a été trouvé.",

@@ -147,6 +147,40 @@ fn query_pointer() -> Option<(i32, i32, u32)> {
     })
 }
 
+/// The click-through lock as an input region: the window takes the mouse
+/// only over `keep` (the lock button: CSS-pixel x, y, width, height and the
+/// page's scale), or nowhere but its top-left pixel without one, as tao's
+/// own `set_ignore_cursor_events` does. `ignore` false takes it everywhere.
+///
+/// Under XWayland the pointer can be read only while it is over an X11
+/// window, so the pointer watch the lock uses elsewhere lost it over the
+/// desktop or a native Wayland window and the button could not be clicked.
+/// An input region needs no pointer. Returns whether it was applied.
+pub fn click_through_except(window: &tauri::WebviewWindow, ignore: bool, keep: Option<(f64, f64, f64, f64, f64)>) -> bool {
+    use gtk::{cairo, prelude::*};
+    let window = window.clone();
+    super::dialog::on_gtk_thread(move || {
+        let gtk_window = window.gtk_window().ok()?;
+        if !ignore {
+            gtk_window.input_shape_combine_region(None);
+            return Some(());
+        }
+        let surface = gtk_window.window()?;
+        // CSS pixels to GDK's: the page's scale over GDK's own.
+        let rect = keep.and_then(|(x, y, w, h, page_scale)| {
+            let k = page_scale / f64::from(gtk_window.scale_factor().max(1));
+            let (left, top) = ((x * k).floor() as i32, (y * k).floor() as i32);
+            let (right, bottom) = (((x + w) * k).ceil() as i32, ((y + h) * k).ceil() as i32);
+            (right > left && bottom > top).then(|| cairo::RectangleInt::new(left, top, right - left, bottom - top))
+        });
+        let region = cairo::Region::create_rectangle(&rect.unwrap_or_else(|| cairo::RectangleInt::new(0, 0, 1, 1)));
+        surface.input_shape_combine_region(&region, 0, 0);
+        Some(())
+    })
+    .flatten()
+    .is_some()
+}
+
 pub fn start_drag(window: &tauri::WebviewWindow) {
     let _ = window.start_dragging();
 }

@@ -3085,6 +3085,10 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 .odyleDisplay .odyleCharged {
   color: #4fd8ff;
 }
+/* The last value seen, until the game sends it again. */
+.odyleDisplay.isRemembered {
+  opacity: 0.55;
+}
 .meter.slim .odyleDisplay { font-size: 10px; }
 .meter.slim .odyleDisplay .odyleIcon { width: 12px; height: 12px; }
 

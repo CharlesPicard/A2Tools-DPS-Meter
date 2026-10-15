@@ -617,6 +617,13 @@ struct Inner {
     /// Odyle energy, (basic, charged), as the game last sent it. See
     /// `StreamProcessor::parse_odyle_energy_packet`.
     odyle_energy: Option<(u32, u32)>,
+    /// The character that energy is, for the window to remember it by
+    /// across a meter restart. A login's list comes some seconds before the
+    /// self record naming who logged in, so until that record it has no
+    /// owner (`odyle_awaits_self_record`): the name still known then can be
+    /// the character before a switch.
+    odyle_owner: Option<String>,
+    odyle_awaits_self_record: bool,
 
     // Local player
     local_player_id: Option<i64>,
@@ -726,6 +733,8 @@ impl DataStorage {
                 has_boss_in_segment: false,
                 current_target: 0,
                 odyle_energy: None,
+                odyle_owner: None,
+                odyle_awaits_self_record: false,
                 local_player_id: None,
                 supporters: std::sync::Arc::new(crate::supporters::Roster::default()),
                 local_character_name: None,
@@ -879,6 +888,10 @@ impl DataStorage {
             || inner.local_character_name != name
             || inner.loot_identity.applied;
         inner.loot_identity.applied = false;
+        if inner.odyle_energy.is_some() && (inner.odyle_awaits_self_record || inner.odyle_owner.is_none()) {
+            inner.odyle_owner = name.clone();
+            inner.odyle_awaits_self_record = false;
+        }
         set_game_identity(&mut inner, id, name);
         changed
     }
@@ -1218,9 +1231,17 @@ impl DataStorage {
     }
 
     /// The Odyle energy the game sent: basic (spent first, recharged every
-    /// cycle) and charged (from items).
-    pub fn set_odyle_energy(&self, basic: u32, charged: u32) {
+    /// cycle) and charged (from items). `whole_list`: the list sent at login
+    /// and after a server transfer, whose owner the next self record names.
+    pub fn set_odyle_energy(&self, basic: u32, charged: u32, whole_list: bool) {
         let mut inner = self.inner.write();
+        if whole_list {
+            inner.odyle_owner = None;
+            inner.odyle_awaits_self_record = true;
+        } else if inner.odyle_owner.is_none() && !inner.odyle_awaits_self_record && inner.local_identity_from_game {
+            // A meter started mid-session: the game named you already.
+            inner.odyle_owner = inner.local_character_name.clone();
+        }
         if inner.odyle_energy != Some((basic, charged)) {
             tracing::info!("Odyle energy: {basic} basic, {charged} charged");
             inner.odyle_energy = Some((basic, charged));
@@ -1229,6 +1250,11 @@ impl DataStorage {
 
     pub fn odyle_energy(&self) -> Option<(u32, u32)> {
         self.inner.read().odyle_energy
+    }
+
+    /// Whose the Odyle energy is, once the game has said (see `odyle_owner`).
+    pub fn odyle_owner(&self) -> Option<String> {
+        self.inner.read().odyle_owner.clone()
     }
 
     pub fn append_damage(&self, pdp: ParsedDamagePacket) {

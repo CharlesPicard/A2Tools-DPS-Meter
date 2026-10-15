@@ -91,10 +91,12 @@ pub struct AppState {
 /// to the game, and it cannot be dragged. Only its own lock button stays
 /// clickable, so the same button unlocks it; a hotkey does too.
 ///
-/// A window either takes the mouse or ignores it, all of it, so the button
-/// is kept clickable by watching the pointer: while it is over the button the
-/// window takes the mouse again. That needs the pointer's position outside
-/// the window, which Wayland does not give (`platform::window::cursor_position`),
+/// On Linux the window takes the mouse over the button alone (an input
+/// region, `platform::window::click_through_except`). Elsewhere a window
+/// either takes the mouse or ignores it, all of it, so the button is kept
+/// clickable by watching the pointer: while it is over the button the window
+/// takes the mouse again. That needs the pointer's position outside the
+/// window, which Wayland does not give (`platform::window::cursor_position`),
 /// so the lock is offered only where it is available.
 #[derive(Default)]
 pub struct OverlayLock {
@@ -104,6 +106,10 @@ pub struct OverlayLock {
     button: Mutex<Option<(f64, f64, f64, f64, f64)>>,
     /// Whether the pointer watch is running.
     watching: std::sync::atomic::AtomicBool,
+    /// A card is open in the page (a one-time popup, the update prompt): the
+    /// window takes the mouse while it is, locked or not, or nothing on the
+    /// card could be clicked. It covers the lock button too.
+    card_open: std::sync::atomic::AtomicBool,
     /// What the window was last told (`true` = ignore the mouse). Every change
     /// goes through `sync_click_through` under this lock, so a late pointer
     /// check can never leave an unlocked window click-through.
@@ -111,11 +117,18 @@ pub struct OverlayLock {
 }
 
 /// Tell the main window whether to ignore the mouse: when locked, unless the
-/// pointer is over the lock button.
+/// pointer is over the lock button or a card is open.
 fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
     use std::sync::atomic::Ordering;
     let mut applied = lock.applied.lock();
-    let ignore = lock.locked.load(Ordering::SeqCst) && !over_button;
+    let ignore = click_through(lock.locked.load(Ordering::SeqCst), over_button, lock.card_open.load(Ordering::SeqCst));
+    // The region follows the button, so it is set again even unchanged.
+    if let Some(main) = app.get_webview_window("main") {
+        if platform::window::click_through_except(&main, ignore, *lock.button.lock()) {
+            *applied = Some(ignore);
+            return;
+        }
+    }
     if *applied == Some(ignore) {
         return;
     }
@@ -124,6 +137,10 @@ fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: b
             *applied = Some(ignore);
         }
     }
+}
+
+fn click_through(locked: bool, over_button: bool, card_open: bool) -> bool {
+    locked && !over_button && !card_open
 }
 
 fn pointer_over_lock_button(app: &tauri::AppHandle, lock: &OverlayLock) -> bool {
@@ -146,6 +163,10 @@ fn apply_overlay_lock(app: &tauri::AppHandle, locked: bool) {
     lock.locked.store(locked, Ordering::SeqCst);
     sync_click_through(app, &lock, false);
     tracing::info!("Overlay {}", if locked { "locked (click-through)" } else { "unlocked" });
+    // No pointer watch where the window keeps the button by its input region.
+    if cfg!(target_os = "linux") {
+        return;
+    }
     if locked && !lock.watching.swap(true, Ordering::SeqCst) {
         let app = app.clone();
         std::thread::spawn(move || {
@@ -1001,6 +1022,16 @@ fn set_overlay_locked(app: tauri::AppHandle, locked: bool) {
     apply_overlay_lock(&app, locked);
 }
 
+/// A card opened or closed in the main window's page (see
+/// `OverlayLock::card_open`). The lock itself stays as it was.
+#[tauri::command]
+fn set_overlay_card_open(app: tauri::AppHandle, open: bool) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let lock = state.overlay_lock.clone();
+    lock.card_open.store(open, std::sync::atomic::Ordering::SeqCst);
+    sync_click_through(&app, &lock, false);
+}
+
 #[tauri::command]
 fn is_overlay_locked(state: tauri::State<'_, AppState>) -> bool {
     state.overlay_lock.locked.load(std::sync::atomic::Ordering::SeqCst)
@@ -1009,9 +1040,14 @@ fn is_overlay_locked(state: tauri::State<'_, AppState>) -> bool {
 /// Where the lock button is in the main window's page, so it stays clickable
 /// while the rest of the window lets clicks through.
 #[tauri::command]
-fn set_lock_button_rect(state: tauri::State<'_, AppState>, x: f64, y: f64, width: f64, height: f64, scale: f64) {
+fn set_lock_button_rect(app: tauri::AppHandle, state: tauri::State<'_, AppState>, x: f64, y: f64, width: f64, height: f64, scale: f64) {
     let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
     *state.overlay_lock.button.lock() = Some((x, y, width, height, scale));
+    // On Linux the button's input region moves with it.
+    if cfg!(target_os = "linux") {
+        let lock = state.overlay_lock.clone();
+        sync_click_through(&app, &lock, false);
+    }
 }
 
 #[tauri::command]
@@ -2944,7 +2980,7 @@ pub fn run() {
                 let mut tick_count: u64 = 0;
                 let mut hide_delay: u64 = 0; // ticks to wait before hiding
                 let mut last_ping: Option<u64> = None;
-                let mut last_odyle: Option<(u32, u32)> = None;
+                let mut last_odyle: Option<((u32, u32), Option<String>)> = None;
                 loop {
                     interval.tick().await;
                     tick_count += 1;
@@ -2961,13 +2997,17 @@ pub fn run() {
 
                         // Odyle energy: sent when it changes, and every 2 s
                         // for a window opened since.
+                        // With the character it belongs to, once the game
+                        // has named it, for the window to remember.
                         if let Some(energy) = state.data_storage.odyle_energy() {
-                            if last_odyle != Some(energy) || tick_count % 4 == 0 {
-                                last_odyle = Some(energy);
+                            let owner = state.data_storage.odyle_owner();
+                            let now = (energy, owner);
+                            if last_odyle.as_ref() != Some(&now) || tick_count % 4 == 0 {
                                 let _ = handle.emit(
                                     "odyle-energy",
-                                    serde_json::json!({ "basic": energy.0, "charged": energy.1 }),
+                                    serde_json::json!({ "basic": energy.0, "charged": energy.1, "name": now.1 }),
                                 );
+                                last_odyle = Some(now);
                             }
                         }
 
@@ -3256,6 +3296,7 @@ pub fn run() {
             suspend_capture,
             overlay_lock_supported,
             set_overlay_locked,
+            set_overlay_card_open,
             is_overlay_locked,
             set_lock_button_rect,
             is_capture_suspended,
@@ -3297,6 +3338,17 @@ pub fn run() {
 mod tests {
     #[cfg_attr(not(feature = "online"), allow(unused_imports))]
     use super::*;
+
+    /// Locked, the window ignores the mouse except over the lock button, and
+    /// while a card is open: a one-time popup at start under a lock left on
+    /// from last time could not be clicked, and it covered the lock button.
+    #[test]
+    fn a_locked_window_takes_the_mouse_while_a_card_is_open() {
+        assert!(click_through(true, false, false));
+        assert!(!click_through(true, true, false));
+        assert!(!click_through(true, false, true));
+        assert!(!click_through(false, false, false));
+    }
 
     #[cfg(feature = "online")]
     #[test]
