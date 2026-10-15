@@ -372,9 +372,14 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
       }
     }
     // Every row names its dungeon tier, so a Hard clear stands out in any view.
-    const tier = fight.dungeonId
-      ? window.i18n?.getDungeonDifficulty?.(Number(fight.dungeonId))
-      : null;
+    // Where one instance has bosses of several levels (Nightmare: Gatekeeper
+    // Pinopi at Level 1-10), the boss's own level, from its NPC code.
+    const npcLevel = window.i18n?.getNpcLevel?.(Number(fight.mobCode)) || "";
+    const tier = npcLevel
+      ? { key: "level", label: npcLevel }
+      : fight.dungeonId
+        ? window.i18n?.getDungeonDifficulty?.(Number(fight.dungeonId))
+        : null;
     if (tier) {
       const badge = document.createElement("span");
       badge.className = `difficultyBadge difficulty-${tier.key}`;
@@ -585,10 +590,14 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
   };
 
   // A dungeon section's title: the dungeon and its difficulty, or Open world.
-  const dungeonTitle = (dungeonId) => {
+  // An instance the dungeon table doesn't name (Nightmare, 200003) takes the
+  // category the NPC table gives its boss.
+  const dungeonTitle = (dungeonId, mobCode) => {
     const id = Number(dungeonId) || 0;
     if (!id) return t("history.openWorld", "Open world");
-    return window.i18n?.getDungeonLabel?.(id) || `#${id}`;
+    return window.i18n?.getDungeonLabel?.(id)
+      || window.i18n?.getNpcCategory?.(Number(mobCode))
+      || `#${id}`;
   };
 
   const renderGrouped = (visible, byDungeon) => {
@@ -596,7 +605,7 @@ const createHistoryUI = ({ onOpenFight } = {}) => {
     visible.forEach((f) => {
       // Keyed by what the header says, so two instance ids with the same name
       // and difficulty share one section.
-      const key = byDungeon ? dungeonTitle(f.dungeonId) : (f.bossName || `Boss #${f.targetId}`);
+      const key = byDungeon ? dungeonTitle(f.dungeonId, f.mobCode) : (f.bossName || `Boss #${f.targetId}`);
       let g = groups.get(key);
       if (!g) {
         g = { name: key, fights: [], rowOptions: byDungeon ? { child: true } : { grouped: true } };
