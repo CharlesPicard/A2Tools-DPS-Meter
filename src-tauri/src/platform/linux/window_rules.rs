@@ -5,7 +5,7 @@
 
 use std::process::Command;
 
-use crate::platform::kwin_rules::{general_entries, is_kde, rule_entries, GROUP};
+use crate::platform::kwin_rules::{general_entries_for, is_kde, no_focus_rule_entries, rule_entries, GROUP, NO_FOCUS_GROUP};
 
 fn tool(names: &[&'static str]) -> Option<&'static str> {
     names.iter().copied().find(|name| {
@@ -49,6 +49,16 @@ fn reconfigure() {
 /// an earlier start already did, so a rule the player has since removed stays
 /// removed. Returns whether the job is done now (added, or already there).
 pub fn keep_above_fullscreen(done: bool) -> Result<bool, String> {
+    add_rule(GROUP, &rule_entries(), done, "the meter stays above fullscreen games")
+}
+
+/// Make sure a click on the meter overlay leaves the game focused (#71), as
+/// `keep_above_fullscreen` does for its rule.
+pub fn click_without_focus(done: bool) -> Result<bool, String> {
+    add_rule(NO_FOCUS_GROUP, &no_focus_rule_entries(), done, "clicking the overlay keeps the game focused")
+}
+
+fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Result<bool, String> {
     if done || !is_kde(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()) {
         return Ok(done);
     }
@@ -57,18 +67,18 @@ pub fn keep_above_fullscreen(done: bool) -> Result<bool, String> {
     else {
         return Err("kwriteconfig is not installed".into());
     };
-    if !read(reader, GROUP, "wmclass").is_empty() {
+    if !read(reader, group, "wmclass").is_empty() {
         return Ok(true);
     }
-    for (key, value) in rule_entries() {
-        write(writer, GROUP, key, value)?;
+    for (key, value) in entries {
+        write(writer, group, key, value)?;
     }
     let order = read(reader, "General", "Order");
     let legacy = read(reader, "General", "rules");
-    for (key, value) in general_entries(&order, &legacy) {
+    for (key, value) in general_entries_for(group, &order, &legacy) {
         write(writer, "General", key, &value)?;
     }
     reconfigure();
-    tracing::info!("KWin rule added: the meter stays above fullscreen games");
+    tracing::info!("KWin rule added: {what}");
     Ok(true)
 }

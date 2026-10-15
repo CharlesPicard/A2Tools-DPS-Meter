@@ -2804,6 +2804,18 @@ pub fn run() {
                         Ok(_) => {}
                         Err(e) => tracing::warn!("Could not add the KWin rule: {e}"),
                     }
+                    // The overlay takes no focus, so a click on it leaves the
+                    // game focused (#71). Its own key, so installs that
+                    // already have the first rule get this one too.
+                    const NO_FOCUS_KEY: &str = "dpsMeter.kwinNoFocusRuleAdded";
+                    let done = state.settings.get(NO_FOCUS_KEY).as_deref() == Some("true");
+                    match platform::window_rules::click_without_focus(done) {
+                        Ok(true) if !done => {
+                            state.settings.set(NO_FOCUS_KEY, "true");
+                        }
+                        Ok(_) => {}
+                        Err(e) => tracing::warn!("Could not add the KWin no-focus rule: {e}"),
+                    }
                 });
             }
             {

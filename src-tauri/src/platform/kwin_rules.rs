@@ -32,6 +32,31 @@ pub fn rule_entries() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// The second rule's group: clicking the meter overlay does not take focus
+/// from the game (#71). Its own group, so installs that already have the
+/// first rule get it too.
+pub const NO_FOCUS_GROUP: &str = "a2tools-dps-meter-no-focus";
+
+/// The overlay's title. The meter's other windows (Settings, Details,
+/// Battle History, plugins) have their own titles and keep focus as usual:
+/// a window that takes no focus takes no typing either.
+pub const OVERLAY_TITLE: &str = "A2Tools DPS Meter";
+
+/// The no-focus rule: the overlay window only (class and exact title), and
+/// `acceptfocus` false, forced (`acceptfocusrule` 2). Clicks still reach it.
+pub fn no_focus_rule_entries() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("Description", "A2Tools DPS Meter overlay keeps focus on the game (added by the meter)"),
+        ("wmclass", WINDOW_CLASS),
+        ("wmclassmatch", "1"),
+        ("wmclasscomplete", "false"),
+        ("title", OVERLAY_TITLE),
+        ("titlematch", "1"),
+        ("acceptfocus", "false"),
+        ("acceptfocusrule", "2"),
+    ]
+}
+
 /// The `[General]` entries that list the rules, with the meter's added.
 ///
 /// KWin 6 orders rules by `Order` and still reads the legacy `rules`/`count`
@@ -39,12 +64,17 @@ pub fn rule_entries() -> Vec<(&'static str, &'static str)> {
 /// or as the legacy list plus ours: writing ours alone would hide every rule
 /// the player made before. The legacy pair is kept in step for older KWin.
 pub fn general_entries(order: &str, legacy_rules: &str) -> Vec<(&'static str, String)> {
+    general_entries_for(GROUP, order, legacy_rules)
+}
+
+/// `general_entries` for any of the meter's rules.
+pub fn general_entries_for(group: &str, order: &str, legacy_rules: &str) -> Vec<(&'static str, String)> {
     let split = |list: &str| -> Vec<String> {
         list.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect()
     };
     let add = |mut list: Vec<String>| {
-        if !list.iter().any(|g| g == GROUP) {
-            list.push(GROUP.to_string());
+        if !list.iter().any(|g| g == group) {
+            list.push(group.to_string());
         }
         list
     };
@@ -107,6 +137,22 @@ mod tests {
         assert_eq!(value("layerrule"), Some("2"));
         assert_eq!(value("wmclass"), Some("a2tools-dps-meter"));
         assert_eq!(value("wmclassmatch"), Some("1"));
+    }
+
+    /// #71: the overlay takes no focus, so a click on it leaves the game
+    /// focused; only the overlay, by its exact title, as the other windows
+    /// need focus to be typed in.
+    #[test]
+    fn the_no_focus_rule_is_the_overlays_alone_and_joins_the_first() {
+        let rule = no_focus_rule_entries();
+        let value = |k: &str| rule.iter().find(|(key, _)| *key == k).map(|(_, v)| *v);
+        assert_eq!(value("title"), Some("A2Tools DPS Meter"));
+        assert_eq!(value("titlematch"), Some("1"));
+        assert_eq!((value("acceptfocus"), value("acceptfocusrule")), (Some("false"), Some("2")));
+        let listed = format!("abc-1,{GROUP}");
+        let e = general_entries_for(NO_FOCUS_GROUP, &listed, &listed);
+        assert_eq!(get(&e, "Order"), format!("{listed},{NO_FOCUS_GROUP}"));
+        assert_eq!(get(&e, "count"), "3");
     }
 
     #[test]
