@@ -2002,8 +2002,10 @@ pub fn read_varint(bytes: &[u8], offset: usize) -> VarIntResult {
 /// and values, and where the next begins.
 fn entry_count_at(body: &[u8], at: usize) -> Option<(u8, u8, i32, [i32; 2], usize)> {
     let kind = *body.get(at)?;
+    // The kind says which values follow: 04 the first, 08 the second, 0c
+    // both (a zero is left out).
     let values = match kind {
-        0x04 => 1,
+        0x04 | 0x08 => 1,
         0x0C => 2,
         _ => return None,
     };
@@ -2019,9 +2021,11 @@ fn entry_count_at(body: &[u8], at: usize) -> Option<(u8, u8, i32, [i32; 2], usiz
 
 /// Odyle energy as `(basic, charged)` from an entry, when it is that entry.
 ///
-/// Two values (`0c`) are basic and charged. With no charged energy the game
-/// drops the zero and sends the one-value form (`04`): `04 01 87 93 03 c8 06`
-/// at a login on 2026-10-16, 840 basic and 0 charged, which the meter missed.
+/// The kind is which of basic and charged are sent, a zero being left out:
+/// `0c` both, `04` basic only (`04 01 87 93 03 c8 06`, 840 and 0, at a login
+/// on 2026-10-16), `08` charged only (`08 01 87 93 03 ab 0e`, 0 and 1835, in
+/// a player's log of 2026-10-15). The meter read only `0c`, so it missed the
+/// energy of anyone with either at 0.
 fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
     // Generous bounds (the game's are 840, or 560 without a membership, and 2000): only to turn away bytes
     // that merely look like the entry.
@@ -2029,6 +2033,7 @@ fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
     match kind {
         0x0C if slot == 1 && ok(v[0]) && ok(v[1]) => Some((v[0] as u32, v[1] as u32)),
         0x04 if slot == 1 && ok(v[0]) => Some((v[0] as u32, 0)),
+        0x08 if slot == 1 && ok(v[0]) => Some((0, v[0] as u32)),
         _ => None,
     }
 }
@@ -2037,7 +2042,7 @@ fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
 /// entry follows with the same key.
 fn odyle_energy_in_list(body: &[u8]) -> Option<(u32, u32)> {
     (0..body.len().saturating_sub(1))
-        .filter(|&i| matches!(body[i], 0x0C | 0x04) && body[i + 1] == 0x01)
+        .filter(|&i| matches!(body[i], 0x0C | 0x04 | 0x08) && body[i + 1] == 0x01)
         .find_map(|i| {
             let (kind, slot, key, v, next) = entry_count_at(body, i)?;
             let (_, next_slot, next_key, _, _) = entry_count_at(body, next)?;
@@ -2049,8 +2054,12 @@ fn odyle_energy_in_list(body: &[u8]) -> Option<(u32, u32)> {
 }
 
 /// Odyle energy in a `0c 61` update, if among the entries that changed.
+///
+/// The first byte is not a count: updates with `00` there carry an entry too
+/// (`0c 61 00 08 01 87 93 03 ab 0e 03`, 2026-10-15), and the meter skipped
+/// them. The entries are read from after it, at least one.
 fn odyle_energy_in_update(body: &[u8]) -> Option<(u32, u32)> {
-    let count = *body.first()?;
+    let count = (*body.first()?).max(1);
     let mut at = 1;
     for _ in 0..count {
         let (kind, slot, _, v, next) = entry_count_at(body, at)?;
@@ -3689,6 +3698,27 @@ mod tests {
     /// dropped): the list at a login on 2026-10-16 (its energy entry and the
     /// one after it, as the game sent them) is 840 basic, 0 charged. The
     /// meter only read the two-value form and showed nothing.
+    /// A player's log (2026-10-15): basic energy 0, so the login list and
+    /// the updates carry charged energy alone (`08`), and many updates start
+    /// `00`. The meter read none of them and only refreshed when a two-value
+    /// entry came.
+    #[test]
+    fn odyle_energy_with_charged_energy_only_and_its_updates() {
+        let (storage, mut p) = processor();
+        let mut list = hex("0b61490801879303ab0e04028793030e04038793030e");
+        list.insert(0, (list.len() + 1) as u8);
+        p.parse_perfect_packet(&list);
+        assert_eq!(storage.odyle_energy(), Some((0, 1835)));
+        p.parse_perfect_packet(&hex("0f0c61000801879303db0d03"));
+        assert_eq!(storage.odyle_energy(), Some((0, 1755)));
+        p.parse_perfect_packet(&hex("130c61010801879303cb0f01f0000000"));
+        assert_eq!(storage.odyle_energy(), Some((0, 1995)));
+        // Updates without the energy change nothing.
+        p.parse_perfect_packet(&hex("0e0c6100040c0000000e02"));
+        p.parse_perfect_packet(&hex("0d0c6100000987930303"));
+        assert_eq!(storage.odyle_energy(), Some((0, 1995)));
+    }
+
     #[test]
     fn odyle_energy_without_charged_energy_is_read() {
         let (storage, mut p) = processor();
