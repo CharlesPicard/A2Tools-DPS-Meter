@@ -48,6 +48,12 @@ pkgver() {
 
 build() {
   cd "$(_root)"
+  # CI packs the binaries its .deb job built (A2T_PREBUILT=1, see
+  # .github/workflows/arch-package.yml) rather than compiling them again.
+  if [ -n "${A2T_PREBUILT:-}" ] && [ -f src-tauri/target/release/a2tools-dps-meter ] \
+     && [ -f src-tauri/target/release/a2tools-hotkeys ]; then
+    return 0
+  fi
   # Files a clean checkout lacks (they are gitignored mirrors of src/data).
   mkdir -p public/i18n public/data public/src/data
   cp -r src/data/i18n/* public/i18n/

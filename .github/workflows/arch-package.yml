@@ -26,42 +26,45 @@ on:
         default: main
 
 jobs:
+  # Packs the binaries the .deb job built instead of compiling them again
+  # (that took 3.5 of its 4.5 minutes). They are built on Ubuntu 22.04, whose
+  # older glibc runs on Arch, and libpcap is loaded at run time under either
+  # name (platform/linux/pcap.rs); the .rpm ships the same binary to Fedora.
+  # A2T_PREBUILT=1 makes the PKGBUILD's build() use them; plain `makepkg`
+  # from a checkout still builds from source.
   package:
     name: makepkg
+    needs: deb-rpm
     runs-on: ubuntu-24.04
     container: archlinux:base-devel
-    env:
-      # Where rust-cache restores and saves the registry; the builder user
-      # below builds with it (su keeps the variable).
-      CARGO_HOME: /github/home/.cargo
     steps:
-      # git first, so checkout keeps the history pkgver() reads.
-      - name: Build dependencies
+      # git first, so checkout keeps the history pkgver() reads. The rest are
+      # the package's runtime dependencies, so ldd below can resolve them.
+      - name: Dependencies
         run: |
-          pacman -Syu --noconfirm --needed git rust nodejs npm pkgconf \
+          pacman -Syu --noconfirm --needed git \
             webkit2gtk-4.1 gtk3 libpcap libcap hicolor-icon-theme \
             gst-plugins-base gst-plugins-good
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.ref }}
           fetch-depth: 0
-      # Compiled dependencies from the last run (src-tauri/target and the
-      # registry). The cache lives on the branch the workflow runs from, so a
-      # release tag build reuses what the previous release built.
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/download-artifact@v8
         with:
-          workspaces: src-tauri
-          key: makepkg
-      # makepkg refuses to run as root.
+          name: linux-binaries
+          path: src-tauri/target/release
+      # It must load on Arch: every library it needs is found.
+      - name: What it links against
+        run: |
+          ldd src-tauri/target/release/a2tools-dps-meter | sort
+          ! ldd src-tauri/target/release/a2tools-dps-meter | grep "not found"
+      # makepkg refuses to run as root. --nodeps: the makedepends (rust,
+      # npm) are not needed to pack prebuilt binaries.
       - name: makepkg
         run: |
           useradd -m builder
-          mkdir -p "$CARGO_HOME"
-          chown -R builder "$GITHUB_WORKSPACE" "$CARGO_HOME"
-          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && makepkg --noconfirm"
-      - name: What it links against
-        run: |
-          ldd "$GITHUB_WORKSPACE/src-tauri/target/release/a2tools-dps-meter" | sort
+          chown -R builder "$GITHUB_WORKSPACE"
+          su builder -c "cd '$GITHUB_WORKSPACE/packaging/arch' && A2T_PREBUILT=1 makepkg --noconfirm --nodeps"
           ls -la "$GITHUB_WORKSPACE"/packaging/arch/*.pkg.tar.zst
       - uses: actions/upload-artifact@v7
         with:
@@ -85,11 +88,20 @@ jobs:
         with:
           node-version: 20
           cache: npm
+      # Cached between runs (it took a minute to download and install every
+      # time); the list is the cache key, so changing it fetches afresh.
       - name: Build dependencies
+        uses: awalsh128/cache-apt-pkgs-action@v1
+        with:
+          packages: libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev rpm cpio mold
+          version: 1
+      # mold links far faster than ld, and the meter's link is a large share
+      # of an incremental build. GCC 11 (Ubuntu 22.04) has no -fuse-ld=mold;
+      # -B points it at mold's `ld` instead, as mold's README says.
+      - name: Link with mold
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
-            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev rpm cpio
+          test -x /usr/libexec/mold/ld
+          echo "RUSTFLAGS=-C link-arg=-B/usr/libexec/mold" >> "$GITHUB_ENV"
       # Files a clean checkout lacks (gitignored mirrors of src/data), as in
       # the PKGBUILD's build().
       - name: Frontend data
@@ -105,6 +117,14 @@ jobs:
           # the meter (platform/linux/hotkeys.rs), without capabilities.
           cargo build --release --manifest-path src-tauri/Cargo.toml --bin a2tools-hotkeys
           npx tauri build --bundles deb,rpm
+      # The same two binaries for the Arch package (the makepkg job).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: linux-binaries
+          path: |
+            src-tauri/target/release/a2tools-dps-meter
+            src-tauri/target/release/a2tools-hotkeys
+          if-no-files-found: error
       # Tauri's .rpm can only grant capture permission from a %post script,
       # which rpm-ostree (Bazzite and the other image-based Fedoras) runs
       # without the privilege to do it. Repackage its files with our spec,
