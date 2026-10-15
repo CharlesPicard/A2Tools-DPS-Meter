@@ -10,8 +10,8 @@
       "ariaBoth": "Showing DPS and total damage",
       "hps": "HPS",
       "totalHeal": "HEAL",
-      "ariaHps": "Showing healing per second",
-      "ariaHeal": "Showing total healing"
+      "ariaHps": "Showing raw healing per second (excludes passive regen)",
+      "ariaHeal": "Showing total raw healing (excludes passive regen)"
     }
   },
   "details": {

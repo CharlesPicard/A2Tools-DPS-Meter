@@ -2029,7 +2029,9 @@ impl DataStorage {
     /// Record a heal tick done by `actor_id` with `skill_code` (is_hot marks a HoT).
     /// Keyed by the healer so "healing done" can be shown per player. Self-heals count.
     pub fn append_heal(&self, actor_id: i32, skill_code: i32, amount: i64, is_hot: bool, timestamp: i64) {
-        if amount <= 0 || !self.is_plausible_entity_id(actor_id) {
+        // 1900001 = passive HP Regen ("Restore HP") — exclude from HPS to avoid
+        // inflating non-healer scores with ambient regen everyone receives.
+        if amount <= 0 || !self.is_plausible_entity_id(actor_id) || skill_code == 1900001 {
             return;
         }
         let mut inner = self.inner.write();
