@@ -755,6 +755,10 @@
     setOverlayLocked(locked) {
       invoke("set_overlay_locked", { locked: !!locked }).catch(() => {});
     },
+    // A card (popup) open in the page takes the mouse though locked.
+    setOverlayCardOpen(open) {
+      invoke("set_overlay_card_open", { open: !!open }).catch(() => {});
+    },
     setLockButtonRect(x, y, width, height, scale) {
       invoke("set_lock_button_rect", { x, y, width, height, scale }).catch(() => {});
     },

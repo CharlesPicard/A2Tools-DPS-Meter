@@ -6173,12 +6173,32 @@ class DpsApp {
         if (!isOverlay) return;
         this._applyLockBtnVisibility(show);
         window.addEventListener("resize", () => this._sendLockBtnRect());
+        this._watchOverlayCards();
         // Stay locked across restarts, as the player left it.
         if (show && this.safeGetSetting(this.storageKeys.overlayLocked) === "true") {
           requestAnimationFrame(() => this._setOverlayLocked(true));
         }
       })
       .catch(() => {});
+  }
+
+  // A card open in the page (a one-time popup at start, the update prompt,
+  // the support card) takes the mouse though the overlay is locked: locked
+  // from last time, nothing on it could be clicked, and it covers the lock
+  // button. The lock itself stays as it was.
+  _watchOverlayCards() {
+    const cards = [...document.querySelectorAll(".updateModal, .discordPromo, .supportModal")];
+    if (!cards.length || typeof MutationObserver !== "function") return;
+    let wasOpen = false;
+    const sync = () => {
+      const open = cards.some((card) => card.classList.contains("isOpen"));
+      if (open === wasOpen) return;
+      wasOpen = open;
+      window.javaBridge?.setOverlayCardOpen?.(open);
+    };
+    const observer = new MutationObserver(sync);
+    for (const card of cards) observer.observe(card, { attributes: true, attributeFilter: ["class"] });
+    sync();
   }
 
   _applyLockBtnVisibility(show) {
