@@ -2018,18 +2018,26 @@ fn entry_count_at(body: &[u8], at: usize) -> Option<(u8, u8, i32, [i32; 2], usiz
 }
 
 /// Odyle energy as `(basic, charged)` from an entry, when it is that entry.
+///
+/// Two values (`0c`) are basic and charged. With no charged energy the game
+/// drops the zero and sends the one-value form (`04`): `04 01 87 93 03 c8 06`
+/// at a login on 2026-10-16, 840 basic and 0 charged, which the meter missed.
 fn odyle_energy_of(kind: u8, slot: u8, v: [i32; 2]) -> Option<(u32, u32)> {
     // Generous bounds (the game's are 840, or 560 without a membership, and 2000): only to turn away bytes
     // that merely look like the entry.
     let ok = |n: i32| (0..=100_000).contains(&n);
-    (kind == 0x0C && slot == 1 && ok(v[0]) && ok(v[1])).then(|| (v[0] as u32, v[1] as u32))
+    match kind {
+        0x0C if slot == 1 && ok(v[0]) && ok(v[1]) => Some((v[0] as u32, v[1] as u32)),
+        0x04 if slot == 1 && ok(v[0]) => Some((v[0] as u32, 0)),
+        _ => None,
+    }
 }
 
 /// Odyle energy in a `0b 61` list: the `0c 01` entry that the list's second
 /// entry follows with the same key.
 fn odyle_energy_in_list(body: &[u8]) -> Option<(u32, u32)> {
     (0..body.len().saturating_sub(1))
-        .filter(|&i| body[i] == 0x0C && body[i + 1] == 0x01)
+        .filter(|&i| matches!(body[i], 0x0C | 0x04) && body[i + 1] == 0x01)
         .find_map(|i| {
             let (kind, slot, key, v, next) = entry_count_at(body, i)?;
             let (_, next_slot, next_key, _, _) = entry_count_at(body, next)?;
@@ -3675,6 +3683,20 @@ mod tests {
         // The `0c 61` that followed the list at 03:18:42.
         p.parse_perfect_packet(&hex("0d0c6100000987930303"));
         assert_eq!(storage.odyle_energy(), Some((30, 880)));
+    }
+
+    /// With no charged energy the entry has one value (`04`, the zero
+    /// dropped): the list at a login on 2026-10-16 (its energy entry and the
+    /// one after it, as the game sent them) is 840 basic, 0 charged. The
+    /// meter only read the two-value form and showed nothing.
+    #[test]
+    fn odyle_energy_without_charged_energy_is_read() {
+        let (storage, mut p) = processor();
+        let body = "0b61490401879303c80604028793030e04038793030e";
+        let mut list = hex(body);
+        list.insert(0, (list.len() + 1) as u8);
+        p.parse_perfect_packet(&list);
+        assert_eq!(storage.odyle_energy(), Some((840, 0)));
     }
 
     /// Whose the energy is, for the window to remember it by: a login's list
