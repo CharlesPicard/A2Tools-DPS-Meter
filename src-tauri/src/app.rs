@@ -91,10 +91,12 @@ pub struct AppState {
 /// to the game, and it cannot be dragged. Only its own lock button stays
 /// clickable, so the same button unlocks it; a hotkey does too.
 ///
-/// A window either takes the mouse or ignores it, all of it, so the button
-/// is kept clickable by watching the pointer: while it is over the button the
-/// window takes the mouse again. That needs the pointer's position outside
-/// the window, which Wayland does not give (`platform::window::cursor_position`),
+/// On Linux the window takes the mouse over the button alone (an input
+/// region, `platform::window::click_through_except`). Elsewhere a window
+/// either takes the mouse or ignores it, all of it, so the button is kept
+/// clickable by watching the pointer: while it is over the button the window
+/// takes the mouse again. That needs the pointer's position outside the
+/// window, which Wayland does not give (`platform::window::cursor_position`),
 /// so the lock is offered only where it is available.
 #[derive(Default)]
 pub struct OverlayLock {
@@ -120,6 +122,13 @@ fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: b
     use std::sync::atomic::Ordering;
     let mut applied = lock.applied.lock();
     let ignore = click_through(lock.locked.load(Ordering::SeqCst), over_button, lock.card_open.load(Ordering::SeqCst));
+    // The region follows the button, so it is set again even unchanged.
+    if let Some(main) = app.get_webview_window("main") {
+        if platform::window::click_through_except(&main, ignore, *lock.button.lock()) {
+            *applied = Some(ignore);
+            return;
+        }
+    }
     if *applied == Some(ignore) {
         return;
     }
@@ -154,6 +163,10 @@ fn apply_overlay_lock(app: &tauri::AppHandle, locked: bool) {
     lock.locked.store(locked, Ordering::SeqCst);
     sync_click_through(app, &lock, false);
     tracing::info!("Overlay {}", if locked { "locked (click-through)" } else { "unlocked" });
+    // No pointer watch where the window keeps the button by its input region.
+    if cfg!(target_os = "linux") {
+        return;
+    }
     if locked && !lock.watching.swap(true, Ordering::SeqCst) {
         let app = app.clone();
         std::thread::spawn(move || {
@@ -1027,9 +1040,14 @@ fn is_overlay_locked(state: tauri::State<'_, AppState>) -> bool {
 /// Where the lock button is in the main window's page, so it stays clickable
 /// while the rest of the window lets clicks through.
 #[tauri::command]
-fn set_lock_button_rect(state: tauri::State<'_, AppState>, x: f64, y: f64, width: f64, height: f64, scale: f64) {
+fn set_lock_button_rect(app: tauri::AppHandle, state: tauri::State<'_, AppState>, x: f64, y: f64, width: f64, height: f64, scale: f64) {
     let scale = if scale.is_finite() && scale > 0.0 { scale } else { 1.0 };
     *state.overlay_lock.button.lock() = Some((x, y, width, height, scale));
+    // On Linux the button's input region moves with it.
+    if cfg!(target_os = "linux") {
+        let lock = state.overlay_lock.clone();
+        sync_click_through(&app, &lock, false);
+    }
 }
 
 #[tauri::command]
