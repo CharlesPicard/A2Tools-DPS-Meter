@@ -104,6 +104,10 @@ pub struct OverlayLock {
     button: Mutex<Option<(f64, f64, f64, f64, f64)>>,
     /// Whether the pointer watch is running.
     watching: std::sync::atomic::AtomicBool,
+    /// A card is open in the page (a one-time popup, the update prompt): the
+    /// window takes the mouse while it is, locked or not, or nothing on the
+    /// card could be clicked. It covers the lock button too.
+    card_open: std::sync::atomic::AtomicBool,
     /// What the window was last told (`true` = ignore the mouse). Every change
     /// goes through `sync_click_through` under this lock, so a late pointer
     /// check can never leave an unlocked window click-through.
@@ -111,11 +115,11 @@ pub struct OverlayLock {
 }
 
 /// Tell the main window whether to ignore the mouse: when locked, unless the
-/// pointer is over the lock button.
+/// pointer is over the lock button or a card is open.
 fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
     use std::sync::atomic::Ordering;
     let mut applied = lock.applied.lock();
-    let ignore = lock.locked.load(Ordering::SeqCst) && !over_button;
+    let ignore = click_through(lock.locked.load(Ordering::SeqCst), over_button, lock.card_open.load(Ordering::SeqCst));
     if *applied == Some(ignore) {
         return;
     }
@@ -124,6 +128,10 @@ fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: b
             *applied = Some(ignore);
         }
     }
+}
+
+fn click_through(locked: bool, over_button: bool, card_open: bool) -> bool {
+    locked && !over_button && !card_open
 }
 
 fn pointer_over_lock_button(app: &tauri::AppHandle, lock: &OverlayLock) -> bool {
@@ -999,6 +1007,16 @@ fn overlay_lock_supported() -> bool {
 #[tauri::command]
 fn set_overlay_locked(app: tauri::AppHandle, locked: bool) {
     apply_overlay_lock(&app, locked);
+}
+
+/// A card opened or closed in the main window's page (see
+/// `OverlayLock::card_open`). The lock itself stays as it was.
+#[tauri::command]
+fn set_overlay_card_open(app: tauri::AppHandle, open: bool) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let lock = state.overlay_lock.clone();
+    lock.card_open.store(open, std::sync::atomic::Ordering::SeqCst);
+    sync_click_through(&app, &lock, false);
 }
 
 #[tauri::command]
@@ -3256,6 +3274,7 @@ pub fn run() {
             suspend_capture,
             overlay_lock_supported,
             set_overlay_locked,
+            set_overlay_card_open,
             is_overlay_locked,
             set_lock_button_rect,
             is_capture_suspended,
@@ -3297,6 +3316,17 @@ pub fn run() {
 mod tests {
     #[cfg_attr(not(feature = "online"), allow(unused_imports))]
     use super::*;
+
+    /// Locked, the window ignores the mouse except over the lock button, and
+    /// while a card is open: a one-time popup at start under a lock left on
+    /// from last time could not be clicked, and it covered the lock button.
+    #[test]
+    fn a_locked_window_takes_the_mouse_while_a_card_is_open() {
+        assert!(click_through(true, false, false));
+        assert!(!click_through(true, true, false));
+        assert!(!click_through(true, false, true));
+        assert!(!click_through(false, false, false));
+    }
 
     #[cfg(feature = "online")]
     #[test]
