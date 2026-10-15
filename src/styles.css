@@ -4864,6 +4864,10 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   background: rgba(0, 112, 186, 0.2);
   color: #8fc9ff;
 }
+.supportModal .supportIconButton[data-support="patreon"] {
+  background: rgba(249, 104, 84, 0.2);
+  color: #ffb3a8;
+}
 .supportModal .supportIconButton[data-support="kofi"] {
   background: linear-gradient(90deg, #7f5fe8, #6f4cd8);
   color: #ffffff;
@@ -4883,6 +4887,13 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
 /* What the buttons below do: a site opens in the browser, crypto copies. */
 .supportModal .supportQrImage.isLink {
   cursor: pointer;
+}
+.supportModal .supportPerks {
+  margin: 0 0 6px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.86);
+  text-align: center;
 }
 .supportModal .supportLinksHint {
   margin: 0 0 8px;

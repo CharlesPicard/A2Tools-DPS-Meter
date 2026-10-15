@@ -516,7 +516,8 @@
   "support": {
     "button": "Unterstütze mich",
     "title": "Unterstütze den Autor auf Ko-fi",
-    "linksHint": "Ko-fi, Afdian und PayPal öffnen ihre Seite im Browser. Die Krypto-Schaltflächen kopieren eine Adresse.",
+    "linksHint": "Ko-fi, Patreon, Afdian und PayPal öffnen ihre Seite im Browser. Die Krypto-Schaltflächen kopieren eine Adresse.",
+    "perks": "Je 5 $ gibt es 12 Monate Unterstützer-Vorteile, bis zu 2 Jahre pro Zahlung. Schreib den Code von deiner A2 Tools-Kontoseite in deine Ko-fi-Nachricht oder nutze auf Patreon dieselbe E-Mail-Adresse.",
     "titleWechat": "Unterstütze den Autor über WeChat",
     "label": {
       "wechat": "WeChat"
@@ -529,6 +530,7 @@
     "aria": {
       "afdian": "Afdian öffnen",
       "kofi": "Ko-fi öffnen",
+      "patreon": "Patreon öffnen",
       "close": "Unterstützungsfenster schließen",
       "wechat": "WeChat-QR-Code anzeigen",
       "paypal": "PayPal öffnen",

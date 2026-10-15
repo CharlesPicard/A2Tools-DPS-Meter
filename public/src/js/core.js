@@ -3296,7 +3296,7 @@ class DpsApp {
     }
 
     if (url) {
-      const externalOnly = supportType === "paypal" || supportType === "afdian" || supportType === "kofi";
+      const externalOnly = supportType === "paypal" || supportType === "afdian" || supportType === "kofi" || supportType === "patreon";
       this.openExternalLink(url, { externalOnly });
     }
 

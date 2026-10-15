@@ -528,7 +528,8 @@
   "support": {
     "button": "Support Me",
     "title": "Support the author on Ko-fi",
-    "linksHint": "Ko-fi, Afdian and PayPal open their site in your browser. The crypto buttons copy an address.",
+    "linksHint": "Ko-fi, Patreon, Afdian and PayPal open their site in your browser. The crypto buttons copy an address.",
+    "perks": "Every $5 gives you 12 months of supporter perks, up to 2 years per payment. Use the code from your A2 Tools account page in your Ko-fi message, or the same email on Patreon.",
     "titleWechat": "Support the author on WeChat",
     "label": {
       "wechat": "WeChat"
@@ -541,6 +542,7 @@
     "aria": {
       "afdian": "Open Afdian",
       "kofi": "Open Ko-fi",
+      "patreon": "Open Patreon",
       "close": "Close support modal",
       "wechat": "Show WeChat QR code",
       "paypal": "Open PayPal",

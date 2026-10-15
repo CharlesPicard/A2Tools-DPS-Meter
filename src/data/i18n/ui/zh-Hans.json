@@ -523,7 +523,8 @@
   "support": {
     "button": "支持我一下",
     "title": "在爱发电支持作者",
-    "linksHint": "Ko-fi、爱发电和 PayPal 会在浏览器中打开其网站；加密货币按钮会复制地址。",
+    "linksHint": "Ko-fi、Patreon、爱发电和 PayPal 会在浏览器中打开其网站；加密货币按钮会复制地址。",
+    "perks": "每赞助 $5 可获得 12 个月的赞助者福利，单笔最多 2 年。请在 Ko-fi 留言中填入 A2 Tools 账号页面上的代码，或在 Patreon 使用相同的电子邮件。",
     "titleWechat": "在微信支持作者",
     "label": {
       "wechat": "微信"
@@ -536,6 +537,7 @@
     "aria": {
       "afdian": "打开爱发电",
       "kofi": "打开 Ko-fi",
+      "patreon": "打开 Patreon",
       "close": "关闭支持弹窗",
       "wechat": "显示微信二维码",
       "paypal": "打开 PayPal",

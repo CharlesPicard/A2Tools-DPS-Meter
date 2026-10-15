@@ -516,7 +516,8 @@
   "support": {
     "button": "支援する",
     "title": "Ko-fiで作者を支援",
-    "linksHint": "Ko-fi・爱发电・PayPal はブラウザでそのサイトを開きます。暗号資産のボタンはアドレスをコピーします。",
+    "linksHint": "Ko-fi・Patreon・爱发电・PayPal はブラウザでそのサイトを開きます。暗号資産のボタンはアドレスをコピーします。",
+    "perks": "5ドルごとにサポーター特典が12か月付与されます（1回の支払いにつき最大2年）。Ko-fiのメッセージにA2 Toolsアカウントページのコードを入れるか、Patreonでは同じメールアドレスを使ってください。",
     "titleWechat": "WeChatで作者を支援",
     "label": {
       "wechat": "WeChat"
@@ -529,6 +530,7 @@
     "aria": {
       "afdian": "Afdianを開く",
       "kofi": "Ko-fiを開く",
+      "patreon": "Patreonを開く",
       "close": "支援ウィンドウを閉じる",
       "wechat": "WeChatのQRコードを表示",
       "paypal": "PayPalを開く",
