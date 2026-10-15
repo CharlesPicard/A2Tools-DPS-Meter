@@ -2288,7 +2288,7 @@ class DpsApp {
       totalHits: totalTimes,
       multiHitCount: totalMultiHitCount,
       multiHitDamage: totalMultiHitDamage,
-      multiHitPct: totalTimes > 0 ? Math.round((totalMultiHitHits / totalTimes) * 1000) / 10 : 0,
+      multiHitPct: totalTimes > 0 ? Math.round((totalMultiHitCount / totalTimes) * 1000) / 10 : 0,
       totalRegen,
       combatTime,
       battleTimeMs: Number.isFinite(battleTimeMsRaw) ? battleTimeMsRaw : 0,

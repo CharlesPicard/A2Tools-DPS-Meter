@@ -981,8 +981,8 @@ const createDetailsUI = ({
       case "hit":
         return hits;
       case "mhit": {
-        const mhHits = Number(skill?.multiHitHits) || 0;
-        return hits > 0 ? mhHits / hits : 0;
+        const mhCount = Number(skill?.multiHitCount) || 0;
+        return hits > 0 ? mhCount / hits : 0;
       }
       case "mdmg":
         return Number(skill?.multiHitDamage) || 0;
@@ -1294,9 +1294,9 @@ const createDetailsUI = ({
         const dotCrit = Number(dot.crit) || 0;
         const dotDmgRate = percentBaseTotal > 0 ? (dotDmg / percentBaseTotal) * 100 : 0;
         const dotCritRate = dotHits > 0 ? Math.round((dotCrit / dotHits) * 100) : 0;
-        const dotMhHits = Number(dot.multiHitHits) || 0;
+        const dotMhCount = Number(dot.multiHitCount) || 0;
         const dotMhDmg = Number(dot.multiHitDamage) || 0;
-        const dotMhRate = dotHits > 0 ? Math.round((dotMhHits / dotHits) * 100) : 0;
+        const dotMhRate = dotHits > 0 ? Math.round((dotMhCount / dotHits) * 100) : 0;
         const dotParry = dotHits > 0 ? Math.round(((Number(dot.parry) || 0) / dotHits) * 100) : 0;
         const dotPerfect = dotHits > 0 ? Math.round(((Number(dot.perfect) || 0) / dotHits) * 100) : 0;
         const dotDouble = dotHits > 0 ? Math.round(((Number(dot.double) || 0) / dotHits) * 100) : 0;
@@ -1381,7 +1381,10 @@ const createDetailsUI = ({
       const back = skill.back || 0;
       const frontal = skill.frontal || 0;
       const regen = skill.regen || 0;
-      const multiHitHits = skill.multiHitHits || 0;
+      // Multi-hit rate as the game's Damage Analyzer counts it: hits that
+      // had additional hits (multiHitCount), not the additional hits
+      // themselves (multiHitHits), which can outnumber the hits (140%).
+      const multiHitCount = skill.multiHitCount || 0;
       const multiHitDamage = skill.multiHitDamage || 0;
       const rawMinDmg = Number(skill.minDmg) || 0;
       const dotRawMinDmg = showCombined ? (Number(dotChild?.minDmg) || 0) : 0;
@@ -1402,7 +1405,7 @@ const createDetailsUI = ({
       const frontalRate = pct(frontal, hits);
       const perfectRate = pct(perfect, hits);
       const doubleRate = pct(double, hits);
-      const multiHitRate = pct(multiHitHits, hits);
+      const multiHitRate = pct(multiHitCount, hits);
 
       // Show/hide DOT toggle arrow
       view.dotToggleEl.textContent = hasDotChild ? "\u25BC" : "";
@@ -2719,7 +2722,7 @@ const createDetailsUI = ({
       totalDoublePct: pct(totalDouble, totalTimes),
       multiHitCount: totalMultiHitCount,
       multiHitDamage: totalMultiHitDamage,
-      multiHitPct: pct(totalMultiHitHits, totalTimes),
+      multiHitPct: pct(totalMultiHitCount, totalTimes),
       totalRegen,
       // Aggregate actor-level stats from context (party heal, damage received)
       totalPartyHeal: (() => {
