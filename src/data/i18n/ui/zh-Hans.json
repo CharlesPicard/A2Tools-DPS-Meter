@@ -7,7 +7,11 @@
       "ariaDps": "显示 DPS",
       "ariaDamage": "显示总伤害",
       "both": "两者",
-      "ariaBoth": "显示 DPS 和总伤害"
+      "ariaBoth": "显示 DPS 和总伤害",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "显示每秒治疗量",
+      "ariaHeal": "显示总治疗量"
     }
   },
   "details": {

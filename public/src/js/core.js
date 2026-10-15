@@ -1525,8 +1525,10 @@ class DpsApp {
       const name = hasNickname ? nickname : idText;
 
       const dpsRaw = isObj ? value.dps : value;
-      const dps = Math.trunc(Number(dpsRaw));
-      const totalDamage = Math.trunc(Number(isObj ? value.amount : 0));
+      const dps = Math.trunc(Number(dpsRaw)) || 0;
+      const totalDamage = Math.trunc(Number(isObj ? value.amount : 0)) || 0;
+      const hps = Math.trunc(Number(isObj ? value.hps : 0)) || 0;
+      const healAmount = Math.trunc(Number(isObj ? value.healAmount : 0)) || 0;
 
       // 소수점 한자리
       const contribRaw = isObj ? Number(value.damageContribution) : NaN;
@@ -1534,7 +1536,7 @@ class DpsApp {
         ? Math.round(contribRaw * 10) / 10
         : NaN;
 
-      if (!Number.isFinite(dps)) {
+      if (!Number.isFinite(dps) && healAmount <= 0) {
         continue;
       }
 
@@ -1549,6 +1551,8 @@ class DpsApp {
         job,
         dps,
         totalDamage,
+        hps,
+        healAmount,
         damageContribution,
         combatPower,
         gearScore,
@@ -2351,8 +2355,8 @@ class DpsApp {
       }
     });
     this.metricToggleBtn?.addEventListener("click", () => {
-      // DPS -> total damage -> both -> DPS.
-      const order = ["dps", "totalDamage", "both"];
+      // DPS -> total damage -> both -> HPS -> total heal -> DPS.
+      const order = ["dps", "totalDamage", "both", "hps", "totalHeal"];
       const nextMode = order[(order.indexOf(this.displayMode) + 1) % order.length];
       this.setDisplayMode(nextMode, { persist: true });
       this.renderCurrentRows();
@@ -4914,7 +4918,8 @@ class DpsApp {
   }
 
   setDisplayMode(mode, { persist = false } = {}) {
-    this.displayMode = mode === "totalDamage" || mode === "both" ? mode : "dps";
+    const valid = ["totalDamage", "both", "hps", "totalHeal"];
+    this.displayMode = valid.includes(mode) ? mode : "dps";
     if (persist) {
       this.safeSetStorage(this.storageKeys.displayMode, this.displayMode);
     }
@@ -4926,6 +4931,8 @@ class DpsApp {
     const [labelKey, labelFallback, ariaKey, ariaFallback] = {
       totalDamage: ["header.display.total", "DMG", "header.display.ariaDamage", "Showing total damage"],
       both: ["header.display.both", "BOTH", "header.display.ariaBoth", "Showing DPS and total damage"],
+      hps: ["header.display.hps", "HPS", "header.display.ariaHps", "Showing healing per second"],
+      totalHeal: ["header.display.totalHeal", "HEAL", "header.display.ariaHeal", "Showing total healing"],
       dps: ["header.display.dps", "DPS", "header.display.ariaDps", "Showing DPS"],
     }[this.displayMode];
     const label = this.i18n?.t(labelKey, labelFallback) ?? labelFallback;
@@ -5323,6 +5330,14 @@ class DpsApp {
         value: totalDamage,
         text: this.formatAbbreviatedNumber(totalDamage),
       };
+    }
+    if (this.displayMode === "hps") {
+      const hps = Number(row?.hps) || 0;
+      return { value: hps, text: `${this.formatDpsThousands(hps)}${this.meterDpsSuffix()}` };
+    }
+    if (this.displayMode === "totalHeal") {
+      const healAmount = Number(row?.healAmount) || 0;
+      return { value: healAmount, text: this.formatAbbreviatedNumber(healAmount) };
     }
     const dps = Number(row?.dps) || 0;
     const dpsText = `${this.formatDpsThousands(dps)}${this.meterDpsSuffix()}`;

@@ -34,6 +34,10 @@ pub struct PersonalData {
     /// mark beside the name.
     #[serde(default)]
     pub uses_a2tools: bool,
+    #[serde(default)]
+    pub hps: f64,
+    #[serde(default)]
+    pub heal_amount: f64,
 }
 
 impl PersonalData {
@@ -49,6 +53,8 @@ impl PersonalData {
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            hps: 0.0,
+            heal_amount: 0.0,
         }
     }
 
@@ -64,6 +70,8 @@ impl PersonalData {
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            hps: 0.0,
+            heal_amount: 0.0,
         }
     }
 
@@ -78,6 +86,7 @@ impl PersonalData {
 
     pub fn merge_from(&mut self, other: &PersonalData) {
         self.amount += other.amount;
+        self.heal_amount += other.heal_amount;
         for (skill_code, other_skill) in &other.analyzed_data {
             let existing = self.analyzed_data.entry(*skill_code).or_insert_with(|| {
                 AnalyzedSkill::new(*skill_code, other_skill.skill_name.clone())

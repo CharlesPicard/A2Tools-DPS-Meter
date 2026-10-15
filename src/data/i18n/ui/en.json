@@ -7,7 +7,11 @@
       "ariaDps": "Showing DPS",
       "ariaDamage": "Showing total damage",
       "both": "BOTH",
-      "ariaBoth": "Showing DPS and total damage"
+      "ariaBoth": "Showing DPS and total damage",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Showing healing per second",
+      "ariaHeal": "Showing total healing"
     }
   },
   "details": {

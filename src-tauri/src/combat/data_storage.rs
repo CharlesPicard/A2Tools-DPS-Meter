@@ -2042,6 +2042,8 @@ impl DataStorage {
         e.total_heal += amount;
         e.tick_count += 1;
         e.ticks.push((timestamp, amount));
+        drop(inner);
+        self.damage_generation.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn get_heal_snapshot(&self) -> HashMap<i32, HashMap<(i32, bool), HealSkillData>> {
@@ -2052,6 +2054,30 @@ impl DataStorage {
             .filter(|(id, _)| !is_mob(&inner, **id))
             .map(|(&id, skills)| (id, skills.clone()))
             .collect()
+    }
+
+    /// Per-actor heal totals within a fight window. Iterates ticks without
+    /// cloning the vectors — much cheaper than `get_heal_snapshot`.
+    pub fn get_heal_totals_in_window(&self, from_ms: i64, to_ms: i64) -> HashMap<i32, i64> {
+        let inner = self.inner.read();
+        let mut totals: HashMap<i32, i64> = HashMap::new();
+        for (&actor_id, skills) in &inner.heal_storage {
+            if is_mob(&inner, actor_id) {
+                continue;
+            }
+            let mut actor_total: i64 = 0;
+            for skill_data in skills.values() {
+                for &(ts, amount) in &skill_data.ticks {
+                    if ts >= from_ms && ts <= to_ms {
+                        actor_total += amount;
+                    }
+                }
+            }
+            if actor_total > 0 {
+                totals.insert(actor_id, actor_total);
+            }
+        }
+        totals
     }
 
     /// The NPC code entity `id` spawned as, if it is a known mob.
