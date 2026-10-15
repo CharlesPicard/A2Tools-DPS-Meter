@@ -7,10 +7,11 @@
 //! dead (back when). Nothing about the player; the site counts reporters by a
 //! hash of their address that changes daily, and keeps no address.
 //!
-//! A map is sent each time the player opens it. While it stays open the game
-//! sends it again every couple of seconds: those repeats go only when the map
-//! says something new, or OPEN_AGAIN_MS after the last one sent (taken as
-//! opening it again). A meter started
+//! A map is sent when it says something new for that server: a boss up or
+//! down, a new appearance or respawn time, a boss added or gone. The same map
+//! goes again at most every RESEND_SAME_MS, which keeps the site's
+//! confirmations (two reporters agreeing) coming without a request for every
+//! time the map is opened (a2tools.app's Workers CPU, 2026-10-16). A meter started
 //! mid-game doesn't know the server until the game says it: the newest map
 //! waits until then, and goes if it is still under MAX_AGE_MS old. Only the
 //! player's own server's maps: an enemy map viewed from the menu carries
@@ -34,9 +35,8 @@ use crate::combat::data_storage::{BossEvent, BossEventKind, BossHp};
 
 pub const SETTING_KEY: &str = "dpsMeter.shareBossTimers";
 const CHECK: Duration = Duration::from_secs(2);
-/// The same map, unchanged, is sent again after this long: the player
-/// opened it again (the game repeats an open map every couple of seconds).
-const OPEN_AGAIN_MS: i64 = 20_000;
+/// The same map, unchanged, is sent again after this long at the earliest.
+const RESEND_SAME_MS: i64 = 5 * 60_000;
 /// A map read longer ago than this is not sent (waiting for the server).
 const MAX_AGE_MS: i64 = 10 * 60_000;
 
@@ -189,7 +189,7 @@ pub fn spawn(app: tauri::AppHandle) {
             for map in maps.iter().filter(|m| m.header == 0 && now - m.seen_ms <= MAX_AGE_MS) {
                 let said = serde_json::to_string(&report(server, map, 0)["bosses"]).unwrap_or_default();
                 if let Some((at, before)) = sent.get(&(server, map.map_id)) {
-                    if *before == said && now - at < OPEN_AGAIN_MS {
+                    if *before == said && now - at < RESEND_SAME_MS {
                         continue;
                     }
                 }

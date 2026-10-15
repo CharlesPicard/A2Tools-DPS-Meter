@@ -30,6 +30,11 @@ const REFRESH_MS: i64 = 10 * 60_000;
 const MIN_GAP_MS: i64 = 6_000;
 /// Names one request asks about at most (the site's limit).
 const MAX_CHECK: usize = 24;
+/// After a request fails (paced, an error, a reply that can't be read), the
+/// next waits this long, doubling to REFRESH_MS. Nothing was marked asked, so
+/// it used to be retried every MIN_GAP_MS for as long as the party lasted:
+/// about one request a second across all meters (2026-10-16).
+const FAILED_WAIT_MS: i64 = 60_000;
 
 /// A character's hash, as the site keeps it.
 pub fn hash(name: &str, server_id: u16) -> String {
@@ -55,6 +60,8 @@ pub fn spawn(app: tauri::AppHandle) {
         let mut users: HashSet<String> = HashSet::new();
         let mut last_sent: i64 = 0;
         let mut last_refresh: i64 = 0;
+        let mut retry_at: i64 = 0;
+        let mut failed_wait = FAILED_WAIT_MS;
         loop {
             tokio::time::sleep(CHECK).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
@@ -87,10 +94,13 @@ pub fn spawn(app: tauri::AppHandle) {
             let now = crate::clock::now_ms();
             let refresh = now - last_refresh >= REFRESH_MS;
             let ask = to_ask(&party, &asked, &users, refresh);
-            if (ask.is_empty() && !refresh) || now - last_sent < MIN_GAP_MS {
+            if (ask.is_empty() && !refresh) || now - last_sent < MIN_GAP_MS || now < retry_at {
                 continue;
             }
             last_sent = now;
+            // Until it succeeds, the next try waits (see FAILED_WAIT_MS).
+            retry_at = now + failed_wait;
+            failed_wait = (failed_wait * 2).min(REFRESH_MS);
             let by_hash: HashMap<String, String> = ask.iter().map(|(n, s)| (hash(n, *s), n.clone())).collect();
             let body = json!({ "format": 1, "me": hash(&me, server), "check": by_hash.keys().collect::<Vec<_>>() });
             let url = format!("{}/api/presence", crate::account::base_url());
@@ -103,6 +113,8 @@ pub fn spawn(app: tauri::AppHandle) {
                 continue; // paced or down: asked again on a later pass
             }
             let Ok(answer) = serde_json::from_str::<serde_json::Value>(&res.text().await.unwrap_or_default()) else { continue };
+            retry_at = 0;
+            failed_wait = FAILED_WAIT_MS;
             if refresh {
                 last_refresh = now;
             }
