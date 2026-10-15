@@ -45,9 +45,10 @@ fn reconfigure() {
     tracing::info!("KWin rule written; KWin applies it after the next login");
 }
 
-/// Make sure the desktop keeps the meter above a fullscreen game. `done`:
-/// an earlier start already did, so a rule the player has since removed stays
-/// removed. Returns whether the job is done now (added, or already there).
+/// Make sure the desktop keeps the meter above a fullscreen game. Called at
+/// every start with `done` false, so a missing rule is put back (it is the only
+/// thing that keeps the meter on top there); nothing is written when it is
+/// there. Returns whether the job is done now (added, or already there).
 pub fn keep_above_fullscreen(done: bool) -> Result<bool, String> {
     add_rule(GROUP, &rule_entries(), done, "the meter stays above fullscreen games")
 }
