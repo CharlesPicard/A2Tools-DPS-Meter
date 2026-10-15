@@ -431,8 +431,12 @@ pub enum BossEventKind {
 const MAX_BOSS_EVENTS: usize = 64;
 
 /// A field boss counts as being fought while its HP changed, or it took
-/// damage, this recently: its HP goes every 3 seconds then, changed or not.
+/// damage, this recently.
 const IN_COMBAT_MS: i64 = 10_000;
+/// While it is fought and its HP holds, the same HP goes again this often:
+/// the site takes a repeat as "still being fought" once a minute and ignores
+/// the rest. A change goes on the next pass (every 3 s), as always.
+const BOSS_HP_KEEP_ALIVE_MS: i64 = 60_000;
 /// A field boss's HP back up by this many points or more has reset (kited
 /// out of range, or left alone until it recovered).
 const RESET_RISE: u8 = 5;
@@ -573,7 +577,8 @@ struct Inner {
     /// A field boss's HP now (NPC code, whole percent, when it last changed),
     /// per entity, and the percent last handed to the sender (`take_boss_hp`).
     boss_hp_now: HashMap<i32, (i32, u8, i64)>,
-    boss_hp_sent: HashMap<i32, u8>,
+    /// Each fought boss's HP as last sent, and when (`take_boss_hp`).
+    boss_hp_sent: HashMap<i32, (u8, i64)>,
     /// Field boss kills and HP milestones in the open world, not yet sent
     /// (`boss_report.rs`).
     boss_events: VecDeque<BossEvent>,
@@ -1484,11 +1489,12 @@ impl DataStorage {
             let hit = inner.target_combat.get(&id).map_or(0, |t| t.last_damage_time);
             let fought = now_ms - changed.max(hit) < IN_COMBAT_MS;
             let sent = inner.boss_hp_sent.get(&id).copied();
-            if sent == Some(pct) && !fought {
+            let keep_alive_due = sent.is_some_and(|(_, at)| now_ms - at >= BOSS_HP_KEEP_ALIVE_MS);
+            if sent.map(|(p, _)| p) == Some(pct) && !(fought && keep_alive_due) {
                 continue;
             }
-            let reset = sent.is_some_and(|s| pct >= s.saturating_add(RESET_RISE));
-            inner.boss_hp_sent.insert(id, pct);
+            let reset = sent.is_some_and(|(s, _)| pct >= s.saturating_add(RESET_RISE));
+            inner.boss_hp_sent.insert(id, (pct, now_ms));
             out.push(BossHp { npc, percent: pct, reset });
         }
         out
@@ -3165,8 +3171,9 @@ mod tests {
         let t = now_ms();
         let pct = |v: Vec<BossHp>| v.into_iter().map(|h| (h.percent, h.reset)).collect::<Vec<_>>();
         assert_eq!(pct(s.take_boss_hp(t)), vec![(95, false)]);
-        // Still being fought (its HP moved a moment ago): again, unchanged.
-        assert_eq!(pct(s.take_boss_hp(t + 3_000)), vec![(95, false)]);
+        // Still being fought but unchanged: not again until a minute has
+        // passed since it went (the site uses a repeat once a minute).
+        assert!(s.take_boss_hp(t + 3_000).is_empty());
         // Left alone: nothing once the fight has gone quiet.
         assert!(s.take_boss_hp(t + 60_000).is_empty());
         s.set_mob_current_hp(500, 400);

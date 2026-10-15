@@ -19,8 +19,9 @@
 //! until it is known whose server it shows.
 //!
 //! Field boss kills in the open world go too, as they happen, and a field
-//! boss's HP every 3 seconds while it is fought (changed or not), and when it
-//! changes; a jump back up is marked as a reset (`spawn_events`). a2tools.app
+//! boss's HP when it changes (checked every 3 seconds), and once a minute
+//! while it is fought and holds; a jump back up is marked as a reset
+//! (`spawn_events`). a2tools.app
 //! passes a drop of a percent or more, and a reset, on to Aion 2 Timers.
 
 use std::collections::HashMap;
