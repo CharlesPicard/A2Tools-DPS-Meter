@@ -1487,8 +1487,14 @@ impl StreamProcessor {
                 break;
             }
 
-            // Skip 7-digit NPC skills
-            if (1_000_000..=9_999_999).contains(&exact_skill_code) {
+            // A 7-digit skill is an NPC's: a monster hitting a player. Its
+            // damage is what the player took (DataStorage::append_damage); it
+            // used to be dropped here, so Damage Taken stayed 0 (Gatekeeper
+            // Pinopi, 2026-10-15).
+            let npc_skill = (1_000_000..=9_999_999).contains(&exact_skill_code);
+            // Only a known monster's hit on a known player; any other NPC
+            // skill is still dropped, as it always was.
+            if npc_skill && !(self.data_storage.is_mob(actor_value) && self.data_storage.is_known_player(target_value)) {
                 break;
             }
 
@@ -1506,7 +1512,7 @@ impl StreamProcessor {
             // Hit type 1 (Miss) and 6 (Resist) carry no damage: count them on
             // the skill and stop here, as the parser always did on these.
             if no_value {
-                if !require_trusted && actor_value != target_value {
+                if !require_trusted && actor_value != target_value && !npc_skill {
                     if let Some(kind) = NoDamageHit::from_hit_type(dummy_type) {
                         let skill = self.normalize_skill_id(exact_skill_code as i32);
                         self.data_storage.append_no_damage_hit(target_value, actor_value, skill, kind);
@@ -1596,7 +1602,7 @@ impl StreamProcessor {
             //
             // Recorded per actor so a summon whose spawn packet never arrived
             // can still be tied to its owner.
-            if (1_000..=200_000).contains(&first_value) {
+            if (1_000..=200_000).contains(&first_value) && !npc_skill {
                 self.data_storage.note_power_scalar(actor_value, first_value);
             }
 
@@ -3544,6 +3550,30 @@ mod tests {
         packet.extend(hex(record));
         packet[0] = packet.len() as u8;
         p.parsing_damage(&packet, false, false)
+    }
+
+    /// Gatekeeper Pinopi (2026-10-15, entity 47573) hitting a player (9681)
+    /// for 1,258 with a 7-digit NPC skill (1607550). The parser used to drop
+    /// every NPC skill, so Damage Taken stayed 0; the hit now counts, on the
+    /// fight with the monster that dealt it.
+    #[test]
+    fn a_monsters_hit_on_a_player_counts_as_damage_taken() {
+        let (storage, mut p) = processor();
+        storage.append_mob(47573, 2_980_040);
+        // The player hits it first (a player skill), so 9681 is known to be one.
+        let mut first = crate::entity::damage_packet::ParsedDamagePacket::new();
+        first.set_timestamp(500);
+        first.set_actor_id(9681);
+        first.set_target_id(47573);
+        first.set_skill_code(16_190_020);
+        first.set_damage(100);
+        storage.append_damage(first);
+
+        assert!(feed(&mut p, "D14B0600D5F3027E871800020202000243ED940901000000904EEA090100"));
+        let taken = storage.get_combat_snapshot_light()[&47573].actors[&9681].damage_received;
+        assert_eq!(taken, 1_258);
+        // Nothing of it is taken for the monster's own damage.
+        assert!(!storage.get_combat_snapshot_light()[&47573].actors.contains_key(&47573));
     }
 
     /// A Training Scarecrow's live HP (2026-10-07, entity 25839, whose spawn
