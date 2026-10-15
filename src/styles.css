@@ -1046,7 +1046,13 @@ body.linuxOverlay .meter {
   /* The cyan the game itself uses for combat power, so the number reads as the
      same stat players already know from the character sheet. */
   color: #78f2fb;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  /* A thin dark edge (two tight halos) under the drop shadow, so the light
+     cyan stays legible on a bright bar or texture; a text stroke would thin
+     glyphs this small. */
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   /* Optical centring against the name. The row centres flex items by their
      boxes, but the name is Pretendard and this is Bahnschrift at a smaller
@@ -4073,7 +4079,13 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
   line-height: 1;
   letter-spacing: 0.02em;
   color: #78f2fb;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+  /* A thin dark edge (two tight halos) under the drop shadow, so the light
+     cyan stays legible on a bright bar or texture; a text stroke would thin
+     glyphs this small. */
+  text-shadow:
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 0 1px rgba(0, 0, 0, 0.95),
+    0 1px 2px rgba(0, 0, 0, 0.9);
   white-space: nowrap;
   position: relative;
   top: 1px;
