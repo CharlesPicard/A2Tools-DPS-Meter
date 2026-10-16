@@ -133,6 +133,31 @@ fn show_meter_again(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
     let _ = window.emit("force-resize", ());
 }
 
+/// The label of the meter window titled `title`.
+fn window_titled(app: &tauri::AppHandle, title: &str) -> Option<String> {
+    app.webview_windows()
+        .into_iter()
+        .find(|(_, window)| window.title().ok().as_deref() == Some(title))
+        .map(|(label, _)| label)
+}
+
+/// Where the window manager says a window was left, by its label (#76).
+fn save_window_place(app: &tauri::AppHandle, title: &str, (x, y, w, h): (i32, i32, i32, i32)) {
+    let (Some(label), Some(state)) = (window_titled(app, title), app.try_state::<AppState>()) else { return };
+    state.settings.set(&format!("window.{label}.placed"), &format!("{x},{y},{w},{h}"));
+}
+
+/// Where a window belongs, for the window manager to put it (#76). The
+/// overlay sizes itself to its content, so it gets its place only.
+fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i32, i32)> {
+    let label = window_titled(app, title)?;
+    let state = app.try_state::<AppState>()?;
+    let value = state.settings.get(&format!("window.{label}.placed"))?;
+    let n: Vec<i32> = value.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+    let [x, y, w, h] = n[..] else { return None };
+    Some(if label == "main" { (x, y, 0, 0) } else { (x, y, w, h) })
+}
+
 /// Auto-hide at once, when the desktop says the active window changed (KWin,
 /// see platform::linux::focus): the 500 ms check and its wait before hiding
 /// left the meter up for a moment after an alt-tab (2026-10-17). The check
@@ -2700,11 +2725,17 @@ pub fn run() {
         // Closing the meter quits, even with Details, History or a kept
         // Settings window still open.
         .on_window_event(|window, event| {
-            // Plugin windows open where they were left.
+            // Plugin windows open where they were left, at the size they
+            // were left (#76).
             if let tauri::WindowEvent::Moved(at) = event
                 && window.label().starts_with("plugin-")
             {
                 crate::plugins::note_moved(window.app_handle(), window.label(), *at);
+            }
+            if let tauri::WindowEvent::Resized(size) = event
+                && window.label().starts_with("plugin-")
+            {
+                crate::plugins::note_resized(window.app_handle(), window, *size);
             }
             if window.label() == "main"
                 && let tauri::WindowEvent::CloseRequested { api, .. } = event
@@ -2842,6 +2873,13 @@ pub fn run() {
                     let state = handle.state::<AppState>();
                     // For "Hide when AION2 isn't focused": KWin says which
                     // window is active (platform::linux::focus).
+                    // On Wayland, KWin keeps the windows where they were
+                    // left (#76). Before the watch, which starts the script.
+                    let (save_app, load_app) = (handle.clone(), handle.clone());
+                    platform::window::keep_places(
+                        move |title, rect| save_window_place(&save_app, title, rect),
+                        move |title| load_window_place(&load_app, title),
+                    );
                     let focus_app = handle.clone();
                     if let Err(e) = platform::window_detector::watch_focus(move || auto_hide_now(&focus_app)) {
                         tracing::warn!("Cannot follow the active window: {e}");

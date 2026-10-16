@@ -1121,6 +1121,51 @@ pub fn note_moved(app: &tauri::AppHandle, label: &str, at: tauri::PhysicalPositi
     });
 }
 
+/// How big a plugin window was last left, `"w,h"` (logical pixels), per id.
+const SIZE_PREFIX: &str = "dpsMeter.pluginWindowSize.";
+
+/// The size a plugin window was left at, if it is a usable one.
+fn saved_size(app: &tauri::AppHandle, id: &str) -> Option<(f64, f64)> {
+    let value = app.try_state::<AppState>()?.settings.get(&format!("{SIZE_PREFIX}{id}"))?;
+    let (w, h) = value.split_once(',')?;
+    let (w, h): (f64, f64) = (w.trim().parse().ok()?, h.trim().parse().ok()?);
+    (w.is_finite() && h.is_finite() && w >= 120.0 && h >= 120.0).then_some((w.min(2000.0), h.min(1600.0)))
+}
+
+/// A plugin window was resized: remember its size, once it has settled, as
+/// `note_moved` does its place. Not while it is being shown, nor a minimized
+/// or hidden window's.
+pub fn note_resized(app: &tauri::AppHandle, window: &tauri::Window, size: tauri::PhysicalSize<u32>) {
+    static LATEST: std::sync::OnceLock<Mutex<HashMap<String, (f64, f64)>>> = std::sync::OnceLock::new();
+    let Some(id) = window.label().strip_prefix("plugin-").filter(|id| valid_id(id)).map(str::to_string) else { return };
+    if window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true) {
+        return;
+    }
+    let placing = shown_at()
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .get(&id)
+        .is_some_and(|t| t.elapsed() < Duration::from_millis(700));
+    let scale = window.scale_factor().unwrap_or(1.0).max(0.1);
+    let logical = (f64::from(size.width) / scale, f64::from(size.height) / scale);
+    if placing || logical.0 < 120.0 || logical.1 < 120.0 {
+        return;
+    }
+    let latest = LATEST.get_or_init(Mutex::default);
+    let first = latest.lock().unwrap_or_else(|p| p.into_inner()).insert(id.clone(), logical).is_none();
+    if !first {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(Duration::from_millis(600)).await;
+        let Some((w, h)) = latest.lock().unwrap_or_else(|p| p.into_inner()).remove(&id) else { return };
+        if let Some(state) = app.try_state::<AppState>() {
+            state.settings.set(&format!("{SIZE_PREFIX}{id}"), &format!("{},{}", w.round(), h.round()));
+        }
+    });
+}
+
 /// Build (or show) a plugin's window; `visible: false` builds it hidden, for a
 /// plugin restored at start that was watching in the background.
 fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), String> {
@@ -1144,10 +1189,12 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
         }
         return Ok(());
     }
+    // The size it was left at, else the manifest's panel and its title bar.
+    let (inner_w, inner_h) = saved_size(app, id).unwrap_or((width, height + 30.0));
     tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("plugin-host.html".into()))
         .initialization_script(format!("window.__A2_PLUGIN_ID__ = {};", serde_json::to_string(id).unwrap_or_default()))
         .title(format!("{name} (plugin)"))
-        .inner_size(width, height + 30.0)
+        .inner_size(inner_w, inner_h)
         .min_inner_size(240.0, (height + 30.0).min(230.0))
         .decorations(false)
         .always_on_top(true)

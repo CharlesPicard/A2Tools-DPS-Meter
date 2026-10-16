@@ -105,6 +105,13 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
     hide_without_focus(window);
 }
 
+/// Windows are placed by the meter itself here (Linux on Wayland asks KWin).
+pub fn keep_places(
+    _save: impl Fn(&str, (i32, i32, i32, i32)) + Send + Sync + 'static,
+    _load: impl Fn(&str) -> Option<(i32, i32, i32, i32)> + Send + Sync + 'static,
+) {
+}
+
 /// Nothing is hidden in place here.
 pub fn is_hidden_in_place(_window: &tauri::WebviewWindow) -> bool {
     false

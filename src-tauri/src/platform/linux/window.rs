@@ -277,6 +277,17 @@ pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
     true
 }
 
+/// Keep the meter's windows where they were left (#76): on Wayland through
+/// KWin, which may place windows where an application may not
+/// (`focus::keep_places`). `save` gets a window's title and its place (x, y,
+/// width, height); `load` answers where a window of that title belongs.
+pub fn keep_places(
+    save: impl Fn(&str, (i32, i32, i32, i32)) + Send + Sync + 'static,
+    load: impl Fn(&str) -> Option<(i32, i32, i32, i32)> + Send + Sync + 'static,
+) {
+    super::focus::keep_places(super::focus::Places { save: Box::new(save), load: Box::new(load) });
+}
+
 /// Whether `hide_in_place` has this window hidden.
 pub fn is_hidden_in_place(window: &tauri::WebviewWindow) -> bool {
     hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).contains(window.label())
