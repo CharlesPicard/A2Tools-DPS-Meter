@@ -101,7 +101,16 @@ fn apply(app: &tauri::AppHandle, st: &mut State, server: u32) {
         None if !wanted.is_empty() => {
             let (tx, rx) = watch::channel(wanted);
             st.conns.insert(server, tx);
-            tauri::async_runtime::spawn(run(app.clone(), server, rx));
+            let app = app.clone();
+            tauri::async_runtime::spawn(async move {
+                run(app, server, rx).await;
+                // Ended (nothing followed, or refused): a later follow opens
+                // a new one. Only this connection's entry, not a newer one's.
+                let mut st = state().lock().unwrap_or_else(|p| p.into_inner());
+                if st.conns.get(&server).is_some_and(|tx| tx.is_closed() || tx.borrow().is_empty()) {
+                    st.conns.remove(&server);
+                }
+            });
         }
         None => {}
     }
@@ -132,16 +141,13 @@ async fn run(app: tauri::AppHandle, server: u32, mut rx: watch::Receiver<Vec<Str
         let mut ws = match connected {
             Ok(Ok((ws, _))) => ws,
             Ok(Err(e)) => {
-                // Refused for good (an unknown or unsupported server): stop.
-                if let tokio_tungstenite::tungstenite::Error::Http(r) = &e
-                    && matches!(r.status().as_u16(), 400 | 403 | 404)
-                {
-                    tracing::info!("Boss live {server}: not available ({})", r.status());
-                    return;
-                }
+                // Not there (a site without live updates yet): try again in 5
+                // minutes, so it connects once it is; the feed meanwhile.
+                let missing = matches!(&e, tokio_tungstenite::tungstenite::Error::Http(r) if r.status().as_u16() == 404);
                 tracing::debug!("Boss live {server}: no connection ({e})");
                 tell(&app, serde_json::json!({ "type": "status", "server": server, "connected": false }));
-                if wait_or_changed(&mut rx, backoff).await {
+                let wait = if missing { Duration::from_secs(300) } else { backoff };
+                if wait_or_changed(&mut rx, wait).await {
                     return;
                 }
                 backoff = (backoff * 2).min(Duration::from_secs(60));
