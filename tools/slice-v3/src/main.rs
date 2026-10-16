@@ -41,6 +41,13 @@ fn convert(data: &[u8]) -> Result<Option<Vec<u8>>, String> {
         blind_map: blind_map.clone(),
         stats: Default::default(),
     });
+    // Version 3 is larger unpacked (bundles are stored inflated). The log
+    // service refuses more than this unpacked (MAX_INFLATED there), so such a
+    // slice keeps its version 2 form, which the service can still read.
+    const MAX_INFLATED: usize = 24 * 1024 * 1024;
+    if v3.len() > MAX_INFLATED {
+        return Err(format!("too-large {} bytes unpacked", v3.len()));
+    }
     let zst = zstd::bulk::compress(&v3, 19).map_err(|e| format!("zstd: {e}"))?;
 
     let mut back = Vec::new();
