@@ -632,7 +632,7 @@ body.linuxOverlay .meter {
   cursor: pointer;
   transition: background 120ms ease;
 }
-.list .item:hover { background: rgba(255, 255, 255, 0.075); }
+html:not(.hoverStale) .list .item:hover { background: rgba(255, 255, 255, 0.075); }
 .list.dragInteracting .item { pointer-events: none; }
 
 /* The bar spans the whole row: at 100% it has to look 100% full, and a

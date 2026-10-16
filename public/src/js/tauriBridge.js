@@ -23,8 +23,20 @@
   const { listen } = window.__TAURI__.event;
   const { open: shellOpen } = window.__TAURI__.opener;
 
-  // The backend enables compositor resizing only on GNOME.
+  // The backend enables compositor resizing on GNOME and KDE.
   const isLinux = document.documentElement.classList.contains("linux");
+
+  // WebKitGTK can show a row as hovered when the window opens or comes back,
+  // from where the pointer was before, until the pointer moves over it again
+  // (Linux players, 2026-10-17). Row hover waits for a real move: one that
+  // moved (a synthetic event does not).
+  const staleHover = () => { if (isLinux) document.documentElement.classList.add("hoverStale"); };
+  staleHover();
+  document.addEventListener("mousemove", (e) => {
+    if ((e.movementX || e.movementY) && document.documentElement.classList.contains("hoverStale")) {
+      document.documentElement.classList.remove("hoverStale");
+    }
+  }, { capture: true, passive: true });
   // Native startup policy is independent of the webview's user agent.
   const loadsHidden = window.__A2_WINDOW_STARTUP__?.loadsHidden === true;
   const reusesSettings = window.__A2_WINDOW_STARTUP__?.reusesSettings === true;
@@ -1307,6 +1319,7 @@
   // Force resize when window is restored from auto-hide
   // (content may have changed while minimized, stale lastSizeKey would skip resize)
   listen("force-resize", () => {
+    staleHover();
     lastSizeKey = "";
     updateWindowSize();
   });
