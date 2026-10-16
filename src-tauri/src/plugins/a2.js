@@ -29,6 +29,13 @@
 //                                              "feed:boss-timers", meter 2.0.65 on): { bosses: { <id>:
 //                                              { state, upSince, nextSpawn, reportedAt, confirmed } } }
 //                                              or null
+//   await a2.followBosses(serverId, ["101006", ...])  follow these field bosses live (permission
+//                                              "feed:boss-timers", meter 2.0.68 on): each change comes at
+//                                              once as a2.on("bossLive", (m) => ...), m being
+//                                              { type: "state", server, bosses } on following,
+//                                              { type: "boss", server, boss, entry } on each change (an
+//                                              entry as a2.bossTimers gives it), or
+//                                              { type: "status", server, connected }; [] stops
 //   a2.window.show() / a2.window.hide()        its own window, shown on top without taking focus
 //   a2.window.fit(height) / a2.window.fit()    the window fitted to that much content (an alert),
 //                                              its title bar hidden; then back to its size and
@@ -96,6 +103,7 @@
     }),
     notify: (text) => call("notify", [String(text)]),
     bossTimers: (server) => call("bossTimers", [Number(server)]),
+    followBosses: (server, bosses) => call("bossTimers.follow", [Number(server), (bosses || []).map(String)]),
     window: Object.freeze({
       show: () => call("window.show", []),
       hide: () => call("window.hide", []),

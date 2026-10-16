@@ -2748,6 +2748,7 @@ pub fn run() {
                 && let Some(id) = window.label().strip_prefix("plugin-")
             {
                 crate::plugins::widgets::close_all(window.app_handle(), id);
+                crate::plugins::boss_live::forget_plugin(window.app_handle(), id);
             }
             if window.label() == "main"
                 && let tauri::WindowEvent::CloseRequested { api, .. } = event
@@ -3363,6 +3364,7 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_hello,
             crate::plugins::widgets::plugin_widget_post,
             crate::plugins::widgets::plugin_widget_drag,
+            crate::plugins::boss_live::plugin_boss_follow,
             crate::plugins::plugin_storage_get,
             crate::plugins::plugin_boss_timers,
             crate::plugins::plugin_storage_set,

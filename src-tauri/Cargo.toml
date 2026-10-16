@@ -38,6 +38,7 @@ online = [
     "dep:urlencoding",
     "dep:discord-rich-presence",
     "dep:ed25519-dalek",
+    "dep:tokio-tungstenite",
 ]
 desktop = [
     "dep:tauri",
@@ -114,6 +115,9 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"], optional = tr
 chrono = { version = "0.4", features = ["serde"] }
 parking_lot = "0.12"
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "stream"], optional = true }
+# Live field boss updates pushed by a2tools.app (plugins/boss_live.rs), on the
+# same rustls and web PKI roots as reqwest.
+tokio-tungstenite = { version = "0.24", default-features = false, features = ["connect", "rustls-tls-webpki-roots"], optional = true }
 # Discord activity ("playing AION2 as a level 29 Cleric on Kaisinel"), over the
 # local Discord client's IPC socket. Opt-in; see presence.rs.
 discord-rich-presence = { version = "1.1", optional = true }

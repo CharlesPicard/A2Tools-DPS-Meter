@@ -15,6 +15,17 @@
 pub mod catalog;
 pub mod decoder;
 pub mod widgets;
+#[cfg(feature = "online")]
+pub mod boss_live;
+/// Without the network there is nothing to follow.
+#[cfg(not(feature = "online"))]
+pub mod boss_live {
+    #[tauri::command]
+    pub fn plugin_boss_follow(_server: u32, _bosses: Vec<String>) -> Result<(), String> {
+        Err("live boss updates need the online build".into())
+    }
+    pub fn forget_plugin(_app: &tauri::AppHandle, _id: &str) {}
+}
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
