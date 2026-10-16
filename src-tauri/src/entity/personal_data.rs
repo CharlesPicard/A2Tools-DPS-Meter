@@ -12,6 +12,8 @@ pub struct PersonalData {
     pub dps: f64,
     pub amount: f64,
     pub damage_contribution: f64,
+    pub hps: f64,
+    pub heal_amount: f64,
     #[serde(skip)]
     pub analyzed_data: HashMap<i32, AnalyzedSkill>,
     pub nickname: String,
@@ -43,6 +45,8 @@ impl PersonalData {
             dps: 0.0,
             amount: 0.0,
             damage_contribution: 0.0,
+            hps: 0.0,
+            heal_amount: 0.0,
             analyzed_data: HashMap::new(),
             nickname,
             combat_power: 0,
@@ -58,6 +62,8 @@ impl PersonalData {
             dps: 0.0,
             amount: 0.0,
             damage_contribution: 0.0,
+            hps: 0.0,
+            heal_amount: 0.0,
             analyzed_data: HashMap::new(),
             nickname,
             combat_power: 0,
@@ -78,6 +84,7 @@ impl PersonalData {
 
     pub fn merge_from(&mut self, other: &PersonalData) {
         self.amount += other.amount;
+        self.heal_amount += other.heal_amount;
         for (skill_code, other_skill) in &other.analyzed_data {
             let existing = self.analyzed_data.entry(*skill_code).or_insert_with(|| {
                 AnalyzedSkill::new(*skill_code, other_skill.skill_name.clone())

@@ -271,6 +271,9 @@ impl DpsCalculator {
             }
         }
 
+        // Heal data lives in a separate global store, not per-target
+        let heal_snapshot = self.data_storage.get_heal_snapshot();
+
         // Calculate battle time
         let battle_time = if self.current_target != 0 {
             combat_data.get(&self.current_target)
@@ -341,6 +344,16 @@ impl DpsCalculator {
             }
 
             entry.amount += damage as f64;
+            // Heal lookup: try raw actor_id first, then summon-resolved uid
+            let actor_heal: i64 = heal_snapshot.get(&actor_id)
+                .or_else(|| heal_snapshot.get(&raw_uid))
+                .or_else(|| heal_snapshot.get(&uid))
+                .map(|skills| skills.values().map(|s| s.total_heal).sum())
+                .unwrap_or(0);
+            entry.heal_amount += actor_heal as f64;
+            if actor_heal > 0 && entry.heal_amount > 0.0 {
+                tracing::debug!("HPS: actor={} uid={} nick={} heal={} total={}", actor_id, uid, nickname, actor_heal, entry.heal_amount);
+            }
 
             if entry.job.is_empty() {
                 if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
@@ -509,6 +522,7 @@ impl DpsCalculator {
                 }
             }
             data.dps = data.amount / bt as f64 * 1000.0;
+            data.hps = data.heal_amount / bt as f64 * 1000.0;
             data.damage_contribution = if total_damage > 0.0 {
                 data.amount / total_damage * 100.0
             } else {
