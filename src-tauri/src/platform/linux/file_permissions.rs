@@ -223,22 +223,32 @@ mod tests {
         acl
     }
 
-    fn set_acl(file: &File, name: &CStr, acl: &[u8]) {
+    fn set_acl(file: &File, name: &CStr, acl: &[u8]) -> bool {
         // SAFETY: all pointers, the file descriptor and the ACL buffer are live.
-        assert_eq!(
-            unsafe {
-                libc::fsetxattr(
-                    file.as_raw_fd(),
-                    name.as_ptr(),
-                    acl.as_ptr().cast(),
-                    acl.len(),
-                    0,
+        let result = unsafe {
+            libc::fsetxattr(
+                file.as_raw_fd(),
+                name.as_ptr(),
+                acl.as_ptr().cast(),
+                acl.len(),
+                0,
+            )
+        };
+        if result == 0 {
+            true
+        } else {
+            let error = io::Error::last_os_error();
+            if attribute_absent(&error)
+                || matches!(
+                    error.raw_os_error(),
+                    Some(libc::ENOSYS | libc::EPERM | libc::EACCES)
                 )
-            },
-            0,
-            "{}",
-            io::Error::last_os_error()
-        );
+            {
+                false
+            } else {
+                panic!("{error}");
+            }
+        }
     }
 
     fn file_acl(file: &File) -> Option<Vec<u8>> {
@@ -258,7 +268,10 @@ mod tests {
         let path = dir.0.join("settings.json");
         let mut file = create_new_private(&path).unwrap();
         file.write_all(b"old").unwrap();
-        set_acl(&file, ACCESS_ACL, &acl());
+        if !set_acl(&file, ACCESS_ACL, &acl()) {
+            eprintln!("POSIX ACLs are not supported on this filesystem");
+            return;
+        }
         let before = file.metadata().unwrap();
         assert_eq!(before.permissions().mode() & 0o777, 0o640);
         drop(file);
@@ -293,11 +306,14 @@ mod tests {
             .set_permissions(std::fs::Permissions::from_mode(0o640))
             .unwrap();
         assert!(file_acl(&original).is_none());
-        set_acl(
+        if !set_acl(
             &File::open(&dir.0).unwrap(),
             c"system.posix_acl_default",
             &acl(),
-        );
+        ) {
+            eprintln!("POSIX ACLs are not supported on this filesystem");
+            return;
+        }
         let temporary = create_new_private(&dir.0.join("probe.tmp")).unwrap();
         assert_eq!(temporary.metadata().unwrap().len(), 0);
         assert_eq!(
@@ -377,7 +393,10 @@ mod tests {
         let dir = Directory::new();
         let original_path = dir.0.join("settings.json");
         let original = create_new_private(&original_path).unwrap();
-        set_acl(&original, ACCESS_ACL, &acl());
+        if !set_acl(&original, ACCESS_ACL, &acl()) {
+            eprintln!("POSIX ACLs are not supported on this filesystem");
+            return;
+        }
         let permissions = replacement_permissions(&original_path).unwrap();
         let temporary_path = dir.0.join("temporary.json");
         let temporary = create_new_private(&temporary_path).unwrap();
