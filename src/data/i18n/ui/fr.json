@@ -2,16 +2,16 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
-      "hps": "HPS",
-      "totalHeal": "HEAL",
-      "ariaHps": "Affiche les soins par seconde",
-      "ariaHeal": "Affiche les soins totaux",
       "dps": "DPS",
       "total": "DGT",
       "ariaDps": "Affiche les DPS",
       "ariaDamage": "Affiche les dégâts totaux",
       "both": "LES 2",
-      "ariaBoth": "Affiche les DPS et les dégâts totaux"
+      "ariaBoth": "Affiche les DPS et les dégâts totaux",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Affiche les soins par seconde",
+      "ariaHeal": "Affiche les soins totaux"
     }
   },
   "details": {

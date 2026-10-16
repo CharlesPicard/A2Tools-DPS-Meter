@@ -1535,8 +1535,10 @@ class DpsApp {
       const name = hasNickname ? nickname : idText;
 
       const dpsRaw = isObj ? value.dps : value;
-      const dps = Math.trunc(Number(dpsRaw));
-      const totalDamage = Math.trunc(Number(isObj ? value.amount : 0));
+      const dps = Math.trunc(Number(dpsRaw)) || 0;
+      const totalDamage = Math.trunc(Number(isObj ? value.amount : 0)) || 0;
+      const hps = Math.trunc(Number(isObj ? value.hps : 0)) || 0;
+      const healAmount = Math.trunc(Number(isObj ? value.healAmount : 0)) || 0;
 
       // 소수점 한자리
       const contribRaw = isObj ? Number(value.damageContribution) : NaN;
@@ -1544,7 +1546,7 @@ class DpsApp {
         ? Math.round(contribRaw * 10) / 10
         : NaN;
 
-      if (!Number.isFinite(dps)) {
+      if (!Number.isFinite(dps) && healAmount <= 0) {
         continue;
       }
 
@@ -1553,18 +1555,15 @@ class DpsApp {
       const combatPower = Math.trunc(Number(isObj ? value.combatPower : 0)) || 0;
       const gearScore = Math.trunc(Number(isObj ? value.gearScore : 0)) || 0;
 
-      const hps = Math.trunc(Number(isObj ? value.hps : 0));
-      const healAmount = Math.trunc(Number(isObj ? value.healAmount : 0));
-
       rows.push({
         id: String(id),
         name,
         job,
         dps,
         totalDamage,
-        damageContribution,
         hps,
         healAmount,
+        damageContribution,
         combatPower,
         gearScore,
         isUser: (!!name && name === this.USER_NAME) || (hasLocalId && numericId === localId),
@@ -4945,8 +4944,8 @@ class DpsApp {
   }
 
   setDisplayMode(mode, { persist = false } = {}) {
-    const modes = this.showHealModes === false ? ["totalDamage", "both"] : ["totalDamage", "both", "hps", "totalHeal"];
-    this.displayMode = modes.includes(mode) ? mode : "dps";
+    const valid = this.showHealModes === false ? ["totalDamage", "both"] : ["totalDamage", "both", "hps", "totalHeal"];
+    this.displayMode = valid.includes(mode) ? mode : "dps";
     if (persist) {
       this.safeSetStorage(this.storageKeys.displayMode, this.displayMode);
     }
@@ -4958,9 +4957,9 @@ class DpsApp {
     const [labelKey, labelFallback, ariaKey, ariaFallback] = {
       totalDamage: ["header.display.total", "DMG", "header.display.ariaDamage", "Showing total damage"],
       both: ["header.display.both", "BOTH", "header.display.ariaBoth", "Showing DPS and total damage"],
-      dps: ["header.display.dps", "DPS", "header.display.ariaDps", "Showing DPS"],
       hps: ["header.display.hps", "HPS", "header.display.ariaHps", "Showing healing per second"],
       totalHeal: ["header.display.totalHeal", "HEAL", "header.display.ariaHeal", "Showing total healing"],
+      dps: ["header.display.dps", "DPS", "header.display.ariaDps", "Showing DPS"],
     }[this.displayMode];
     const label = this.i18n?.t(labelKey, labelFallback) ?? labelFallback;
     const ariaLabel = this.i18n?.t(ariaKey, ariaFallback) ?? ariaFallback;
@@ -5360,8 +5359,7 @@ class DpsApp {
     }
     if (this.displayMode === "hps") {
       const hps = Number(row?.hps) || 0;
-      const suffix = this.i18n?.t?.("meter.dpsSuffix", "/s") ?? "/s";
-      return { value: hps, text: `${this.formatDpsThousands(hps)}${suffix}` };
+      return { value: hps, text: `${this.formatDpsThousands(hps)}${this.meterDpsSuffix()}` };
     }
     if (this.displayMode === "totalHeal") {
       const healAmount = Number(row?.healAmount) || 0;

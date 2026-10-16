@@ -12,8 +12,6 @@ pub struct PersonalData {
     pub dps: f64,
     pub amount: f64,
     pub damage_contribution: f64,
-    pub hps: f64,
-    pub heal_amount: f64,
     #[serde(skip)]
     pub analyzed_data: HashMap<i32, AnalyzedSkill>,
     pub nickname: String,
@@ -36,6 +34,10 @@ pub struct PersonalData {
     /// mark beside the name.
     #[serde(default)]
     pub uses_a2tools: bool,
+    #[serde(default)]
+    pub hps: f64,
+    #[serde(default)]
+    pub heal_amount: f64,
 }
 
 impl PersonalData {
@@ -45,14 +47,14 @@ impl PersonalData {
             dps: 0.0,
             amount: 0.0,
             damage_contribution: 0.0,
-            hps: 0.0,
-            heal_amount: 0.0,
             analyzed_data: HashMap::new(),
             nickname,
             combat_power: 0,
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            hps: 0.0,
+            heal_amount: 0.0,
         }
     }
 
@@ -62,14 +64,14 @@ impl PersonalData {
             dps: 0.0,
             amount: 0.0,
             damage_contribution: 0.0,
-            hps: 0.0,
-            heal_amount: 0.0,
             analyzed_data: HashMap::new(),
             nickname,
             combat_power: 0,
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            hps: 0.0,
+            heal_amount: 0.0,
         }
     }
 

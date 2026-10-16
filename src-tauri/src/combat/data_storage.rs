@@ -433,6 +433,8 @@ const MAX_BOSS_EVENTS: usize = 64;
 /// A field boss counts as being fought while its HP changed, or it took
 /// damage, this recently.
 const IN_COMBAT_MS: i64 = 10_000;
+/// The passive HP regen everyone gets ("Restore HP"), not a heal anyone cast.
+const PASSIVE_REGEN_SKILL: i32 = 1_900_001;
 /// While it is fought and its HP holds, the same HP goes again this often:
 /// the site takes a repeat as "still being fought" once a minute and ignores
 /// the rest. A change goes on the next pass (every 3 s), as always.
@@ -2054,6 +2056,8 @@ impl DataStorage {
         e.total_heal += amount;
         e.tick_count += 1;
         e.ticks.push((timestamp, amount));
+        drop(inner);
+        self.damage_generation.fetch_add(1, Ordering::Relaxed);
     }
 
     pub fn get_heal_snapshot(&self) -> HashMap<i32, HashMap<(i32, bool), HealSkillData>> {
@@ -2064,6 +2068,37 @@ impl DataStorage {
             .filter(|(id, _)| !is_mob(&inner, **id))
             .map(|(&id, skills)| (id, skills.clone()))
             .collect()
+    }
+
+    /// Per-actor heal totals within a fight window. Iterates ticks without
+    /// cloning the vectors — much cheaper than `get_heal_snapshot`.
+    ///
+    /// Passive HP regen ("Restore HP", 1900001) is left out: everyone gets it,
+    /// and it would inflate every player's HPS. It is still stored, as
+    /// Details shows it on its own.
+    pub fn get_heal_totals_in_window(&self, from_ms: i64, to_ms: i64) -> HashMap<i32, i64> {
+        let inner = self.inner.read();
+        let mut totals: HashMap<i32, i64> = HashMap::new();
+        for (&actor_id, skills) in &inner.heal_storage {
+            if is_mob(&inner, actor_id) {
+                continue;
+            }
+            let mut actor_total: i64 = 0;
+            for (&(code, _), skill_data) in skills {
+                if code == PASSIVE_REGEN_SKILL {
+                    continue;
+                }
+                for &(ts, amount) in &skill_data.ticks {
+                    if ts >= from_ms && ts <= to_ms {
+                        actor_total += amount;
+                    }
+                }
+            }
+            if actor_total > 0 {
+                totals.insert(actor_id, actor_total);
+            }
+        }
+        totals
     }
 
     /// The NPC code entity `id` spawned as, if it is a known mob.

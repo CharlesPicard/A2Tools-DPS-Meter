@@ -2,16 +2,16 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
-      "hps": "HPS",
-      "totalHeal": "HEAL",
-      "ariaHps": "秒間回復量を表示中",
-      "ariaHeal": "総回復量を表示中",
       "dps": "DPS",
       "total": "ダメージ",
       "ariaDps": "DPSを表示中",
       "ariaDamage": "総ダメージを表示中",
       "both": "両方",
-      "ariaBoth": "DPSと総ダメージを表示中"
+      "ariaBoth": "DPSと総ダメージを表示中",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "秒間回復量を表示中",
+      "ariaHeal": "総回復量を表示中"
     }
   },
   "details": {

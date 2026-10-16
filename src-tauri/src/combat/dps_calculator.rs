@@ -271,9 +271,6 @@ impl DpsCalculator {
             }
         }
 
-        // Heal data lives in a separate global store, not per-target
-        let heal_snapshot = self.data_storage.get_heal_snapshot();
-
         // Calculate battle time
         let battle_time = if self.current_target != 0 {
             combat_data.get(&self.current_target)
@@ -288,6 +285,19 @@ impl DpsCalculator {
                 .unwrap_or(0)
         } else {
             0
+        };
+
+        // Fight window for windowed heal totals (union of all target windows)
+        let (fight_start, fight_end) = {
+            let mut first = i64::MAX;
+            let mut last = 0i64;
+            for &tid in &target_ids {
+                if let Some(td) = combat_data.get(&tid) {
+                    first = first.min(td.first_damage_time);
+                    last = last.max(td.last_damage_time);
+                }
+            }
+            if first == i64::MAX { (0i64, 0i64) } else { (first, last) }
         };
 
         if (battle_time == 0 && combined_actors.is_empty()) || combined_actors.is_empty() {
@@ -344,16 +354,6 @@ impl DpsCalculator {
             }
 
             entry.amount += damage as f64;
-            // Heal lookup: try raw actor_id first, then summon-resolved uid
-            let actor_heal: i64 = heal_snapshot.get(&actor_id)
-                .or_else(|| heal_snapshot.get(&raw_uid))
-                .or_else(|| heal_snapshot.get(&uid))
-                .map(|skills| skills.values().map(|s| s.total_heal).sum())
-                .unwrap_or(0);
-            entry.heal_amount += actor_heal as f64;
-            if actor_heal > 0 && entry.heal_amount > 0.0 {
-                tracing::debug!("HPS: actor={} uid={} nick={} heal={} total={}", actor_id, uid, nickname, actor_heal, entry.heal_amount);
-            }
 
             if entry.job.is_empty() {
                 if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
@@ -501,9 +501,33 @@ impl DpsCalculator {
             }
         }
 
+        // Heal data: per-actor totals windowed to the fight
+        let heal_totals = self.data_storage.get_heal_totals_in_window(fight_start, fight_end);
+        let mut resolved_heals: HashMap<i32, i64> = HashMap::new();
+        for (&actor_id, &heal) in &heal_totals {
+            let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
+            if raw_uid <= 0 { continue; }
+            let nickname = resolve_nickname(raw_uid, &nickname_data, &summon_data);
+            let uid = *canonical.get(&nickname).unwrap_or(&raw_uid);
+            *resolved_heals.entry(uid).or_insert(0) += heal;
+        }
+        let bt = battle_time.max(1000);
+        for (&uid, &heal) in &resolved_heals {
+            let entry = dps_data.map.entry(uid).or_insert_with(|| {
+                let nickname = resolve_nickname(uid, &nickname_data, &summon_data);
+                let cached_job = self.cached_job(&nickname);
+                if let Some(job) = cached_job {
+                    PersonalData::with_job(nickname, job)
+                } else {
+                    PersonalData::new(nickname)
+                }
+            });
+            entry.heal_amount = heal as f64;
+            entry.hps = heal as f64 / bt as f64 * 1000.0;
+        }
+
         // Filter and compute DPS
         let party_members = self.data_storage.get_party_members();
-        let bt = battle_time.max(1000);
         let mut to_remove = Vec::new();
         for (&uid, data) in &mut dps_data.map {
             // Combat power joins on the character name: the roster carries an
@@ -512,7 +536,9 @@ impl DpsCalculator {
             data.combat_power = member.map(|m| m.combat_power).unwrap_or(0);
             data.gear_score = member.map(|m| m.gear_score).unwrap_or(0);
             if data.job.is_empty() {
-                if local_ids.as_ref().is_some_and(|ids| ids.contains(&uid)) {
+                if local_ids.as_ref().is_some_and(|ids| ids.contains(&uid))
+                    || data.heal_amount > 0.0
+                {
                     // A class seen earlier this session survives a reset
                     // (issue #9); "Unknown" draws no icon.
                     data.job = self.cached_job(&data.nickname).unwrap_or_else(|| "Unknown".to_string());
@@ -522,7 +548,6 @@ impl DpsCalculator {
                 }
             }
             data.dps = data.amount / bt as f64 * 1000.0;
-            data.hps = data.heal_amount / bt as f64 * 1000.0;
             data.damage_contribution = if total_damage > 0.0 {
                 data.amount / total_damage * 100.0
             } else {

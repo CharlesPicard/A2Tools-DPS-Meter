@@ -2,16 +2,16 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
-      "hps": "HPS",
-      "totalHeal": "HEAL",
-      "ariaHps": "초당 치유량 표시 중",
-      "ariaHeal": "총 치유량 표시 중",
       "dps": "DPS",
       "total": "DMG",
       "ariaDps": "DPS 표시 중",
       "ariaDamage": "총 피해 표시 중",
       "both": "둘 다",
-      "ariaBoth": "DPS와 총 피해 표시 중"
+      "ariaBoth": "DPS와 총 피해 표시 중",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "초당 힐량 표시 중",
+      "ariaHeal": "총 힐량 표시 중"
     }
   },
   "details": {

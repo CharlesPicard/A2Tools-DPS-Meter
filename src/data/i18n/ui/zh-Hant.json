@@ -2,16 +2,16 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
-      "hps": "HPS",
-      "totalHeal": "HEAL",
-      "ariaHps": "顯示每秒治療量",
-      "ariaHeal": "顯示總治療量",
       "dps": "DPS",
       "total": "DMG",
       "ariaDps": "顯示 DPS",
       "ariaDamage": "顯示總傷害",
       "both": "兩者",
-      "ariaBoth": "顯示 DPS 和總傷害"
+      "ariaBoth": "顯示 DPS 和總傷害",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "顯示每秒治療量",
+      "ariaHeal": "顯示總治療量"
     }
   },
   "details": {

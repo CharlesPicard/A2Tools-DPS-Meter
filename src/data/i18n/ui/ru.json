@@ -2,16 +2,16 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
-      "hps": "HPS",
-      "totalHeal": "HEAL",
-      "ariaHps": "Показано исцеление в секунду",
-      "ariaHeal": "Показано общее исцеление",
       "dps": "DPS",
       "total": "УРН",
       "ariaDps": "Показан DPS",
       "ariaDamage": "Показан общий урон",
       "both": "ОБА",
-      "ariaBoth": "Показаны DPS и общий урон"
+      "ariaBoth": "Показаны DPS и общий урон",
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Показаны исцеления в секунду",
+      "ariaHeal": "Показаны общие исцеления"
     }
   },
   "details": {
