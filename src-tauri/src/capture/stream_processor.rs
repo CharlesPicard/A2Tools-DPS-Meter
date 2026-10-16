@@ -882,6 +882,17 @@ impl StreamProcessor {
                     .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                     .filter(|l| (1..=99).contains(l));
                 self.data_storage.note_self_profile(&sanitized, job, level);
+                // Then the gear score (equipment item level), twice: 383 for
+                // Naicha (2026-10-04), 2040 for Nullception (2026-10-11, as the
+                // character sheet showed). Taken only when both copies agree.
+                let gear = |at: usize| {
+                    data.get(after + at..after + at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                };
+                if let (Some(_), Some(gs), Some(again)) = (level, gear(11), gear(15)) {
+                    if gs == again && (1..=100_000).contains(&gs) {
+                        self.data_storage.note_self_gear_score(&sanitized, gs as i32);
+                    }
+                }
             } else {
                 tracing::debug!("player record: '{}' -> entity {}", sanitized, id);
             }
@@ -4199,6 +4210,20 @@ mod tests {
         assert_eq!(me.name.as_deref(), Some("Naicha"));
         assert_eq!(storage.local_player_id(), Some(14957));
         assert_eq!((me.server_id, me.class, me.level), (1304, Some(crate::entity::job_class::JobClass::Cleric), Some(28)));
+        assert_eq!(me.gear_score, Some(383));
+    }
+
+    /// The start of another self record (2026-10-11): Nullception, server
+    /// 2312, level 45, gear score 2040 as the character sheet showed it.
+    #[test]
+    fn the_self_record_says_your_gear_score() {
+        let storage = Arc::new(DataStorage::new());
+        let processor = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
+        let record = hex("3336ef295fa1c128370b4e756c6c63657074696f6e080924000000022d000000f8070000f80700002d000000");
+        processor.scan_masked_identity(&record);
+        let me = storage.local_profile();
+        assert_eq!(me.name.as_deref(), Some("Nullception"));
+        assert_eq!((me.server_id, me.level, me.gear_score), (2312, Some(45), Some(2040)));
     }
 
     /// Two frames from a capture (2026-10-06 18:12:55): a `2a 37` record that
