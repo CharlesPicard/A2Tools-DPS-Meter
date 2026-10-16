@@ -270,7 +270,9 @@
     "discord": {
       "title": "Discord",
       "activity": "Discord にプレイ中の内容を表示",
-      "activityHint": "AION2 の起動中、Discord のステータスにキャラクター名、クラス、レベル、サーバー、戦闘中のボスを表示します。このパソコンの Discord アプリ経由で表示され、アカウントは不要です。"
+      "activityHint": "AION2 の起動中、Discord のステータスにキャラクター名、クラス、レベル、サーバー、戦闘中のボスを表示します。このパソコンの Discord アプリ経由で表示され、アカウントは不要です。",
+      "stat": "Discord に表示する数値",
+      "statHint": "Discord のステータスでレベルの後に表示する数値です。"
     },
     "streamOverlay": {
       "title": "配信",
