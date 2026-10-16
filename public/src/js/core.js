@@ -1022,10 +1022,15 @@ class DpsApp {
     const container = tooltip.offsetParent;
     const origin = container?.getBoundingClientRect?.() || { left: 0, top: 0 };
     const screen = window.screen || {};
-    const availableWidth = Math.max(32, (screen.availLeft || 0) + (screen.availWidth || window.innerWidth)
-      - (window.screenX || 0) - origin.left);
-    const availableHeight = Math.max(32, (screen.availTop || 0) + (screen.availHeight || window.innerHeight)
-      - (window.screenY || 0) - origin.top);
+    // On Linux the tooltip stays inside the window: growing the window for it
+    // made KWin move the meter up and left while it showed (2026-10-16).
+    const inWindow = !!document.documentElement?.classList.contains("linux");
+    const availableWidth = Math.max(32, inWindow
+      ? window.innerWidth - origin.left
+      : (screen.availLeft || 0) + (screen.availWidth || window.innerWidth) - (window.screenX || 0) - origin.left);
+    const availableHeight = Math.max(32, inWindow
+      ? window.innerHeight - origin.top
+      : (screen.availTop || 0) + (screen.availHeight || window.innerHeight) - (window.screenY || 0) - origin.top);
     const margin = 8;
     const gap = 12;
     const limits = {

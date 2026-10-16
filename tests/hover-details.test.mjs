@@ -197,7 +197,7 @@ test("overlay reserves the tooltip's actual width and height and shrinks on clos
   const release = releaseTimers();
   const context = vm.createContext({
     ...release.globals,
-    resizeActive: false, lastSizeKey: "", pendingWindowSize: null,
+    resizeActive: false, lastSizeKey: "", pendingWindowSize: null, isLinux: false,
     PANEL_WIDTH: 1200, PANEL_HEIGHT: 800, PROMO_WIDTH: 600, PROMO_HEIGHT: 400,
     spaceRightBelow: () => ({ w: 900, h: 700 }),
     window: { A2_VIEW: "main", devicePixelRatio: 1.5, javaBridge: {} },
@@ -225,6 +225,29 @@ test("overlay reserves the tooltip's actual width and height and shrinks on clos
   await vm.runInContext("updateWindowSize()", context);
   assert.equal(sizes[2].width, 1200);
   assert.equal(sizes[2].height, 800);
+});
+
+
+test("on Linux the overlay does not grow for the tooltip", async () => {
+  const sizes = [];
+  const release = releaseTimers();
+  const context = vm.createContext({
+    ...release.globals,
+    resizeActive: false, lastSizeKey: "", pendingWindowSize: null, isLinux: true,
+    PANEL_WIDTH: 1200, PANEL_HEIGHT: 800, PROMO_WIDTH: 600, PROMO_HEIGHT: 400,
+    spaceRightBelow: () => ({ w: 900, h: 700 }),
+    window: { A2_VIEW: "main", devicePixelRatio: 1, javaBridge: {} },
+    document: {
+      body: { classList: { contains: () => false } },
+      querySelector: (selector) => selector === ".meter" ? { offsetWidth: 380, offsetHeight: 200, scrollHeight: 200 }
+        : selector === ".hoverDetailsTooltip.isVisible" ? { getBoundingClientRect: () => ({ right: 610, bottom: 360 }) }
+        : null,
+    },
+    invoke: (command, args) => { sizes.push(args); return Promise.resolve(); },
+  });
+  vm.runInContext(sizingSource, context);
+  await vm.runInContext("updateWindowSize()", context);
+  assert.deepEqual([sizes[0].width, sizes[0].height], [396, 210], "the meter's own size");
 });
 
 
@@ -501,7 +524,7 @@ test('native travel area stays fixed during motion, is screen-clamped and shrink
   const release = releaseTimers();
   const context = vm.createContext({
     ...release.globals,
-    resizeActive: false, lastSizeKey: '', pendingWindowSize: null,
+    resizeActive: false, lastSizeKey: '', pendingWindowSize: null, isLinux: false,
     PANEL_WIDTH: 1200, PANEL_HEIGHT: 800, PROMO_WIDTH: 600, PROMO_HEIGHT: 400,
     spaceRightBelow: () => room,
     window: { A2_VIEW: 'main', devicePixelRatio: 1.5, javaBridge: {} },
@@ -715,7 +738,7 @@ test("moving between rows keeps the native window size and leaving the meter shr
   const release = releaseTimers();
   const context = vm.createContext({
     ...release.globals,
-    resizeActive: false, lastSizeKey: '', pendingWindowSize: null,
+    resizeActive: false, lastSizeKey: '', pendingWindowSize: null, isLinux: false,
     PANEL_WIDTH: 1200, PANEL_HEIGHT: 800, PROMO_WIDTH: 600, PROMO_HEIGHT: 400,
     spaceRightBelow: () => ({ w: 1900, h: 1000 }),
     window: { A2_VIEW: 'main', devicePixelRatio: 1, javaBridge: {} },

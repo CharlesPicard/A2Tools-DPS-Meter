@@ -1187,7 +1187,9 @@
       document.querySelector(".historyPanel.isOpen") ||
       document.querySelector(".historyPanel.open")
     );
-    const tooltip = fullPanel ? null : document.querySelector(".hoverDetailsTooltip.isVisible");
+    // On Linux the window never grows for the tooltip, which stays inside it:
+    // KWin moved a growing meter up and left, and back as it shrank.
+    const tooltip = fullPanel || isLinux ? null : document.querySelector(".hoverDetailsTooltip.isVisible");
     // The one-time Discord popup needs room for its card, no more: a
     // full-panel window would block clicks on the game around it.
     const promoOpen = !fullPanel && !!document.querySelector(".discordPromo.isOpen");
