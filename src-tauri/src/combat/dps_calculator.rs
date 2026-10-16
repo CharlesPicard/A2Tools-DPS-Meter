@@ -312,8 +312,14 @@ impl DpsCalculator {
 
         let mut total_damage: f64 = 0.0;
 
-        // Build PersonalData from aggregates (no packet iteration!)
-        for (&actor_id, &damage) in &combined_actors {
+        // Build PersonalData from aggregates (no packet iteration!), in a fixed
+        // order: a row is a player and their summons, and it takes its job
+        // from the first of them with one. In the map's order that was any of
+        // them, and a player's class flipped between derives of the same slice
+        // (2026-10-17). The player's own entity comes first, then by id.
+        let mut actors: Vec<(i32, i64)> = combined_actors.iter().map(|(&a, &d)| (a, d)).collect();
+        actors.sort_unstable_by_key(|&(actor_id, _)| (summon_resolver::resolve(actor_id, &summon_data) != actor_id, actor_id));
+        for (actor_id, damage) in actors {
             let raw_uid = summon_resolver::resolve(actor_id, &summon_data);
             if raw_uid <= 0 { continue; }
             let nickname = resolve_nickname(raw_uid, &nickname_data, &summon_data);
@@ -970,14 +976,11 @@ impl DpsCalculator {
                 let uid = skill.actor_id;
                 record_actors.entry(uid).or_insert_with(|| {
                     let nick = resolve_nickname(uid, &nickname_data, &summon_data_snap);
-                    let job = if !skill.job.is_empty() { skill.job.clone() }
-                        else { JobClass::convert_from_skill(skill.code).map(|j| j.class_name().to_string()).unwrap_or_default() };
+                    let job = class_by_damage(details.skills.iter().filter(|s| s.actor_id == uid).map(|s| (s.code, s.dmg)))
+                        .map(|j| j.class_name().to_string())
+                        .unwrap_or_default();
                     (nick, job)
                 });
-                let entry = record_actors.get_mut(&uid).unwrap();
-                if entry.1.is_empty() && !skill.job.is_empty() {
-                    entry.1 = skill.job.clone();
-                }
             }
 
             let local_id = self.data_storage.local_player_id().unwrap_or(-1) as i32;
@@ -988,11 +991,8 @@ impl DpsCalculator {
                     } else {
                         crate::entity::fight_record::obscure_nickname(nick)
                     };
-                    let job_class = JobClass::convert_from_skill(
-                        details.skills.iter()
-                            .find(|s| s.actor_id == id && !s.job.is_empty())
-                            .map(|s| s.code)
-                            .unwrap_or(0)
+                    let job_class = class_by_damage(
+                        details.skills.iter().filter(|s| s.actor_id == id).map(|s| (s.code, s.dmg)),
                     );
                     // Aggregate per-actor stats across all targets
                     let (mut party_heal, mut regen, mut dmg_recv, mut hits_recv) = (0i64, 0i64, 0i64, 0i32);
@@ -1200,15 +1200,12 @@ impl DpsCalculator {
 
         let actors: Vec<DetailsActorSummary> = actor_meta.iter()
             .map(|(&id, (nick, job))| {
-                let job_id = if let Some(jc) = JobClass::convert_from_skill(
-                    // Find a skill code from this actor's aggregate data
+                let job_id = class_by_damage(
                     combat_data.values()
                         .flat_map(|td| td.actors.get(&id))
-                        .flat_map(|ad| ad.skills.keys())
-                        .find(|&&(sc, _)| JobClass::convert_from_skill(sc).is_some())
-                        .map(|&(sc, _)| sc)
-                        .unwrap_or(0)
-                ) { jc.class_prefix() } else { 0 };
+                        .flat_map(|ad| ad.skills.values())
+                        .map(|sd| (sd.skill_code, sd.total_damage)),
+                ).map_or(0, |jc| jc.class_prefix());
                 // Aggregate per-actor stats
                 let (mut party_heal, mut regen, mut dmg_recv, mut hits_recv) = (0i64, 0i64, 0i64, 0i32);
                 for td in combat_data.values() {
@@ -1700,6 +1697,23 @@ fn fight_dungeon(npcs: &NpcLookup, mob_code: i32, roster: i32) -> i32 {
     npcs.dungeon_of(mob_code).unwrap_or(roster)
 }
 
+/// An actor's class, by which class's skills did the most damage (each skill
+/// counts at least 1, so a class seen only in heals still counts), then the
+/// lower class id. Not the first skill that names a class: skills come in a
+/// HashMap's order, and one stray code of another class then decided it, so a
+/// player's class flipped between derives of the same slice (2026-10-17).
+fn class_by_damage(skills: impl Iterator<Item = (i32, i32)>) -> Option<JobClass> {
+    let mut by_class: std::collections::BTreeMap<i32, (i64, JobClass)> = std::collections::BTreeMap::new();
+    for (code, dmg) in skills {
+        if let Some(job) = JobClass::convert_from_skill(code) {
+            by_class.entry(job.class_prefix()).or_insert((0, job)).0 += i64::from(dmg.max(0)) + 1;
+        }
+    }
+    by_class.into_iter()
+        .max_by_key(|&(prefix, (dmg, _))| (dmg, std::cmp::Reverse(prefix)))
+        .map(|(_, (_, job))| job)
+}
+
 fn build_nickname_canonical_map_from_aggregates(
     actor_damage: &HashMap<i32, i64>,
     summon_data: &HashMap<i32, i32>,
@@ -1726,9 +1740,13 @@ fn build_nickname_canonical_map_from_aggregates(
                 continue;
             }
         }
-        let direct_owner = id_damage.keys().find(|&&id| nickname_data.get(&id).is_some_and(|n| n == nickname));
-        let canonical = direct_owner.copied()
-            .or_else(|| id_damage.iter().max_by_key(|(_, d)| *d).map(|(id, _)| *id));
+        // Most damage, then the lower id: never the map's order, which differs
+        // from one map to the next and flipped rows between derives.
+        let pick = |only_owner: bool| id_damage.iter()
+            .filter(|(id, _)| !only_owner || nickname_data.get(id).is_some_and(|n| n == nickname))
+            .max_by_key(|&(&id, &d)| (d, std::cmp::Reverse(id)))
+            .map(|(&id, _)| id);
+        let canonical = pick(true).or_else(|| pick(false));
         if let Some(id) = canonical {
             result.insert(nickname.clone(), id);
         }
