@@ -19,6 +19,8 @@ use std::time::{Duration, Instant};
 
 use std::io::{Read, Write};
 
+use crate::platform::discord_ipc::{self, Stream as IpcStream};
+
 use discord_rich_presence::activity::{Activity, Assets, Timestamps};
 use tauri::Manager;
 
@@ -143,11 +145,6 @@ struct Discords {
     nonce: u64,
 }
 
-#[cfg(unix)]
-type IpcStream = std::os::unix::net::UnixStream;
-#[cfg(windows)]
-type IpcStream = std::fs::File;
-
 impl Discords {
     fn is_empty(&self) -> bool {
         self.open.is_empty()
@@ -156,7 +153,7 @@ impl Discords {
     /// Connects to every Discord not connected yet; true when one was added.
     fn connect_new(&mut self) -> bool {
         let mut added = false;
-        for path in ipc_paths() {
+        for path in discord_ipc::socket_paths() {
             if self.open.iter().any(|(p, _)| *p == path) {
                 continue;
             }
@@ -209,60 +206,10 @@ impl Discords {
     }
 }
 
-/// Where Discord apps put their sockets, as the `discord-rich-presence`
-/// crate searches them, but every one that exists rather than the first.
-#[cfg(unix)]
-fn ipc_paths() -> Vec<PathBuf> {
-    const SUBPATHS: [&str; 7] = [
-        "",
-        "app/com.discordapp.Discord/",
-        "app/dev.vencord.Vesktop/",
-        ".flatpak/com.discordapp.Discord/xdg-run/",
-        ".flatpak/dev.vencord.Vesktop/xdg-run/",
-        "snap.discord-canary/",
-        "snap.discord/",
-    ];
-    let mut found = Vec::new();
-    for key in ["XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"] {
-        let Ok(base) = std::env::var(key) else { continue };
-        let base = PathBuf::from(base);
-        for sub in SUBPATHS {
-            for i in 0..10 {
-                let path = base.join(sub).join(format!("discord-ipc-{i}"));
-                if path.exists() && !found.contains(&path) {
-                    found.push(path);
-                }
-            }
-        }
-    }
-    found
-}
-
-/// Windows: the ten pipe names. Asking a pipe for its metadata opens it, so
-/// each is simply tried, as the crate does; a missing one fails to open.
-#[cfg(windows)]
-fn ipc_paths() -> Vec<PathBuf> {
-    (0..10).map(|i| PathBuf::from(format!(r"\\.\pipe\discord-ipc-{i}"))).collect()
-}
-
-#[cfg(unix)]
-fn open_ipc(path: &PathBuf) -> std::io::Result<IpcStream> {
-    let stream = std::os::unix::net::UnixStream::connect(path)?;
-    // Discord answers at once; a hung one must not stall the activity thread.
-    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-    Ok(stream)
-}
-
-#[cfg(windows)]
-fn open_ipc(path: &PathBuf) -> std::io::Result<IpcStream> {
-    std::fs::OpenOptions::new().read(true).write(true).open(path)
-}
-
 /// Opens the socket and says hello as the AION2 application; returns the
 /// stream and the Discord user it answered for.
 fn handshake(path: &PathBuf) -> std::io::Result<(IpcStream, String)> {
-    let mut stream = open_ipc(path)?;
+    let mut stream = discord_ipc::connect(path)?;
     send(&mut stream, 0, &serde_json::json!({ "v": 1, "client_id": DISCORD_APPLICATION_ID }))?;
     let reply = recv(&mut stream)?;
     if reply.get("evt").and_then(|e| e.as_str()) != Some("READY") {
