@@ -92,14 +92,10 @@ fn classify(pid: u32, class: &str, caption: &str) -> Who {
     if crate::platform::procfs::is_aion2_process(&comm, &cmdline) { Who::Game } else { Who::Other }
 }
 
-fn is_kde() -> bool {
-    std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default().split(':').any(|d| d.eq_ignore_ascii_case("KDE"))
-}
-
 /// Serve `Focus` on the session bus and load the script into KWin. Does
 /// nothing outside KDE: there the game is taken as always focused.
 pub fn watch() -> Result<(), String> {
-    if !is_kde() || CONNECTION.get().is_some() {
+    if !super::process::is_kde() || CONNECTION.get().is_some() {
         return Ok(());
     }
     let connection = zbus::blocking::connection::Builder::session()

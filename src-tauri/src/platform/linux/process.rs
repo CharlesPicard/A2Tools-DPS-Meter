@@ -22,6 +22,10 @@ pub(crate) fn is_gnome() -> bool {
     desktop_is_gnome(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
 }
 
+pub(crate) fn is_kde() -> bool {
+    crate::platform::kwin_rules::is_kde(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default())
+}
+
 fn prefer_xwayland(backend_set: bool, desktop: &str, wayland: bool, x11_available: bool) -> bool {
     !backend_set && wayland && x11_available && desktop_is_gnome(desktop)
 }

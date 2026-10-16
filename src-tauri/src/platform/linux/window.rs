@@ -11,9 +11,14 @@
 
 use x11_dl::xlib;
 
-/// GNOME uses compositor resizing on both native Wayland and X11.
+/// GNOME and KDE resize the overlay through the compositor, on native
+/// Wayland and X11. Elsewhere the page grows the window to the space right
+/// and below it and resizes inside that; on KWin that space, measured from a
+/// position Wayland does not give, made the window huge and KWin moved it:
+/// the resize "glitched all over" (2026-10-17). KWin already resized the
+/// meter's other windows this way.
 pub fn compositor_resize_supported(window: &tauri::WebviewWindow) -> bool {
-    if !super::process::is_gnome() {
+    if !super::process::is_gnome() && !super::process::is_kde() {
         return false;
     }
     use gtk::prelude::*;
