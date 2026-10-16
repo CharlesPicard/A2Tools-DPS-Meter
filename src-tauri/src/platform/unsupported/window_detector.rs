@@ -8,6 +8,11 @@ pub fn find_aion2_window() -> bool {
     false
 }
 
+/// Nothing to watch here.
+pub fn watch_focus() -> Result<(), String> {
+    Ok(())
+}
+
 pub fn is_aion2_foreground() -> bool {
     false
 }

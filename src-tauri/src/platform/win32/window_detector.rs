@@ -89,6 +89,11 @@ pub fn find_aion2_window() -> bool {
     find_aion2_window_title().is_some()
 }
 
+/// Nothing to start: the foreground window is asked for when needed.
+pub fn watch_focus() -> Result<(), String> {
+    Ok(())
+}
+
 /// Check if the foreground window belongs to AION 2, by title or by program.
 pub fn is_aion2_foreground() -> bool {
     let hwnd = unsafe { GetForegroundWindow() };

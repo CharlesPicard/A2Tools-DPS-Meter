@@ -2797,6 +2797,11 @@ pub fn run() {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
                     let state = handle.state::<AppState>();
+                    // For "Hide when AION2 isn't focused": KWin says which
+                    // window is active (platform::linux::focus).
+                    if let Err(e) = platform::window_detector::watch_focus() {
+                        tracing::warn!("Cannot follow the active window: {e}");
+                    }
                     if let Err(e) = platform::window_rules::keep_above_fullscreen(false) {
                         tracing::warn!("Could not add the KWin rule: {e}");
                     }
@@ -3033,15 +3038,26 @@ pub fn run() {
                                     tracing::trace!("auto-hide: aion_fg={} self_fg={} visible={} minimized={} hide_delay={}",
                                         aion_fg, is_self_fg, is_visible, is_minimized, hide_delay);
                                 }
+                                // Linux hides it in place (transparent, mapped).
+                                let hidden = !is_visible || is_minimized
+                                    || platform::window::is_hidden_in_place(&window);
                                 if aion_fg || is_self_fg {
                                     hide_delay = 0;
-                                    if !is_visible || is_minimized {
-                                        platform::window::show_on_top_without_focus(&window);
+                                    if hidden {
+                                        if platform::window::reveal_in_place(&window) {
+                                            // Revealing takes the mouse back;
+                                            // the lock decides that.
+                                            let lock = state.overlay_lock.clone();
+                                            *lock.applied.lock() = None;
+                                            sync_click_through(&handle, &lock, false);
+                                        } else {
+                                            platform::window::show_on_top_without_focus(&window);
+                                        }
                                         // Notify frontend to recalculate window size
                                         // (content may have changed while minimized)
                                         let _ = window.emit("force-resize", ());
                                     }
-                                } else if is_visible && !is_minimized {
+                                } else if !hidden {
                                     // Wait 3 ticks (1.5s) before hiding to avoid
                                     // flickering during alt-tab transitions
                                     hide_delay += 1;

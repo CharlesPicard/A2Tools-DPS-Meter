@@ -62,6 +62,11 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
     hide_without_focus(window);
 }
 
+/// Nothing is hidden in place here.
+pub fn is_hidden_in_place(_window: &tauri::WebviewWindow) -> bool {
+    false
+}
+
 /// Nothing is hidden in place here: windows are shown as usual.
 pub fn reveal_in_place(_window: &tauri::WebviewWindow) -> bool {
     false

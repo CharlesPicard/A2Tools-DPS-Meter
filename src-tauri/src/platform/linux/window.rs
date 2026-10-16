@@ -265,9 +265,16 @@ pub fn reveal_in_place(window: &tauri::WebviewWindow) -> bool {
     true
 }
 
+/// Whether `hide_in_place` has this window hidden.
+pub fn is_hidden_in_place(window: &tauri::WebviewWindow) -> bool {
+    hidden_in_place().lock().unwrap_or_else(|p| p.into_inner()).contains(window.label())
+}
+
+/// Hide the meter while the game is not in front. Kept mapped (see
+/// `hide_in_place`) rather than minimized: on Wayland an application cannot
+/// bring its own minimized window back.
 pub fn minimize_off_top(window: &tauri::WebviewWindow) {
-    let _ = window.set_always_on_top(false);
-    let _ = window.minimize();
+    hide_in_place(window);
 }
 
 /// Size a meter window and pin its size hints to that size. Window managers

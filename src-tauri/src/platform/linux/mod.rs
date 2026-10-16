@@ -13,6 +13,7 @@ pub mod atomic_file;
 pub mod clock;
 pub mod dialog;
 mod file_permissions;
+mod focus;
 pub mod pcap;
 pub mod process;
 pub mod screen;
