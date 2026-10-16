@@ -41,3 +41,10 @@ pub fn connect(path: &Path) -> std::io::Result<Stream> {
     stream.set_write_timeout(Some(Duration::from_secs(5)))?;
     Ok(stream)
 }
+
+/// Which socket file is at `path` (its inode): a Discord that starts again
+/// makes a new one in the same place.
+pub fn socket_id(path: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    std::fs::metadata(path).ok().map(|m| m.ino())
+}

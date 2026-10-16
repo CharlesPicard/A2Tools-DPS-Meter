@@ -13,21 +13,23 @@
 //! left out rather than guessed.
 
 use std::collections::HashMap;
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use std::io::{Read, Write};
-
-use crate::platform::discord_ipc::{self, Stream as IpcStream};
-
 use discord_rich_presence::activity::{Activity, Assets, Timestamps};
+use discord_rich_presence::error::Error as IpcError;
+use discord_rich_presence::DiscordIpc;
 use tauri::Manager;
 
 use crate::app::AppState;
 use crate::combat::data_storage::{DataStorage, LocalProfile};
 use crate::entity::job_class::JobClass;
+use crate::platform::discord_ipc::{self, Stream as IpcStream};
 use crate::platform::window_detector;
+
+type IpcResult<T> = Result<T, IpcError>;
 
 /// The Discord application whose name ("AION2") the activity shows under, and
 /// whose art assets hold the class icons (keys as `class_key` returns them).
@@ -130,19 +132,55 @@ fn run(app: tauri::AppHandle) {
         if !next.state.is_empty() {
             activity = activity.state(next.state.as_str());
         }
-        let activity = serde_json::to_value(activity).unwrap_or(serde_json::Value::Null);
         discords.set_all(&activity);
         // Discord closed in the meantime: told again once it is back.
         shown = if discords.is_empty() { None } else { Some(next) };
     }
 }
 
-/// One connection per Discord socket found (`discord-ipc-0` … `-9`, also
-/// inside Flatpak and Snap sandboxes), by the socket's path.
+/// One Discord socket (`discord-ipc-0` … `-9`, also inside Flatpak and Snap
+/// sandboxes). The crate speaks Discord's protocol over it; this only opens
+/// it, as `platform::discord_ipc` finds it.
+struct Socket {
+    path: PathBuf,
+    stream: Option<IpcStream>,
+}
+
+impl DiscordIpc for Socket {
+    fn get_client_id(&self) -> &str {
+        DISCORD_APPLICATION_ID
+    }
+
+    fn connect_ipc(&mut self) -> IpcResult<()> {
+        let stream = discord_ipc::connect(&self.path).map_err(|_| IpcError::IPCConnectionFailed)?;
+        self.stream = Some(stream);
+        Ok(())
+    }
+
+    fn write(&mut self, data: &[u8]) -> IpcResult<()> {
+        let stream = self.stream.as_mut().ok_or(IpcError::NotConnected)?;
+        stream.write_all(data).map_err(IpcError::WriteError)?;
+        stream.flush().map_err(IpcError::FlushError)
+    }
+
+    fn read(&mut self, buffer: &mut [u8]) -> IpcResult<()> {
+        let stream = self.stream.as_mut().ok_or(IpcError::NotConnected)?;
+        stream.read_exact(buffer).map_err(IpcError::ReadError)
+    }
+
+    fn close(&mut self) -> IpcResult<()> {
+        self.stream = None;
+        Ok(())
+    }
+}
+
+/// Every Discord running, one connection each.
 #[derive(Default)]
 struct Discords {
-    open: Vec<(PathBuf, IpcStream)>,
-    nonce: u64,
+    open: Vec<Socket>,
+    /// Sockets that refused the handshake, by which socket file it was: not
+    /// tried again until a Discord makes a new one there.
+    refused: HashMap<PathBuf, Option<u64>>,
 }
 
 impl Discords {
@@ -152,98 +190,52 @@ impl Discords {
 
     /// Connects to every Discord not connected yet; true when one was added.
     fn connect_new(&mut self) -> bool {
+        let paths = discord_ipc::socket_paths();
+        self.refused.retain(|p, _| paths.contains(p));
         let mut added = false;
-        for path in discord_ipc::socket_paths() {
-            if self.open.iter().any(|(p, _)| *p == path) {
+        for path in paths {
+            if self.open.iter().any(|s| s.path == path) {
                 continue;
             }
-            match handshake(&path) {
-                Ok((stream, who)) => {
-                    tracing::info!("Discord activity: connected to {} ({who})", path.display());
-                    self.open.push((path, stream));
+            let id = discord_ipc::socket_id(&path);
+            if id.is_some() && self.refused.get(&path) == Some(&id) {
+                continue;
+            }
+            let mut socket = Socket { path, stream: None };
+            match socket.connect() {
+                Ok(()) => {
+                    tracing::info!("Discord activity: connected to {}", socket.path.display());
+                    self.refused.remove(&socket.path);
+                    self.open.push(socket);
                     added = true;
                 }
                 // A socket left behind by a Discord that crashed.
-                Err(e) => tracing::debug!("Discord activity: {} not reachable ({e})", path.display()),
+                Err(e) => {
+                    tracing::debug!("Discord activity: {} not reachable ({e})", socket.path.display());
+                    self.refused.insert(socket.path, id);
+                }
             }
         }
         added
     }
 
-    fn set_all(&mut self, activity: &serde_json::Value) {
-        let mut keep = Vec::with_capacity(self.open.len());
-        for (path, mut stream) in std::mem::take(&mut self.open) {
-            self.nonce += 1;
-            let request = serde_json::json!({
-                "cmd": "SET_ACTIVITY",
-                "args": { "pid": std::process::id(), "activity": activity },
-                "nonce": format!("a2tools-{}", self.nonce),
-            });
-            match send(&mut stream, 1, &request).and_then(|()| recv(&mut stream)) {
-                Ok(reply) => {
-                    if reply.get("evt").and_then(|e| e.as_str()) == Some("ERROR") {
-                        tracing::warn!("Discord activity: {} refused it: {}", path.display(), reply["data"]);
-                    }
-                    keep.push((path, stream));
-                }
-                // Discord closed or restarted: connect again on a later scan.
-                Err(e) => tracing::info!("Discord activity: lost {} ({e}); will reconnect", path.display()),
+    fn set_all(&mut self, activity: &Activity) {
+        self.open.retain_mut(|socket| match socket.set_activity(activity.clone()) {
+            Ok(()) => true,
+            // Discord closed or restarted: connect again on a later scan.
+            Err(e) => {
+                tracing::info!("Discord activity: lost {} ({e}); will reconnect", socket.path.display());
+                false
             }
-        }
-        self.open = keep;
+        });
     }
 
     fn clear_all(&mut self) {
-        for (_, mut stream) in std::mem::take(&mut self.open) {
-            self.nonce += 1;
-            let request = serde_json::json!({
-                "cmd": "SET_ACTIVITY",
-                "args": { "pid": std::process::id() },
-                "nonce": format!("a2tools-{}", self.nonce),
-            });
-            let _ = send(&mut stream, 1, &request).and_then(|()| recv(&mut stream));
+        for mut socket in std::mem::take(&mut self.open) {
+            let _ = socket.clear_activity();
+            let _ = socket.close();
         }
     }
-}
-
-/// Opens the socket and says hello as the AION2 application; returns the
-/// stream and the Discord user it answered for.
-fn handshake(path: &PathBuf) -> std::io::Result<(IpcStream, String)> {
-    let mut stream = discord_ipc::connect(path)?;
-    send(&mut stream, 0, &serde_json::json!({ "v": 1, "client_id": DISCORD_APPLICATION_ID }))?;
-    let reply = recv(&mut stream)?;
-    if reply.get("evt").and_then(|e| e.as_str()) != Some("READY") {
-        return Err(std::io::Error::other(format!("handshake refused: {reply}")));
-    }
-    let who = reply["data"]["user"]["username"].as_str().unwrap_or("?").to_string();
-    Ok((stream, who))
-}
-
-/// One frame: opcode and length (little-endian u32 each), then the JSON.
-fn send(stream: &mut IpcStream, opcode: u32, body: &serde_json::Value) -> std::io::Result<()> {
-    let body = body.to_string();
-    let mut frame = Vec::with_capacity(8 + body.len());
-    frame.extend_from_slice(&opcode.to_le_bytes());
-    frame.extend_from_slice(&(body.len() as u32).to_le_bytes());
-    frame.extend_from_slice(body.as_bytes());
-    stream.write_all(&frame)
-}
-
-fn recv(stream: &mut IpcStream) -> std::io::Result<serde_json::Value> {
-    let mut header = [0u8; 8];
-    stream.read_exact(&mut header)?;
-    let opcode = u32::from_le_bytes(header[..4].try_into().unwrap());
-    let len = u32::from_le_bytes(header[4..].try_into().unwrap()) as usize;
-    if len > 1 << 20 {
-        return Err(std::io::Error::other("reply too large"));
-    }
-    let mut body = vec![0u8; len];
-    stream.read_exact(&mut body)?;
-    // Opcode 2: Discord is closing this connection.
-    if opcode == 2 {
-        return Err(std::io::Error::other(String::from_utf8_lossy(&body).into_owned()));
-    }
-    serde_json::from_slice(&body).map_err(std::io::Error::other)
 }
 
 /// The class's art-asset key in the Discord application.

@@ -11,6 +11,15 @@ pub fn socket_paths() -> Vec<PathBuf> {
     (0..10).map(|i| PathBuf::from(format!(r"\\.\pipe\discord-ipc-{i}"))).collect()
 }
 
+/// A pipe opened as a `File` has no read timeout: a Discord that hangs
+/// without closing its end blocks the read until it does. The crate has the
+/// same limit; bounding it would take overlapped I/O.
 pub fn connect(path: &Path) -> std::io::Result<Stream> {
     std::fs::OpenOptions::new().read(true).write(true).open(path)
+}
+
+/// No identity to tell one pipe instance from the next without opening it.
+/// A pipe with no Discord behind it fails to open at once anyway.
+pub fn socket_id(_path: &Path) -> Option<u64> {
+    None
 }

@@ -11,3 +11,7 @@ pub fn socket_paths() -> Vec<PathBuf> {
 pub fn connect(_path: &Path) -> std::io::Result<Stream> {
     Err(std::io::ErrorKind::Unsupported.into())
 }
+
+pub fn socket_id(_path: &Path) -> Option<u64> {
+    None
+}
