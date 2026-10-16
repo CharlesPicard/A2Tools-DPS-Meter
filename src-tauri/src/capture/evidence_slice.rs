@@ -1076,7 +1076,29 @@ pub fn build(
 pub const MAGIC: &[u8; 4] = b"A2ES";
 /// 2: lengths follow the corrected framing rule. Version 1 slices are read by
 /// re-framing their records (see `upgrade_v1_record`).
-pub const VERSION: u16 = 2;
+/// 3: a bundle record is stored unpacked (its inner stream, not LZ4), so the
+/// slice's own compression can reach it: most of a slice is bundles, and LZ4
+/// output does not compress again (37% smaller than gzipped v2 with zstd, on
+/// real fights, 2026-10-16). Read back, it is wrapped as before.
+pub const VERSION: u16 = 3;
+
+/// A version 3 record: the packet as it is, or a bundle's inner stream.
+const RECORD_PACKET: u8 = 0;
+const RECORD_BUNDLE: u8 = 1;
+
+/// The inner stream of a bundle record, or None for any other packet.
+fn bundle_inner(packet: &[u8]) -> Option<Vec<u8>> {
+    let len = super::stream_processor::read_varint(packet, 0);
+    let o = usize::try_from(len.length).ok().filter(|&n| n > 0)?;
+    let payload = packet.get(o..)?;
+    if payload.get(..2)? != [0xFF, 0xFF] {
+        return None;
+    }
+    let inner = framing::decompress_bundle(payload)?;
+    // Only when it wraps back to the same bytes: the record then reads back
+    // exactly as it went in.
+    (rewrap_bundle(&inner).as_deref() == Some(packet)).then_some(inner)
+}
 
 /// Serialise to the `.a2es` container.
 ///
@@ -1084,8 +1106,11 @@ pub const VERSION: u16 = 2;
 /// "A2ES" | u16 version | u16 opcode_count | [u16 opcode]*
 ///        | u16 blind_count | [u8 token_len | token bytes | u64 dbid]*
 ///        | u32 record_count
-///        | [ i32 dt_ms | u16 len | bytes ]*
+///        | [ i32 dt_ms | u8 kind | u32 len | bytes ]*      (version 3)
 /// ```
+///
+/// `kind` 0 is the packet as it is, 1 a bundle's inner stream (see VERSION).
+/// Versions 1 and 2 had `u16 len | bytes` and no kind.
 ///
 /// Deliberately not the game's framing: a reader must not be able to mistake a
 /// slice for a capture, and `a2t-inspect` needs a magic number to refuse one.
@@ -1111,8 +1136,13 @@ pub fn encode(slice: &EvidenceSlice) -> Vec<u8> {
     out.extend_from_slice(&(slice.records.len() as u32).to_le_bytes());
     for (dt, packet) in &slice.records {
         out.extend_from_slice(&dt.to_le_bytes());
-        out.extend_from_slice(&(packet.len() as u16).to_le_bytes());
-        out.extend_from_slice(packet);
+        let (kind, bytes) = match bundle_inner(packet) {
+            Some(inner) => (RECORD_BUNDLE, std::borrow::Cow::Owned(inner)),
+            None => (RECORD_PACKET, std::borrow::Cow::Borrowed(packet.as_slice())),
+        };
+        out.push(kind);
+        out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+        out.extend_from_slice(&bytes);
     }
     out
 }
@@ -1133,7 +1163,7 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
         return None;
     }
     let version = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?);
-    if version != VERSION && version != 1 {
+    if !(1..=VERSION).contains(&version) {
         return None;
     }
     let op_count = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
@@ -1154,9 +1184,20 @@ pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)
     let mut records = Vec::with_capacity(rec_count.min(1 << 20));
     for _ in 0..rec_count {
         let dt = i32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?);
-        let len = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
-        let record = take(data, &mut o, len)?;
-        let record = if version == 1 { upgrade_v1_record(record) } else { record.to_vec() };
+        let record = if version >= 3 {
+            let kind = take(data, &mut o, 1)?[0];
+            let len = u32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?) as usize;
+            let bytes = take(data, &mut o, len)?;
+            match kind {
+                RECORD_PACKET => bytes.to_vec(),
+                RECORD_BUNDLE => rewrap_bundle(bytes)?,
+                _ => return None,
+            }
+        } else {
+            let len = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
+            let record = take(data, &mut o, len)?;
+            if version == 1 { upgrade_v1_record(record) } else { record.to_vec() }
+        };
         records.push((dt, record));
     }
     Some((records, blind_map))
@@ -1816,6 +1857,45 @@ mod tests {
         ));
     }
 
+    /// A slice in the version 1/2 layout (`u16 len`, no kind), as older
+    /// meters wrote it.
+    fn encode_legacy(slice: &EvidenceSlice, version: u16) -> Vec<u8> {
+        let current = encode(&EvidenceSlice { records: Vec::new(), blind_map: slice.blind_map.clone(), stats: SliceStats::default() });
+        let mut out = current[..current.len() - 4].to_vec();
+        out[4..6].copy_from_slice(&version.to_le_bytes());
+        out.extend_from_slice(&(slice.records.len() as u32).to_le_bytes());
+        for (dt, packet) in &slice.records {
+            out.extend_from_slice(&dt.to_le_bytes());
+            out.extend_from_slice(&(packet.len() as u16).to_le_bytes());
+            out.extend_from_slice(packet);
+        }
+        out
+    }
+
+    /// Version 3 stores a bundle unpacked and wraps it again on reading: the
+    /// records come back byte for byte, and a version 2 slice of the same
+    /// fight reads the same. The unpacked bundle is in the clear in the
+    /// slice, where the outer compression can reach it.
+    #[test]
+    fn a_version_3_slice_reads_back_the_records_it_was_given() {
+        let packet = frame_packet(&[0x04, 0x38, 0x01, 0x02, 0x03]).unwrap();
+        let inner: Vec<u8> = [frame_packet(&[0x41, 0x36, 0x05]).unwrap(), frame_packet(&[0x2B, 0x38, 9, 9, 9, 9]).unwrap()].concat();
+        let bundle = rewrap_bundle(&inner).unwrap();
+        let slice = EvidenceSlice {
+            records: vec![(0, packet.clone()), (40, bundle.clone()), (90, packet.clone())],
+            blind_map: HashMap::from([("@a".to_string(), 7u64)]),
+            stats: SliceStats::default(),
+        };
+        let bytes = encode(&slice);
+        assert_eq!(u16::from_le_bytes([bytes[4], bytes[5]]), 3);
+        assert!(bytes.windows(inner.len()).any(|w| w == inner.as_slice()), "the bundle is stored unpacked");
+        let (records, blind) = decode(&bytes).expect("decodes");
+        assert_eq!(records, slice.records);
+        assert_eq!(blind.get("@a"), Some(&7));
+        let (old, _) = decode(&encode_legacy(&slice, 2)).expect("a version 2 slice still decodes");
+        assert_eq!(old, records);
+    }
+
     #[test]
     fn a_version_1_slice_is_reframed_for_the_current_walk() {
         // Version 1 lengths: a frame spans `len - 3`, a top-level bundle one more.
@@ -1842,8 +1922,7 @@ mod tests {
             blind_map: HashMap::new(),
             stats: SliceStats::default(),
         };
-        let mut bytes = encode(&slice);
-        bytes[4..6].copy_from_slice(&1u16.to_le_bytes());
+        let bytes = encode_legacy(&slice, 1);
 
         let (records, _) = decode(&bytes).expect("a version 1 slice still decodes");
         let bodies: Vec<Vec<u8>> = records

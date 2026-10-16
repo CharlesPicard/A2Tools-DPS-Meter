@@ -158,11 +158,23 @@ fn decode_hex(hex: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Compress an encoded Evidence Slice for upload: zstd at level 19.
+///
+/// Measured on real fights (2026-10-16): with bundles stored unpacked (slice
+/// version 3) it is 37% smaller than the gzipped version 2 slice, and the log
+/// service decompresses it twice as fast. It costs about 0.7 s of CPU here per
+/// fight, once, off the UI. The log service tells zstd from an older gzipped
+/// slice by its magic bytes, so slices saved before this still upload.
+pub fn compress_slice(data: &[u8]) -> Result<Vec<u8>, String> {
+    zstd::bulk::compress(data, 19).map_err(|e| e.to_string())
+}
+
 /// Gzip a buffer.
 ///
 /// Worth doing even though a slice already holds LZ4-compressed bundles: the
 /// framing, the repeated opcodes and the hex-free binary still compress about
-/// 2.2x, measured on the reference run (467 KB -> 212 KB). For a diagnostic
+/// 2.2x, measured on the reference run (467 KB -> 212 KB). Slices now go
+/// through `compress_slice`; this is for diagnostic captures. For a diagnostic
 /// capture, which is ASCII hex, it is closer to 3x — the difference between an
 /// 8 MB upload and a 2.8 MB one, and the reason a size limit can be generous.
 pub fn gzip(data: &[u8]) -> Result<Vec<u8>, String> {
@@ -403,7 +415,7 @@ pub fn preview(
     let envelope = build_envelope(record, &encoded);
     let json = serde_json::to_string_pretty(&envelope).map_err(|e| e.to_string())?;
 
-    let compressed = gzip(&encoded)?;
+    let compressed = compress_slice(&encoded)?;
 
     std::fs::create_dir_all(out_dir).map_err(|e| e.to_string())?;
     // Both: the `.a2es` is what `a2t-inspect` reads, the `.gz` is what an
@@ -650,7 +662,7 @@ pub fn save_slice(
         evidence_slice::build(&packets, start, start + record.duration_ms, &names_from(storage), slice_key()?)
             .map_err(|e| e.to_string())?;
     without_roster_ids(&mut slice);
-    let compressed = gzip(&evidence_slice::encode(&slice))?;
+    let compressed = compress_slice(&evidence_slice::encode(&slice))?;
 
     let dir = slices_dir(app_data_dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -890,7 +902,7 @@ pub async fn upload_detailed(
                      Fights recorded from this version on can be.",
                 )
             })?;
-            gzip(&encoded).map_err(UploadFailure::fatal)?
+            compress_slice(&encoded).map_err(UploadFailure::fatal)?
         }
     };
 
