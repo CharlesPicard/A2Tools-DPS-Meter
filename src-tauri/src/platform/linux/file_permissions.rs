@@ -96,9 +96,12 @@ fn read_acl_with(
 
 /// An owner or group this user may not hand a file to: the previous file was
 /// written by root (a sudo run, a rootful container) or for a group the user
-/// has left.
+/// has left, or the ID is unmapped in the current user namespace.
 fn ownership_refused(error: &io::Error) -> bool {
-    matches!(error.raw_os_error(), Some(libc::EPERM) | Some(libc::EACCES))
+    matches!(
+        error.raw_os_error(),
+        Some(libc::EPERM) | Some(libc::EACCES) | Some(libc::EINVAL)
+    )
 }
 
 pub(super) fn restore(path: &Path, file: &File, security: &SecuritySnapshot) -> io::Result<()> {
@@ -203,10 +206,12 @@ mod tests {
     // Linux's posix_acl_xattr_header/entry layout. Named-user read access is
     // intentional; the owning group must retain no access despite mode 0640.
     fn acl() -> Vec<u8> {
+        // SAFETY: geteuid takes no parameters and returns the current user ID.
+        let user = unsafe { libc::geteuid() };
         let mut acl = 2_u32.to_le_bytes().to_vec();
         for (tag, rights, id) in [
             (0x01_u16, 6_u16, u32::MAX),
-            (0x02, 4, 65_534),
+            (0x02, 4, user),
             (0x04, 0, u32::MAX),
             (0x10, 4, u32::MAX),
             (0x20, 0, u32::MAX),
@@ -350,15 +355,13 @@ mod tests {
         let count = unsafe { libc::getgroups(count, groups.as_mut_ptr()) };
         assert!(count >= 0);
         groups.truncate(count as usize);
-        let Some(group) = groups.into_iter().find(|group| *group != initial.gid()) else {
-            eprintln!("owning-group regression requires a second supplementary group");
+        let Some(group) = groups.into_iter().find(|group| {
+            *group != initial.gid()
+                && unsafe { libc::fchown(original.as_raw_fd(), libc::uid_t::MAX, *group) } == 0
+        }) else {
+            eprintln!("owning-group regression requires a usable second supplementary group");
             return;
         };
-        // SAFETY: original owns the descriptor and the process is a member of group.
-        assert_eq!(
-            unsafe { libc::fchown(original.as_raw_fd(), libc::uid_t::MAX, group) },
-            0
-        );
         original
             .set_permissions(std::fs::Permissions::from_mode(0o640))
             .unwrap();
@@ -438,7 +441,7 @@ mod tests {
 
     #[test]
     fn only_a_refused_owner_change_is_skipped() {
-        for refused in [libc::EPERM, libc::EACCES] {
+        for refused in [libc::EPERM, libc::EACCES, libc::EINVAL] {
             assert!(ownership_refused(&io::Error::from_raw_os_error(refused)));
         }
         for error in [libc::EIO, libc::EBADF, libc::EROFS] {
