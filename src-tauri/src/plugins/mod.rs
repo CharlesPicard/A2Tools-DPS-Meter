@@ -1406,11 +1406,11 @@ pub async fn plugin_boss_timers(app: tauri::AppHandle, window: tauri::WebviewWin
 async fn boss_timers(app: &tauri::AppHandle, server: u32) -> Result<Option<Value>, String> {
     static CACHE: std::sync::OnceLock<Mutex<HashMap<u32, (Instant, Option<Value>)>>> = std::sync::OnceLock::new();
     let cache = CACHE.get_or_init(Mutex::default);
-    // As long as the CDN keeps the file (max-age 10): a plugin following a
-    // boss that is being fought reads it every 10 seconds, for its HP and
-    // its kill (Event Timers' pinned bosses).
+    // As long as the CDN keeps the file (max-age 2): a plugin following a
+    // boss that is being fought reads it every few seconds, for its HP as it
+    // falls and its kill (Event Timers' pinned bosses).
     if let Some((at, value)) = cache.lock().unwrap_or_else(|p| p.into_inner()).get(&server) {
-        if at.elapsed() < Duration::from_secs(10) {
+        if at.elapsed() < Duration::from_secs(2) {
             return Ok(value.clone());
         }
     }
