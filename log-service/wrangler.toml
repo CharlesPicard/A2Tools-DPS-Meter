@@ -11,4 +11,5 @@ preview_urls = false
 command = "worker-build --release"
 
 # Secret, set once:  npx wrangler secret put LOG_SERVICE_KEY
+# While the key changes, LOG_SERVICE_KEY_PREVIOUS is accepted too (optional).
 # The same value goes on the site Worker, which sends it on every call.

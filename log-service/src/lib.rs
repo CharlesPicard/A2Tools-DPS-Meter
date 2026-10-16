@@ -52,9 +52,15 @@ async fn fetch(mut req: Request, env: Env, _ctx: Context) -> Result<Response> {
     // Defence in depth: the binding is the real boundary, but a Worker that
     // does expensive work on request should not trust that nobody ever adds a
     // route to it by mistake.
-    let key = env.secret("LOG_SERVICE_KEY").map(|s| s.to_string()).unwrap_or_default();
+    // Two keys may be accepted, so the key can change without a gap:
+    // LOG_SERVICE_KEY and, while the callers move to a new one,
+    // LOG_SERVICE_KEY_PREVIOUS. One unset or empty accepts nothing.
     let presented = req.headers().get("x-a2-service-key")?.unwrap_or_default();
-    if key.is_empty() || !constant_time_eq(key.as_bytes(), presented.as_bytes()) {
+    let accepted = ["LOG_SERVICE_KEY", "LOG_SERVICE_KEY_PREVIOUS"].iter().any(|name| {
+        let key = env.secret(name).map(|s| s.to_string()).unwrap_or_default();
+        !key.is_empty() && constant_time_eq(key.as_bytes(), presented.as_bytes())
+    });
+    if !accepted {
         return Response::error("forbidden", 403);
     }
 
