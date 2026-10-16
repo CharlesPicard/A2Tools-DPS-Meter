@@ -228,6 +228,13 @@ pub fn hide_in_place(window: &tauri::WebviewWindow) {
     let target = window.clone();
     let concealed = super::dialog::on_gtk_thread(move || {
         let gtk_window = target.gtk_window().ok()?;
+        // A window never shown has no GDK window yet, and tao unwraps it when
+        // told to ignore the mouse: a panic in a GTK callback, so an abort (a
+        // CachyOS player's meter, at a plugin's hide at start, 2026-10-16).
+        // It has no place to keep either, so it is hidden as usual.
+        if !gtk_window.is_visible() || gtk_window.window().is_none() {
+            return None;
+        }
         if !WidgetExt::screen(&gtk_window)?.is_composited() {
             return None;
         }

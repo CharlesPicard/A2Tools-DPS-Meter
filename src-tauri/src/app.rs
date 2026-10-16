@@ -129,6 +129,11 @@ fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: b
             return;
         }
     }
+    // Not applied on Linux means the window has no GDK window yet, and tao's
+    // own call would unwrap it and abort. Left for the next sync.
+    if cfg!(target_os = "linux") {
+        return;
+    }
     if *applied == Some(ignore) {
         return;
     }
