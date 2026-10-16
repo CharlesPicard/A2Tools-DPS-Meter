@@ -13,6 +13,10 @@ pub const MISSING_HELP: &str = "Is Npcap installed? Download from https://npcap.
 /// The meter can fetch and run Npcap's installer for the player.
 pub const OFFERS_INSTALL: bool = true;
 
+/// Whether a read returns at its timeout on a device with no traffic: Npcap's
+/// does.
+pub const READ_TIMES_OUT_WHEN_IDLE: bool = true;
+
 /// Npcap puts `wpcap.dll` in System32 only when it is installed in its
 /// WinPcap-compatible mode; otherwise it lives in `System32\Npcap`, where a
 /// plain load does not look. Npcap's guidance for programs is to add that

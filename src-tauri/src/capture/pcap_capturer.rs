@@ -10,6 +10,7 @@ use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
 use super::captured_payload::CapturedPayload;
+use super::combat_port_detector::CombatPortDetector;
 
 fn now_ms() -> i64 {
     SystemTime::now()
@@ -58,7 +59,17 @@ struct PcapPkthdr {
     len: c_uint,
 }
 
+/// `struct bpf_program`: a compiled capture filter.
+#[repr(C)]
+struct BpfProgram {
+    bf_len: c_uint,
+    bf_insns: *mut std::ffi::c_void,
+}
+
 const PCAP_IF_LOOPBACK: c_uint = 0x00000001;
+/// `PCAP_NETMASK_UNKNOWN`: only broadcast tests need the netmask, and the
+/// filters here have none.
+const PCAP_NETMASK_UNKNOWN: u32 = 0xffff_ffff;
 
 // ===== Device info =====
 
@@ -101,6 +112,20 @@ struct PcapLib {
     close: unsafe extern "C" fn(PcapT),
     next_ex: unsafe extern "C" fn(PcapT, *mut *mut PcapPkthdr, *mut *const u8) -> c_int,
     datalink: unsafe extern "C" fn(PcapT) -> c_int,
+    filter: Option<FilterFns>,
+}
+
+/// libpcap's filter calls. Every libpcap and Npcap has them; without them
+/// the capture runs unfiltered, as it did before filters.
+struct FilterFns {
+    compile: unsafe extern "C" fn(PcapT, *mut BpfProgram, *const c_char, c_int, u32) -> c_int,
+    setfilter: unsafe extern "C" fn(PcapT, *mut BpfProgram) -> c_int,
+    freecode: unsafe extern "C" fn(*mut BpfProgram),
+    geterr: unsafe extern "C" fn(PcapT) -> *const c_char,
+    setnonblock: unsafe extern "C" fn(PcapT, c_int, *mut c_char) -> c_int,
+    /// libpcap's filter compiler was not thread-safe before 1.8, and every
+    /// device has its own thread.
+    compiling: Mutex<()>,
 }
 
 impl PcapLib {
@@ -143,6 +168,19 @@ impl PcapLib {
             > = lib.get(b"pcap_next_ex").map_err(|e| format!("pcap_next_ex: {}", e))?;
             let datalink: Symbol<unsafe extern "C" fn(PcapT) -> c_int> =
                 lib.get(b"pcap_datalink").map_err(|e| format!("pcap_datalink: {}", e))?;
+            let filter = (|| {
+                Some(FilterFns {
+                    compile: *lib.get(b"pcap_compile").ok()?,
+                    setfilter: *lib.get(b"pcap_setfilter").ok()?,
+                    freecode: *lib.get(b"pcap_freecode").ok()?,
+                    geterr: *lib.get(b"pcap_geterr").ok()?,
+                    setnonblock: *lib.get(b"pcap_setnonblock").ok()?,
+                    compiling: Mutex::new(()),
+                })
+            })();
+            if filter.is_none() {
+                warn!("libpcap has no pcap_setfilter: capturing without a filter");
+            }
 
             Ok(Self {
                 findalldevs: *findalldevs,
@@ -151,6 +189,7 @@ impl PcapLib {
                 close: *close,
                 next_ex: *next_ex,
                 datalink: *datalink,
+                filter,
                 _lib: lib,
             })
         }
@@ -227,6 +266,44 @@ impl PcapLib {
 
         Ok(handle)
     }
+
+    /// Has the kernel pass this handle only what `filter` matches.
+    fn set_filter(&self, handle: PcapT, filter: &str) -> Result<(), String> {
+        let f = self.filter.as_ref().ok_or("no pcap_setfilter")?;
+        let text = CString::new(filter).map_err(|e| e.to_string())?;
+        let mut program = BpfProgram { bf_len: 0, bf_insns: ptr::null_mut() };
+        let error = || unsafe { CStr::from_ptr((f.geterr)(handle)) }.to_string_lossy().into_owned();
+        {
+            let _one_at_a_time = f.compiling.lock().unwrap_or_else(|p| p.into_inner());
+            // SAFETY: a live handle, and a program for libpcap to fill.
+            if unsafe { (f.compile)(handle, &mut program, text.as_ptr(), 1, PCAP_NETMASK_UNKNOWN) } != 0 {
+                return Err(error());
+            }
+        }
+        // SAFETY: the program compiled above; libpcap copies it, so it is
+        // freed whatever setfilter says.
+        let set = unsafe { (f.setfilter)(handle, &mut program) };
+        let result = if set == 0 { Ok(()) } else { Err(error()) };
+        unsafe { (f.freecode)(&mut program) };
+        result
+    }
+}
+
+/// The capture filter, as libpcap filter text: the game's port once it is
+/// locked (both directions, as the dispatcher reads it), and before that all
+/// IPv4 TCP but the web's ports (the game has never used them; what comes on
+/// them is HTTPS and HTTP from browsers and launchers). The first form also
+/// matches frames with one or two VLAN tags, which some network cards add
+/// (see `link_header_len`); the second is for link types where libpcap has no
+/// VLAN test.
+fn capture_filters(port: Option<u16>) -> [String; 2] {
+    let plain = match port {
+        Some(port) => format!("ip and tcp port {port}"),
+        None => "ip and tcp and not port 80 and not port 443".to_string(),
+    };
+    // Nested: each `vlan` moves the offsets for everything after it in the
+    // expression, so side-by-side alternatives would add their tags up.
+    [format!("({plain}) or (vlan and (({plain}) or (vlan and {plain})))"), plain]
 }
 
 // Safety: PcapLib function pointers are thread-safe (each thread gets its own pcap handle)
@@ -243,7 +320,6 @@ pub struct PcapCapturer {
 }
 
 /// What the capture threads and the device watcher share.
-#[derive(Default)]
 struct Shared {
     /// Devices with a capture thread (or one about to start), by name. A
     /// thread takes its device out again when it ends, so a device that goes
@@ -254,6 +330,9 @@ struct Shared {
     failed: Mutex<HashSet<String>>,
     /// Packets lost because the parser had not taken the earlier ones yet.
     dropped: AtomicU64,
+    /// Which port the game is on, once found: each capture thread filters
+    /// for it.
+    port_detector: Arc<CombatPortDetector>,
 }
 
 /// How often to look for network devices that appeared after the start: a
@@ -261,12 +340,22 @@ struct Shared {
 /// the meter runs carries the game from then on.
 const DEVICE_SCAN_MS: u64 = 15_000;
 
+/// Without blocking reads: how long to wait after finding nothing. Packets
+/// wait in the kernel meanwhile, with their capture times; only an empty
+/// read waits, so a busy device is read straight through.
+const IDLE_WAIT_MS: u64 = 10;
+
 impl PcapCapturer {
-    pub fn new(sender: mpsc::Sender<CapturedPayload>) -> Self {
+    pub fn new(sender: mpsc::Sender<CapturedPayload>, port_detector: Arc<CombatPortDetector>) -> Self {
         Self {
             running: Arc::new(AtomicBool::new(false)),
             sender,
-            shared: Arc::default(),
+            shared: Arc::new(Shared {
+                active: Mutex::default(),
+                failed: Mutex::default(),
+                dropped: AtomicU64::new(0),
+                port_detector,
+            }),
         }
     }
 
@@ -457,7 +546,39 @@ fn start_capture_thread(
         let link_type = unsafe { (pcap.datalink)(handle) };
         info!("Capture active on {} (link type {})", label, link_type);
 
+        // The filter in place: the port it is for (None: not locked yet), or
+        // nothing tried yet. Checked before every read, so a lock narrows it
+        // and a reset widens it at once. Where a read on a quiet device would
+        // block until a packet comes, reads don't block: a filter for the old
+        // port would otherwise wait forever once the game moved to another.
+        let mut filtered_for: Option<Option<u16>> = None;
+        let mut filter_failed = false;
+        let mut nonblocking = false;
+        if let (false, Some(f)) = (crate::platform::pcap::READ_TIMES_OUT_WHEN_IDLE, &pcap.filter) {
+            let mut errbuf = [0u8; 256];
+            // SAFETY: a live handle and an error buffer of libpcap's size.
+            nonblocking = unsafe { (f.setnonblock)(handle, 1, errbuf.as_mut_ptr() as *mut c_char) } == 0;
+        }
         while running.load(Ordering::SeqCst) {
+            let port = shared.port_detector.locked_port_now();
+            if filtered_for != Some(port) && !filter_failed {
+                filtered_for = Some(port);
+                let [full, plain] = capture_filters(port);
+                let result = pcap.set_filter(handle, &full).or_else(|_| pcap.set_filter(handle, &plain));
+                match result {
+                    Ok(()) => info!("Capture filter on {}: {}", label, match port {
+                        Some(p) => format!("game port {p} only"),
+                        None => "IPv4 TCP, not ports 80/443".to_string(),
+                    }),
+                    // Unfiltered, as before filters: the dispatcher still
+                    // keeps only the game's packets.
+                    Err(e) => {
+                        warn!("No capture filter on {}: {}", label, e);
+                        filter_failed = true;
+                    }
+                }
+            }
+
             let mut header: *mut PcapPkthdr = ptr::null_mut();
             let mut data: *const u8 = ptr::null();
 
@@ -483,7 +604,13 @@ fn start_capture_thread(
                         }
                     }
                 }
-                0 => continue, // Timeout
+                // Nothing yet (a timeout, or nothing waiting).
+                0 => {
+                    if nonblocking {
+                        std::thread::sleep(std::time::Duration::from_millis(IDLE_WAIT_MS));
+                    }
+                    continue;
+                }
                 -2 => break,   // EOF (savefile)
                 _ => {
                     warn!("Capture error on {} (ret={})", label, ret);
@@ -656,6 +783,65 @@ mod tests {
         check(113, &sll); // Linux cooked v1
         let sll2 = [[0x08u8, 0x00].as_slice(), &[0u8; 18]].concat();
         check(276, &sll2); // Linux cooked v2
+    }
+
+    /// The filters, compiled by the system's libpcap and run on packets
+    /// (`pcap_offline_filter`), for every link type the meter reads (raw IP
+    /// as live captures report it, 12 and 228: 101 is its number in saved
+    /// files only). Skipped where no libpcap is installed.
+    #[test]
+    fn the_capture_filter_passes_the_game_and_nothing_else() {
+        let Some(lib) = crate::platform::pcap::LIBRARIES.iter().find_map(|n| unsafe { Library::new(n) }.ok()) else {
+            eprintln!("no libpcap: skipped");
+            return;
+        };
+        type Compile = unsafe extern "C" fn(PcapT, *mut BpfProgram, *const c_char, c_int, u32) -> c_int;
+        type Filter = unsafe extern "C" fn(*const BpfProgram, *const PcapPkthdr, *const u8) -> c_int;
+        let (open_dead, compile, run, freecode, close) = unsafe {
+            (
+                *lib.get::<unsafe extern "C" fn(c_int, c_int) -> PcapT>(b"pcap_open_dead").unwrap(),
+                *lib.get::<Compile>(b"pcap_compile").unwrap(),
+                *lib.get::<Filter>(b"pcap_offline_filter").unwrap(),
+                *lib.get::<unsafe extern "C" fn(*mut BpfProgram)>(b"pcap_freecode").unwrap(),
+                *lib.get::<unsafe extern "C" fn(PcapT)>(b"pcap_close").unwrap(),
+            )
+        };
+        let to_port = |port: u16| {
+            let mut ip = ipv4_tcp();
+            ip[22..24].copy_from_slice(&port.to_be_bytes());
+            ip
+        };
+        let ether = [[0u8; 12].as_slice(), &[0x08, 0x00]].concat();
+        let vlan = [[0u8; 12].as_slice(), &[0x81, 0x00, 0x00, 0x05, 0x08, 0x00]].concat();
+        let qinq = [[0u8; 12].as_slice(), &[0x88, 0xA8, 0x00, 0x05, 0x81, 0x00, 0x00, 0x06, 0x08, 0x00]].concat();
+        let sll = [[0u8; 14].as_slice(), &[0x08, 0x00]].concat();
+        let sll2 = [[0x08u8, 0x00].as_slice(), &[0u8; 18]].concat();
+        let links: [(c_int, &[u8]); 8] =
+            [(1, &ether), (1, &vlan), (1, &qinq), (0, &[2, 0, 0, 0]), (12, &[]), (228, &[]), (113, &sll), (276, &sll2)];
+        for (link, header) in links {
+            let dead = unsafe { open_dead(link, 65535) };
+            assert!(!dead.is_null());
+            for (locked, cases) in [
+                (None, [(13328, true), (5000, true), (443, false), (80, false)]),
+                (Some(13328), [(13328, true), (5000, false), (443, false), (80, false)]),
+            ] {
+                // The first form where it compiles, as the capture does.
+                let mut program = BpfProgram { bf_len: 0, bf_insns: ptr::null_mut() };
+                let compiled = capture_filters(locked).iter().any(|text| {
+                    let text = CString::new(text.as_str()).unwrap();
+                    unsafe { compile(dead, &mut program, text.as_ptr(), 1, PCAP_NETMASK_UNKNOWN) == 0 }
+                });
+                assert!(compiled, "link type {link}: no filter compiles");
+                for (port, passes) in cases {
+                    let frame = [header, &to_port(port)].concat();
+                    let hdr = PcapPkthdr { ts_sec: 0, ts_usec: 0, caplen: frame.len() as c_uint, len: frame.len() as c_uint };
+                    let matched = unsafe { run(&program, &hdr, frame.as_ptr()) } != 0;
+                    assert_eq!(matched, passes, "link type {link}, header {header:02x?}, locked {locked:?}, port {port}");
+                }
+                unsafe { freecode(&mut program) };
+            }
+            unsafe { close(dead) };
+        }
     }
 
     #[test]

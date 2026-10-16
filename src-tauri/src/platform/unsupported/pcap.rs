@@ -7,6 +7,8 @@ pub const MISSING_HELP: &str = "Packet capture is not supported on this platform
 /// Capture is not supported here, so there is nothing to install.
 pub const OFFERS_INSTALL: bool = false;
 
+pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
+
 pub fn prepare() {}
 
 pub fn run_installer(_installer: &std::path::Path) -> Result<(), String> {

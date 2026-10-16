@@ -13,6 +13,12 @@ capture without root: `sudo setcap cap_net_raw=ep <path to the meter>`";
 /// The capture library comes from the distribution's packages, not the meter.
 pub const OFFERS_INSTALL: bool = false;
 
+/// Whether a read returns at its timeout on a device with no traffic. Not
+/// here: Linux's packet ring (TPACKET_V3) starts the timeout only once a
+/// packet has arrived, so a quiet device's read blocks until one does, and
+/// its capture filter could not change meanwhile (`pcap_capturer`).
+pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
+
 /// Nothing to set up before loading libpcap.
 pub fn prepare() {}
 
