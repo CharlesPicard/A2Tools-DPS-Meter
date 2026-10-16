@@ -354,7 +354,22 @@ pub fn derive_fight(
     skills_json: &str,
     dot_ids_json: &str,
 ) -> Result<DerivedFight, DeriveError> {
-    match derive_fight_with(slice, npcs_json, skills_json, dot_ids_json, true, false) {
+    let decoded = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
+    derive_decoded(&decoded, npcs_json, skills_json, dot_ids_json)
+}
+
+/// A slice's records and blind map, as `evidence_slice::decode` gives them.
+pub type Decoded = (Vec<(i32, Vec<u8>)>, HashMap<String, u64>);
+
+/// `derive_fight` on a slice already read, for the service, which reads it
+/// as it unpacks (`evidence_slice::decode_from`).
+pub fn derive_decoded(
+    decoded: &Decoded,
+    npcs_json: &str,
+    skills_json: &str,
+    dot_ids_json: &str,
+) -> Result<DerivedFight, DeriveError> {
+    match derive_fight_with(decoded, npcs_json, skills_json, dot_ids_json, true, false) {
         // Slices from early meters (2.0.30 to 2.0.37) have no self record and
         // no dungeon, so `is_our_fight` (2026-10-05, #19) takes the uploader's
         // own boss for a stranger's and nothing is derived: 56 logs a re-derive
@@ -362,7 +377,7 @@ pub fn derive_fight(
         // to send, so when "ours only" finds nothing, every fight counts. A
         // slice that derives as it is never comes here, so none changes.
         Err(DeriveError::NothingDerived) => {
-            derive_fight_with(slice, npcs_json, skills_json, dot_ids_json, true, true)
+            derive_fight_with(decoded, npcs_json, skills_json, dot_ids_json, true, true)
         }
         other => other,
     }
@@ -381,7 +396,8 @@ pub fn derive_fight_unhidden(
     skills_json: &str,
     dot_ids_json: &str,
 ) -> Result<(DerivedFight, i64), DeriveError> {
-    derive_fight_with(slice, npcs_json, skills_json, dot_ids_json, false, false)
+    let decoded = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
+    derive_fight_with(&decoded, npcs_json, skills_json, dot_ids_json, false, false)
 }
 
 /// `derive_fight_unhidden` counting every boss fight in the slice, not only
@@ -393,20 +409,21 @@ pub fn derive_fight_unhidden_every(
     skills_json: &str,
     dot_ids_json: &str,
 ) -> Result<(DerivedFight, i64), DeriveError> {
-    derive_fight_with(slice, npcs_json, skills_json, dot_ids_json, false, true)
+    let decoded = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
+    derive_fight_with(&decoded, npcs_json, skills_json, dot_ids_json, false, true)
 }
 
 /// The fight, and the damage `hide_unplaced_summons` removes from it (or
 /// would, when `hide` is false and the record is returned whole).
 fn derive_fight_with(
-    slice: &[u8],
+    decoded: &Decoded,
     npcs_json: &str,
     skills_json: &str,
     dot_ids_json: &str,
     hide: bool,
     every_fight: bool,
 ) -> Result<(DerivedFight, i64), DeriveError> {
-    let (records, blind_map) = evidence_slice::decode(slice).ok_or(DeriveError::NotASlice)?;
+    let (records, blind_map) = (&decoded.0, decoded.1.clone());
 
     let npcs = Arc::new(NpcLookup::new());
     npcs.load_from_json(npcs_json);

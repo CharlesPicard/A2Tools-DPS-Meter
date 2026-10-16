@@ -1,12 +1,18 @@
 //! Slice version 3 on real uploaded fights (A2_V2_SLICES: a folder of gzipped
 //! version 2 slices, as the site stores them). Each is read, written as
 //! version 3, compressed as the meter does (zstd 19), decompressed as the log
-//! service does (ruzstd), and read back: the records must match exactly.
+//! service does (ruzstd), and read back: the records must match exactly, and
+//! derived as the service reads it, the fight must match the version 2 one.
 //! Skips when the folder is not given.
 
 use std::io::Read;
 
 use a2tools_dps_meter_lib::capture::evidence_slice::{self, EvidenceSlice};
+use a2tools_dps_meter_lib::rederive;
+
+const NPCS: &str = include_str!("../../src/data/i18n/npcs/en.json");
+const SKILLS: &str = include_str!("../../src/data/i18n/skills/en.json");
+const DOTS: &str = include_str!("../../src/data/dot_skill_ids.json");
 
 #[test]
 fn real_slices_survive_version_3_and_zstd() {
@@ -28,6 +34,16 @@ fn real_slices_survive_version_3_and_zstd() {
         assert_eq!(back, v3, "ruzstd reads what zstd wrote");
         let (again, _) = evidence_slice::decode(&back).expect("a version 3 slice");
         assert_eq!(again, records, "{}", path.display());
+        // As the log service reads each: streamed, limited by the records.
+        let streamed = evidence_slice::decode_from(ruzstd::StreamingDecoder::new(&zst[..]).unwrap(), 24 << 20)
+            .expect("streams within the limit");
+        let fight = |r: Result<_, _>| r.map(|f| serde_json::to_value(f).unwrap()).map_err(|e| format!("{e:?}"));
+        assert_eq!(
+            fight(rederive::derive_decoded(&streamed, NPCS, SKILLS, DOTS)),
+            fight(rederive::derive_fight(&v2, NPCS, SKILLS, DOTS)),
+            "derived alike: {}",
+            path.display()
+        );
         before += gz.len();
         after += zst.len();
         n += 1;

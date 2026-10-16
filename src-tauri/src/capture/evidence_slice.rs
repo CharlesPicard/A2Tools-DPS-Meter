@@ -1150,54 +1150,72 @@ pub fn encode(slice: &EvidenceSlice) -> Vec<u8> {
 /// Read a `.a2es` back. Used by the server, and by `a2t-inspect` so a user can
 /// see exactly what an upload would contain.
 pub fn decode(data: &[u8]) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)> {
-    let mut o = 0usize;
-    fn take<'a>(data: &'a [u8], o: &mut usize, n: usize) -> Option<&'a [u8]> {
-        if *o + n > data.len() {
-            return None;
-        }
-        let s = &data[*o..*o + n];
-        *o += n;
-        Some(s)
+    decode_from(data, usize::MAX)
+}
+
+/// `decode` from a stream, so a compressed slice is read as it is unpacked,
+/// never whole. None once the records come to more than `max_record_bytes` as
+/// they read back: a version 3 bundle is counted wrapped, as version 2 stored
+/// it, so one fight has one size in every version and a limit on it takes or
+/// refuses the fight whichever version carries it.
+pub fn decode_from(mut r: impl std::io::Read, max_record_bytes: usize) -> Option<(Vec<(i32, Vec<u8>)>, HashMap<String, u64>)> {
+    use std::io::Read;
+    fn array<const N: usize>(r: &mut impl Read) -> Option<[u8; N]> {
+        let mut b = [0u8; N];
+        r.read_exact(&mut b).ok()?;
+        Some(b)
     }
-    if take(data, &mut o, 4)? != MAGIC {
+    // Read as far as the data goes, so a length that lies allocates nothing.
+    fn bytes<R: Read>(r: &mut R, n: usize) -> Option<Vec<u8>> {
+        let mut v = Vec::new();
+        r.by_ref().take(n as u64).read_to_end(&mut v).ok()?;
+        (v.len() == n).then_some(v)
+    }
+    if array::<4>(&mut r)? != *MAGIC {
         return None;
     }
-    let version = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?);
+    let version = u16::from_le_bytes(array(&mut r)?);
     if !(1..=VERSION).contains(&version) {
         return None;
     }
-    let op_count = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
-    take(data, &mut o, op_count * 2)?;
+    let op_count = u16::from_le_bytes(array(&mut r)?) as usize;
+    bytes(&mut r, op_count * 2)?;
 
-    let blind_count = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
+    let blind_count = u16::from_le_bytes(array(&mut r)?) as usize;
     let mut blind_map = HashMap::with_capacity(blind_count);
     for _ in 0..blind_count {
-        let len = take(data, &mut o, 1)?[0] as usize;
-        let token = std::str::from_utf8(take(data, &mut o, len)?)
-            .ok()?
-            .to_string();
-        let dbid = u64::from_le_bytes(take(data, &mut o, 8)?.try_into().ok()?);
+        let len = array::<1>(&mut r)?[0] as usize;
+        let token = String::from_utf8(bytes(&mut r, len)?).ok()?;
+        let dbid = u64::from_le_bytes(array(&mut r)?);
         blind_map.insert(token, dbid);
     }
 
-    let rec_count = u32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?) as usize;
+    let rec_count = u32::from_le_bytes(array(&mut r)?) as usize;
     let mut records = Vec::with_capacity(rec_count.min(1 << 20));
+    let mut total = 0usize;
     for _ in 0..rec_count {
-        let dt = i32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?);
+        let dt = i32::from_le_bytes(array(&mut r)?);
         let record = if version >= 3 {
-            let kind = take(data, &mut o, 1)?[0];
-            let len = u32::from_le_bytes(take(data, &mut o, 4)?.try_into().ok()?) as usize;
-            let bytes = take(data, &mut o, len)?;
+            let kind = array::<1>(&mut r)?[0];
+            let len = u32::from_le_bytes(array(&mut r)?) as usize;
+            if len > max_record_bytes {
+                return None;
+            }
+            let stored = bytes(&mut r, len)?;
             match kind {
-                RECORD_PACKET => bytes.to_vec(),
-                RECORD_BUNDLE => rewrap_bundle(bytes)?,
+                RECORD_PACKET => stored,
+                RECORD_BUNDLE => rewrap_bundle(&stored)?,
                 _ => return None,
             }
         } else {
-            let len = u16::from_le_bytes(take(data, &mut o, 2)?.try_into().ok()?) as usize;
-            let record = take(data, &mut o, len)?;
-            if version == 1 { upgrade_v1_record(record) } else { record.to_vec() }
+            let len = u16::from_le_bytes(array(&mut r)?) as usize;
+            let record = bytes(&mut r, len)?;
+            if version == 1 { upgrade_v1_record(&record) } else { record }
         };
+        total += record.len();
+        if total > max_record_bytes {
+            return None;
+        }
         records.push((dt, record));
     }
     Some((records, blind_map))
@@ -1876,6 +1894,21 @@ mod tests {
     /// records come back byte for byte, and a version 2 slice of the same
     /// fight reads the same. The unpacked bundle is in the clear in the
     /// slice, where the outer compression can reach it.
+    #[test]
+    fn a_streamed_slice_is_limited_by_its_records_alike_in_every_version() {
+        let bundle = rewrap_bundle(&[0x07, 0x00, 0x2A, 0x38, 1, 2, 3, 4]).expect("a bundle");
+        let records = vec![(0, vec![0x07, 0x00, 0x2B, 0x38, 9, 9, 9]), (5, bundle)];
+        let slice = EvidenceSlice { records: records.clone(), blind_map: HashMap::new(), stats: Default::default() };
+        let size: usize = records.iter().map(|(_, r)| r.len()).sum();
+        for bytes in [encode(&slice), encode_legacy(&slice, 2)] {
+            assert_eq!(decode_from(&bytes[..], size).map(|(r, _)| r), Some(records.clone()));
+            assert_eq!(decode_from(&bytes[..], size - 1), None);
+        }
+        // Cut short: no records invented, nothing read past the end.
+        let v3 = encode(&slice);
+        assert_eq!(decode_from(&v3[..v3.len() - 1], usize::MAX), None);
+    }
+
     #[test]
     fn a_version_3_slice_reads_back_the_records_it_was_given() {
         let packet = frame_packet(&[0x04, 0x38, 0x01, 0x02, 0x03]).unwrap();
