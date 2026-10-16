@@ -462,7 +462,8 @@
       "debugLogging": "Grava um registro de diagnóstico que o desenvolvedor pode usar para encontrar problemas.",
       "saveRawPackets": "Grava o tráfego bruto do jogo para relatórios de erro. O registro de depuração liga junto.",
       "globalHotkeys": "As teclas abaixo funcionam em qualquer lugar, mesmo com o jogo em primeiro plano. Desligado, ficam livres para outros programas. No Linux, o ambiente de trabalho as registra e pode pedir que você as aprove.",
-      "pluginDevMode": "Carrega plugins de pastas deste computador, para criá-los e testá-los. Eles não são revisados, então carregue apenas plugins em que você confia."
+      "pluginDevMode": "Carrega plugins de pastas deste computador, para criá-los e testá-los. Eles não são revisados, então carregue apenas plugins em que você confia.",
+      "showMeter": "Desligado: só os seus plugins aparecem. O medidor continua registrando combates e enviando em segundo plano. Mostre-o de novo aqui, com o atalho de mostrar/ocultar ou com o botão do medidor numa janela de plugin."
     },
     "globalHotkeys": "Usar atalhos de teclado",
     "hotkeyConsent": {
@@ -517,7 +518,8 @@
       "permDecoder": "Ler seus próprios dados do jogo: {name}",
       "permNone": "Nada além de mostrar sua janela",
       "enabled": "Ativado",
-      "enabledTip": "Ligado: inicia com o medidor. Desligado: continua instalado, mas não é executado."
+      "enabledTip": "Ligado: inicia com o medidor. Desligado: continua instalado, mas não é executado.",
+      "showMeter": "Mostrar o medidor de DPS"
     }
   },
   "support": {

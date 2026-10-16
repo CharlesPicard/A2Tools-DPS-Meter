@@ -116,6 +116,45 @@ pub struct OverlayLock {
     applied: Mutex<Option<bool>>,
 }
 
+/// The setting that hides the DPS meter, for players who use only plugins:
+/// capture, uploads and plugins go on; the overlay stays hidden until shown
+/// again (Settings → Plugins, the toggle hotkey, or a plugin window's bar).
+const SHOW_METER_KEY: &str = "dpsMeter.showMeter";
+
+fn meter_wanted(app: &tauri::AppHandle) -> bool {
+    app.try_state::<AppState>()
+        .and_then(|s| s.settings.get(SHOW_METER_KEY))
+        .as_deref()
+        != Some("false")
+}
+
+/// Show or hide the DPS meter and remember it. Hidden in place (Linux keeps
+/// it mapped, so it comes back where it was). Every window hears
+/// "meter-shown", so Settings and plugin bars follow.
+fn set_meter_wanted(app: &tauri::AppHandle, shown: bool) {
+    if let Some(state) = app.try_state::<AppState>() {
+        state.settings.set(SHOW_METER_KEY, if shown { "true" } else { "false" });
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        if shown {
+            show_meter_again(app, &window);
+        } else {
+            platform::window::hide_in_place(&window);
+        }
+    }
+    let _ = app.emit("meter-shown", shown);
+}
+
+#[tauri::command]
+fn set_meter_shown(app: tauri::AppHandle, shown: bool) {
+    set_meter_wanted(&app, shown);
+}
+
+#[tauri::command]
+fn meter_shown(app: tauri::AppHandle) -> bool {
+    meter_wanted(&app)
+}
+
 /// Show the meter that auto-hide hid: in place where it was hidden so
 /// (Linux), else as usual. The page re-measures, as its content may have
 /// changed meanwhile.
@@ -164,7 +203,7 @@ fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i
 /// still runs, for every other desktop and as a fallback.
 fn auto_hide_now(app: &tauri::AppHandle) {
     let Some(state) = app.try_state::<AppState>() else { return };
-    if state.settings.get("dpsMeter.autoHideMeter").unwrap_or_default() != "true" {
+    if state.settings.get("dpsMeter.autoHideMeter").unwrap_or_default() != "true" || !meter_wanted(app) {
         return;
     }
     let Some(window) = app.get_webview_window("main") else { return };
@@ -777,16 +816,10 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
         {
             let h = hotkey_handle.clone();
             move || {
-                // Toggle window visibility
-                if let Some(window) = h.get_webview_window("main") {
-                    if window.is_visible().unwrap_or(false) {
-                        let _ = window.hide();
-                    } else {
-                        let _ = window.show();
-                        let _ = window.set_always_on_top(true);
-                        let _ = window.set_focus();
-                    }
-                }
+                // Show or hide the meter, and remember it (as Settings →
+                // Plugins → Show the DPS meter does).
+                let shown = !meter_wanted(&h);
+                set_meter_wanted(&h, shown);
             }
         },
         {
@@ -1563,6 +1596,11 @@ fn resize_window(app: tauri::AppHandle, width: f64, height: f64, scale: Option<f
 /// position and sizing the meter, so its initial 400x300 rectangle never flashes.
 #[tauri::command]
 fn main_window_ready(window: tauri::WebviewWindow) {
+    // Hidden for plugins only: it stays hidden.
+    if window.label() == "main" && !meter_wanted(window.app_handle()) {
+        platform::window::hide_in_place(&window);
+        return;
+    }
     platform::window_startup::main_ready(&window);
 }
 
@@ -2749,6 +2787,14 @@ pub fn run() {
             {
                 crate::plugins::widgets::close_all(window.app_handle(), id);
                 crate::plugins::boss_live::forget_plugin(window.app_handle(), id);
+                // The meter hidden and its last plugin window closed: nothing
+                // would be left on screen, so the meter comes back.
+                let app = window.app_handle();
+                let label = window.label().to_string();
+                let others = app.webview_windows().into_keys().any(|l| l != label && l.starts_with("plugin-"));
+                if !others && !meter_wanted(app) {
+                    set_meter_wanted(app, true);
+                }
             }
             if window.label() == "main"
                 && let tauri::WindowEvent::CloseRequested { api, .. } = event
@@ -2966,7 +3012,22 @@ pub fn run() {
                 if let Ok(size) = window.inner_size() {
                     platform::window::set_size(&window, tauri::Size::Physical(size));
                 }
-                platform::window_startup::arm_main_fallback(window);
+                if meter_wanted(app.handle()) {
+                    platform::window_startup::arm_main_fallback(window);
+                } else {
+                    // Plugins only: the meter stays hidden, unless no plugin
+                    // has started by then (all turned off or removed).
+                    platform::window::hide_in_place(&window);
+                    let handle = app.handle().clone();
+                    tauri::async_runtime::spawn(async move {
+                        tokio::time::sleep(std::time::Duration::from_secs(8)).await;
+                        let plugins = handle.webview_windows().into_keys().any(|l| l.starts_with("plugin-"));
+                        if !plugins && !meter_wanted(&handle) {
+                            let h = handle.clone();
+                            let _ = handle.run_on_main_thread(move || set_meter_wanted(&h, true));
+                        }
+                    });
+                }
             }
 
             // Check if Npcap is available before starting capture
@@ -3122,7 +3183,8 @@ pub fn run() {
                         // --- Auto-hide when AION2 loses focus (every tick) ---
                         let auto_hide = tick_count > 20
                             && state.settings.get("dpsMeter.autoHideMeter")
-                                .unwrap_or_default() == "true";
+                                .unwrap_or_default() == "true"
+                            && meter_wanted(&handle);
                         if auto_hide {
                             if let Some(window) = handle.get_webview_window("main") {
                                 let aion_fg = platform::window_detector::is_aion2_foreground();
@@ -3365,6 +3427,8 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_post,
             crate::plugins::widgets::plugin_widget_drag,
             crate::plugins::boss_live::plugin_boss_follow,
+            set_meter_shown,
+            meter_shown,
             crate::plugins::plugin_storage_get,
             crate::plugins::plugin_boss_timers,
             crate::plugins::plugin_storage_set,

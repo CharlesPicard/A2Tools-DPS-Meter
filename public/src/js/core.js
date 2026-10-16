@@ -2811,6 +2811,17 @@ class DpsApp {
         }
       });
     }
+    // Plugins only: the meter window hidden, the backend keeps it so (and
+    // tells every window when it changes, from the hotkey or a plugin bar).
+    const showMeterCheckbox = document.querySelector(".showMeterCheckbox");
+    const tauriInvoke = window.__TAURI__?.core?.invoke;
+    if (showMeterCheckbox && tauriInvoke) {
+      tauriInvoke("meter_shown").then((shown) => { showMeterCheckbox.checked = shown !== false; }).catch(() => {});
+      window.__TAURI__?.event?.listen?.("meter-shown", (event) => { showMeterCheckbox.checked = event.payload !== false; });
+      showMeterCheckbox.addEventListener("change", (event) => {
+        tauriInvoke("set_meter_shown", { shown: !!event.target?.checked }).catch(() => {});
+      });
+    }
     this.showTotalDpsCheckbox = document.querySelector(".showTotalDpsCheckbox");
     if (this.showTotalDpsCheckbox) {
       this.showTotalDpsCheckbox.checked = this.showTotalDps;

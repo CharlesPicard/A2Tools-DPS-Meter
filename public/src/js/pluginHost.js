@@ -157,6 +157,24 @@
     invoke("plugin_close").catch(() => {});
   });
 
+  // The DPS meter itself, for players who use only plugins: show or hide it
+  // (kept across restarts), and Settings, which is otherwise on the meter.
+  const meterBtn = document.querySelector(".pluginMeter");
+  const showMeterState = (shown) => {
+    meterBtn.setAttribute("aria-pressed", String(shown));
+    const label = shown ? "Hide the DPS meter" : "Show the DPS meter";
+    meterBtn.setAttribute("aria-label", label);
+    meterBtn.title = label;
+  };
+  invoke("meter_shown").then((shown) => showMeterState(shown !== false)).catch(() => {});
+  listen("meter-shown", (event) => showMeterState(event.payload !== false));
+  meterBtn.addEventListener("click", () => {
+    invoke("set_meter_shown", { shown: meterBtn.getAttribute("aria-pressed") !== "true" }).catch(() => {});
+  });
+  document.querySelector(".pluginSettings").addEventListener("click", () => {
+    invoke("open_settings_window").catch(() => {});
+  });
+
   // Panel preferences, per plugin, kept by this page: background opacity, and
   // whether the plugin's controls are folded away ("compact", which the plugin
   // hears as an event and handles itself).
