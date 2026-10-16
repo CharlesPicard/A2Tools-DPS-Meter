@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Mostrando cura por segundo",
+      "ariaHeal": "Mostrando cura total",
       "dps": "DPS",
       "total": "DAN",
       "ariaDps": "Mostrando DPS",
@@ -254,6 +258,7 @@
     "showOdyle": "Mostrar energia de Odyle",
     "odyleEnergy": "Energia de Odyle",
     "showTtk": "Mostrar tempo estimado para matar",
+    "showHealModes": "Mostrar cura no botão DPS/DMG",
     "showTotalDps": "Mostrar total do grupo",
     "roundDps": "Abreviar DPS em milhares (13k)",
     "showDpsSuffix": "Adicionar /s ao DPS",
@@ -437,6 +442,7 @@
       "autoHideMeter": "O medidor some enquanto outra janela está na frente do jogo e volta com ele.",
       "detailsMonitor": "Abre a janela de detalhes na tela escolhida e a mantém lá.",
       "showTtk": "Ao lado do cronômetro, uma estimativa de quanto durará toda a luta contra o chefe.",
+      "showHealModes": "O botão DPS/DMG do medidor também alterna para cura por segundo e cura total.",
       "showTotalDps": "Uma barra sob as linhas com o DPS e o dano de todo o grupo.",
       "roundDps": "13.412 aparece como 13k.",
       "showSuspendBtn": "Um botão no medidor que para de ler o tráfego do jogo até você apertar de novo.",

@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Showing healing per second",
+      "ariaHeal": "Showing total healing",
       "dps": "DPS",
       "total": "DMG",
       "ariaDps": "Showing DPS",
@@ -264,6 +268,7 @@
     "showOdyle": "Show Odyle energy",
     "odyleEnergy": "Odyle Energy",
     "showTtk": "Show time to kill estimate",
+    "showHealModes": "Show healing in the DPS/DMG button",
     "showTotalDps": "Show party total",
     "roundDps": "Shorten DPS to thousands (13k)",
     "showDpsSuffix": "Add /s to DPS",
@@ -449,6 +454,7 @@
       "autoHideMeter": "The meter disappears while another window is in front of the game, and comes back with it.",
       "detailsMonitor": "Opens the Details window on the chosen display and keeps it there.",
       "showTtk": "Beside the battle timer, an estimate of how long the whole boss fight will take.",
+      "showHealModes": "The DPS/DMG button on the meter also cycles through healing per second and total healing.",
       "showTotalDps": "A bar under the rows with the party's combined DPS and damage.",
       "roundDps": "13,412 shows as 13k.",
       "showSuspendBtn": "A button on the meter that stops reading game traffic until you press it again.",

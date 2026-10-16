@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "显示每秒治疗量",
+      "ariaHeal": "显示总治疗量",
       "dps": "DPS",
       "total": "DMG",
       "ariaDps": "显示 DPS",
@@ -259,6 +263,7 @@
     "showOdyle": "显示奥德能量",
     "odyleEnergy": "奥德能量",
     "showTtk": "显示预计击杀时间",
+    "showHealModes": "在 DPS/DMG 按钮中显示治疗",
     "showTotalDps": "显示队伍总计",
     "roundDps": "DPS 以千为单位显示 (13k)",
     "showDpsSuffix": "DPS 后显示 /s",
@@ -444,6 +449,7 @@
       "autoHideMeter": "其他窗口位于游戏前方时计量器会隐藏，回到游戏后再出现。",
       "detailsMonitor": "在所选显示器上打开详情窗口并保持在那里。",
       "showTtk": "在战斗计时器旁显示整场首领战的预计时长。",
+      "showHealModes": "计量器上的 DPS/DMG 按钮也会切换到每秒治疗量和总治疗量。",
       "showTotalDps": "在各行下方显示队伍总 DPS 和总伤害的条。",
       "roundDps": "13,412 显示为 13k。",
       "showSuspendBtn": "在计量器上显示一个按钮，按下后停止读取游戏流量，再按一次恢复。",

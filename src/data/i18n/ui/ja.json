@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "秒間回復量を表示中",
+      "ariaHeal": "総回復量を表示中",
       "dps": "DPS",
       "total": "ダメージ",
       "ariaDps": "DPSを表示中",
@@ -254,6 +258,7 @@
     "showOdyle": "オードエネルギーを表示",
     "odyleEnergy": "オードエネルギー",
     "showTtk": "撃破時間の予測を表示",
+    "showHealModes": "DPS/DMGボタンに回復量を含める",
     "showTotalDps": "パーティ合計を表示",
     "roundDps": "DPSを千単位で表示 (13k)",
     "showDpsSuffix": "DPSに /s を付ける",
@@ -437,6 +442,7 @@
       "autoHideMeter": "別のウィンドウがゲームの前にあるとメーターが消え、ゲームに戻ると再び表示されます。",
       "detailsMonitor": "選んだディスプレイで詳細ウィンドウを開き、そこに表示し続けます。",
       "showTtk": "戦闘タイマーの横に、ボス戦全体にかかる時間の予測を表示します。",
+      "showHealModes": "メーターのDPS/DMGボタンで、秒間回復量と総回復量にも切り替えられます。",
       "showTotalDps": "行の下に、パーティ全体のDPSとダメージを示すバーを表示します。",
       "roundDps": "13,412 は 13k と表示されます。",
       "showSuspendBtn": "押すとゲーム通信の読み取りを止め、もう一度押すと再開するボタンをメーターに表示します。",

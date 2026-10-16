@@ -39,6 +39,7 @@ const REMOTE_APPLIED_SETTING_CONTROLS = {
   "dpsMeter.showPing": ".showPingCheckbox",
   "dpsMeter.showOdyle": ".showOdyleCheckbox",
   "dpsMeter.showTtk": ".showTtkCheckbox",
+  "dpsMeter.showHealModes": ".showHealModesCheckbox",
   "dpsMeter.bossNameSize": ".bossNameSizeInput",
   "dpsMeter.showSupporterColors": ".showSupporterColorsCheckbox",
   "dpsMeter.barTextureOffset": ".textureOffsetCheckbox",
@@ -99,6 +100,7 @@ class DpsApp {
       showOdyle: "dpsMeter.showOdyle",
       odyleLast: "dpsMeter.odyleLast",
       showTtk: "dpsMeter.showTtk",
+      showHealModes: "dpsMeter.showHealModes",
       showTotalDps: "dpsMeter.showTotalDps",
       roundDps: "dpsMeter.roundDps",
       autoDetectDevice: "dpsMeter.autoDetectDevice",
@@ -314,6 +316,7 @@ class DpsApp {
       this.showPing = this.safeGetSetting(this.storageKeys.showPing) !== "false";
       this.showOdyle = this.safeGetSetting(this.storageKeys.showOdyle) === "true";
       this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
+      this.showHealModes = this.safeGetSetting(this.storageKeys.showHealModes) !== "false";
       this.showTotalDps = this.safeGetSetting(this.storageKeys.showTotalDps) !== "false";
       this.roundDps = this.safeGetSetting(this.storageKeys.roundDps) !== "false";
       this.showDpsSuffix = this.safeGetSetting(this.storageKeys.showDpsSuffix) !== "false";
@@ -471,6 +474,8 @@ class DpsApp {
     this.updateOdyle();
     // Time to kill beside the battle timer, for bosses; on unless turned off.
     this.showTtk = this.safeGetSetting(this.storageKeys.showTtk) !== "false";
+    // HPS and total heal in the DPS/DMG button's cycle; on unless turned off.
+    this.showHealModes = this.safeGetSetting(this.storageKeys.showHealModes) !== "false";
     this.ttk = typeof createTtkEstimator === "function" ? createTtkEstimator() : null;
     // Ping is pushed immediately from PingTracker via window._dpsApp.updatePing().
     // A slow fallback poll handles edge cases (e.g. push not wired yet on startup).
@@ -1564,6 +1569,8 @@ class DpsApp {
         gearScore,
         isUser: (!!name && name === this.USER_NAME) || (hasLocalId && numericId === localId),
         isIdentifying,
+        // Resolved in Rust against a downloaded roster; the frontend only
+        // renders it. Cosmetic only — it must not reach sorting or bar colour.
         isSupporter: !!(isObj && value.isSupporter) && this.showSupporterColors !== false,
         // A party member who runs A2Tools too (party_presence.rs).
         usesA2tools: !!(isObj && value.usesA2tools),
@@ -2359,8 +2366,11 @@ class DpsApp {
       }
     });
     this.metricToggleBtn?.addEventListener("click", () => {
-      // DPS -> total damage -> both -> HPS -> total heal -> DPS.
-      const order = ["dps", "totalDamage", "both", "hps", "totalHeal"];
+      // DPS -> total damage -> both (-> HPS -> total heal, unless turned
+      // off in Settings) -> DPS.
+      const order = this.showHealModes === false
+        ? ["dps", "totalDamage", "both"]
+        : ["dps", "totalDamage", "both", "hps", "totalHeal"];
       const nextMode = order[(order.indexOf(this.displayMode) + 1) % order.length];
       this.setDisplayMode(nextMode, { persist: true });
       this.renderCurrentRows();
@@ -2787,6 +2797,19 @@ class DpsApp {
         this.showTtk = !!event.target?.checked;
         this.safeSetSetting(this.storageKeys.showTtk, String(this.showTtk));
         if (!this.showTtk) this.battleTime?.setTtk?.(null);
+      });
+    }
+    this.showHealModesCheckbox = document.querySelector(".showHealModesCheckbox");
+    if (this.showHealModesCheckbox) {
+      this.showHealModesCheckbox.checked = this.showHealModes;
+      this.showHealModesCheckbox.addEventListener("change", (event) => {
+        this.showHealModes = !!event.target?.checked;
+        this.safeSetSetting(this.storageKeys.showHealModes, String(this.showHealModes));
+        // Turned off while showing healing: back to DPS.
+        if (!this.showHealModes && (this.displayMode === "hps" || this.displayMode === "totalHeal")) {
+          this.setDisplayMode("dps", { persist: true });
+          this.renderCurrentRows?.();
+        }
       });
     }
     this.showTotalDpsCheckbox = document.querySelector(".showTotalDpsCheckbox");
@@ -4922,7 +4945,8 @@ class DpsApp {
   }
 
   setDisplayMode(mode, { persist = false } = {}) {
-    this.displayMode = ["totalDamage", "both", "hps", "totalHeal"].includes(mode) ? mode : "dps";
+    const modes = this.showHealModes === false ? ["totalDamage", "both"] : ["totalDamage", "both", "hps", "totalHeal"];
+    this.displayMode = modes.includes(mode) ? mode : "dps";
     if (persist) {
       this.safeSetStorage(this.storageKeys.displayMode, this.displayMode);
     }
@@ -5346,6 +5370,7 @@ class DpsApp {
     const dps = Number(row?.dps) || 0;
     const dpsText = `${this.formatDpsThousands(dps)}${this.meterDpsSuffix()}`;
     if (this.displayMode === "both") {
+      // "408k (13k/s)", as a player asked: damage leads, so the bars follow it.
       const totalDamage = Number(row?.totalDamage) || 0;
       return { value: totalDamage, text: `${this.formatAbbreviatedNumber(totalDamage)} (${dpsText})` };
     }

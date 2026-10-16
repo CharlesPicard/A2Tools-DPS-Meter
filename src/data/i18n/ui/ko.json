@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "초당 치유량 표시 중",
+      "ariaHeal": "총 치유량 표시 중",
       "dps": "DPS",
       "total": "DMG",
       "ariaDps": "DPS 표시 중",
@@ -259,6 +263,7 @@
     "showOdyle": "오드 에너지 표시",
     "odyleEnergy": "오드 에너지",
     "showTtk": "예상 처치 시간 표시",
+    "showHealModes": "DPS/DMG 버튼에 치유량 표시",
     "showTotalDps": "파티 합계 표시",
     "roundDps": "DPS를 천 단위로 줄이기 (13k)",
     "showDpsSuffix": "DPS에 /s 붙이기",
@@ -444,6 +449,7 @@
       "autoHideMeter": "다른 창이 게임 앞에 있으면 미터가 사라지고, 게임으로 돌아오면 다시 나타납니다.",
       "detailsMonitor": "선택한 디스플레이에서 상세 정보 창을 열고 그곳에 유지합니다.",
       "showTtk": "전투 타이머 옆에 보스전 전체에 걸릴 예상 시간을 표시합니다.",
+      "showHealModes": "미터의 DPS/DMG 버튼으로 초당 치유량과 총 치유량도 볼 수 있습니다.",
       "showTotalDps": "행 아래에 파티 전체 DPS와 피해량을 보여 주는 막대를 표시합니다.",
       "roundDps": "13,412는 13k로 표시됩니다.",
       "showSuspendBtn": "다시 누를 때까지 게임 트래픽 읽기를 멈추는 버튼을 미터에 표시합니다.",

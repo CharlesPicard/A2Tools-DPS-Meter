@@ -2,6 +2,10 @@
   "header": {
     "title": "A2Tools DPS Meter",
     "display": {
+      "hps": "HPS",
+      "totalHeal": "HEAL",
+      "ariaHps": "Affiche les soins par seconde",
+      "ariaHeal": "Affiche les soins totaux",
       "dps": "DPS",
       "total": "DGT",
       "ariaDps": "Affiche les DPS",
@@ -254,6 +258,7 @@
     "showOdyle": "Afficher l'énergie d'Odyle",
     "odyleEnergy": "Énergie d'Odyle",
     "showTtk": "Afficher le temps de kill estimé",
+    "showHealModes": "Afficher les soins dans le bouton DPS/DMG",
     "showTotalDps": "Afficher le total du groupe",
     "roundDps": "Abréger le DPS en milliers (13k)",
     "showDpsSuffix": "Ajouter /s au DPS",
@@ -437,6 +442,7 @@
       "autoHideMeter": "Le compteur disparaît quand une autre fenêtre passe devant le jeu, et revient avec lui.",
       "detailsMonitor": "Ouvre la fenêtre Détails sur l'écran choisi et l'y garde.",
       "showTtk": "À côté du chronomètre, une estimation de la durée totale du combat contre le boss.",
+      "showHealModes": "Le bouton DPS/DMG du compteur affiche aussi les soins par seconde et les soins totaux.",
       "showTotalDps": "Une barre sous les lignes avec le DPS et les dégâts de tout le groupe.",
       "roundDps": "13 412 s'affiche 13k.",
       "showSuspendBtn": "Un bouton sur le compteur qui arrête la lecture du trafic du jeu jusqu'à ce que tu appuies à nouveau.",
