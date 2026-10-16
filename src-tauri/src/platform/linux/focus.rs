@@ -41,6 +41,9 @@ static SEEN_GAME: AtomicBool = AtomicBool::new(false);
 /// The connection that serves `Focus`; dropped, the service would go away.
 static CONNECTION: OnceLock<zbus::blocking::Connection> = OnceLock::new();
 
+/// Told when the game or the meter gains or loses the front.
+static ON_CHANGE: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
+
 /// Whether the game (or the meter) is the active window, if KWin has said
 /// and the game has been recognised.
 pub fn game_or_meter_active() -> Option<bool> {
@@ -63,7 +66,12 @@ impl Focus {
         if who == Who::Game && !SEEN_GAME.swap(true, Ordering::Relaxed) {
             tracing::info!("KWin: the game's window is active (class {class:?})");
         }
-        ACTIVE.store(if who == Who::Other { 2 } else { 1 }, Ordering::Relaxed);
+        let was = ACTIVE.swap(if who == Who::Other { 2 } else { 1 }, Ordering::Relaxed);
+        if was != ACTIVE.load(Ordering::Relaxed) && SEEN_GAME.load(Ordering::Relaxed) {
+            if let Some(on_change) = ON_CHANGE.get() {
+                on_change();
+            }
+        }
     }
 }
 
@@ -94,7 +102,7 @@ fn classify(pid: u32, class: &str, caption: &str) -> Who {
 
 /// Serve `Focus` on the session bus and load the script into KWin. Does
 /// nothing outside KDE: there the game is taken as always focused.
-pub fn watch() -> Result<(), String> {
+pub fn watch(on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
     if !super::process::is_kde() || CONNECTION.get().is_some() {
         return Ok(());
     }
@@ -118,6 +126,7 @@ pub fn watch() -> Result<(), String> {
         return Err("KWin did not load the script".into());
     }
     kwin.call_method("start", &()).map_err(|e| format!("starting the script: {e}"))?;
+    let _ = ON_CHANGE.set(Box::new(on_change));
     let _ = CONNECTION.set(connection);
     tracing::info!("KWin reports the active window (script {id})");
     Ok(())

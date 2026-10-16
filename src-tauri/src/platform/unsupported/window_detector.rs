@@ -9,7 +9,7 @@ pub fn find_aion2_window() -> bool {
 }
 
 /// Nothing to watch here.
-pub fn watch_focus() -> Result<(), String> {
+pub fn watch_focus(_on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
     Ok(())
 }
 

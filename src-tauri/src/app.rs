@@ -116,6 +116,44 @@ pub struct OverlayLock {
     applied: Mutex<Option<bool>>,
 }
 
+/// Show the meter that auto-hide hid: in place where it was hidden so
+/// (Linux), else as usual. The page re-measures, as its content may have
+/// changed meanwhile.
+fn show_meter_again(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    if platform::window::reveal_in_place(window) {
+        // Revealing takes the mouse back; the lock decides that.
+        if let Some(state) = app.try_state::<AppState>() {
+            let lock = state.overlay_lock.clone();
+            *lock.applied.lock() = None;
+            sync_click_through(app, &lock, false);
+        }
+    } else {
+        platform::window::show_on_top_without_focus(window);
+    }
+    let _ = window.emit("force-resize", ());
+}
+
+/// Auto-hide at once, when the desktop says the active window changed (KWin,
+/// see platform::linux::focus): the 500 ms check and its wait before hiding
+/// left the meter up for a moment after an alt-tab (2026-10-17). The check
+/// still runs, for every other desktop and as a fallback.
+fn auto_hide_now(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    if state.settings.get("dpsMeter.autoHideMeter").unwrap_or_default() != "true" {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else { return };
+    let front = platform::window_detector::is_aion2_foreground() || window.is_focused().unwrap_or(false);
+    let hidden = !window.is_visible().unwrap_or(true)
+        || window.is_minimized().unwrap_or(false)
+        || platform::window::is_hidden_in_place(&window);
+    if front && hidden {
+        show_meter_again(app, &window);
+    } else if !front && !hidden {
+        platform::window::minimize_off_top(&window);
+    }
+}
+
 /// Tell the main window whether to ignore the mouse: when locked, unless the
 /// pointer is over the lock button or a card is open.
 fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
@@ -2804,7 +2842,8 @@ pub fn run() {
                     let state = handle.state::<AppState>();
                     // For "Hide when AION2 isn't focused": KWin says which
                     // window is active (platform::linux::focus).
-                    if let Err(e) = platform::window_detector::watch_focus() {
+                    let focus_app = handle.clone();
+                    if let Err(e) = platform::window_detector::watch_focus(move || auto_hide_now(&focus_app)) {
                         tracing::warn!("Cannot follow the active window: {e}");
                     }
                     if let Err(e) = platform::window_rules::keep_above_fullscreen(false) {
@@ -3049,18 +3088,7 @@ pub fn run() {
                                 if aion_fg || is_self_fg {
                                     hide_delay = 0;
                                     if hidden {
-                                        if platform::window::reveal_in_place(&window) {
-                                            // Revealing takes the mouse back;
-                                            // the lock decides that.
-                                            let lock = state.overlay_lock.clone();
-                                            *lock.applied.lock() = None;
-                                            sync_click_through(&handle, &lock, false);
-                                        } else {
-                                            platform::window::show_on_top_without_focus(&window);
-                                        }
-                                        // Notify frontend to recalculate window size
-                                        // (content may have changed while minimized)
-                                        let _ = window.emit("force-resize", ());
+                                        show_meter_again(&handle, &window);
                                     }
                                 } else if !hidden {
                                     // Wait 3 ticks (1.5s) before hiding to avoid

@@ -90,7 +90,7 @@ pub fn find_aion2_window() -> bool {
 }
 
 /// Nothing to start: the foreground window is asked for when needed.
-pub fn watch_focus() -> Result<(), String> {
+pub fn watch_focus(_on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
     Ok(())
 }
 
