@@ -14,6 +14,7 @@
 #[cfg(feature = "online")]
 pub mod catalog;
 pub mod decoder;
+pub mod widgets;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
@@ -766,6 +767,7 @@ struct PromptTexts {
     perm_storage: String,
     perm_notify: String,
     perm_window: String,
+    perm_widgets: String,
     perm_character: String,
     perm_decoder: String,
 }
@@ -797,6 +799,7 @@ fn prompt_texts(data_dir: Option<&Path>, lang: &str) -> PromptTexts {
         perm_storage: perm("permStorage", "Save its own data on this computer"),
         perm_notify: perm("permNotify", "Show short messages in its window"),
         perm_window: perm("permWindow", "Show and hide its own window, without taking focus from the game"),
+        perm_widgets: perm("permWidgets", "Show small windows of its own, which you can move anywhere and lock in place"),
         perm_character: perm("permCharacter", "See your character's name, server, class and level"),
         perm_decoder: perm("permDecoder", "Read your own game data: {name}"),
     }
@@ -809,6 +812,7 @@ fn describe_permission(t: &PromptTexts, permission: &str) -> String {
         "storage" => t.perm_storage.clone(),
         "notify" => t.perm_notify.clone(),
         "window" => t.perm_window.clone(),
+        "widgets" => t.perm_widgets.clone(),
         "events:character" => t.perm_character.clone(),
         p => match p.strip_prefix("decoder:") {
             Some(name) => t.perm_decoder.replace("{name}", name),

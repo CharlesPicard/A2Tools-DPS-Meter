@@ -523,6 +523,7 @@
       "permStorage": "Save its own data on this computer",
       "permNotify": "Show short messages in its window",
       "permWindow": "Show and hide its own window, without taking focus from the game",
+      "permWidgets": "Show small windows of its own, which you can move anywhere and lock in place",
       "permBossTimers": "Read the field boss timers players share through a2tools.app",
       "permCharacter": "See your character's name, server, class and level",
       "permDecoder": "Read your own game data: {name}",

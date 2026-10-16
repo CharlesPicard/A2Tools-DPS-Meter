@@ -511,6 +511,7 @@
       "permStorage": "Salvar os próprios dados neste computador",
       "permNotify": "Mostrar mensagens curtas na sua janela",
       "permWindow": "Mostrar e ocultar a própria janela, sem tirar o foco do jogo",
+      "permWidgets": "Mostrar janelas pequenas próprias, que você pode mover para qualquer lugar e travar",
       "permBossTimers": "Ler os timers de chefes de campo que os jogadores compartilham pelo a2tools.app",
       "permCharacter": "Ver nome, servidor, classe e nível do seu personagem",
       "permDecoder": "Ler seus próprios dados do jogo: {name}",

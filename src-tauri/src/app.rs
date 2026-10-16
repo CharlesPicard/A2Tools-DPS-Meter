@@ -2737,6 +2737,18 @@ pub fn run() {
             {
                 crate::plugins::note_resized(window.app_handle(), window, *size);
             }
+            // Plugin widgets (#77) open where they were left, and close with
+            // their plugin's window.
+            if let tauri::WindowEvent::Moved(at) = event
+                && window.label().starts_with("pw_")
+            {
+                crate::plugins::widgets::note_moved(window.app_handle(), window.label(), *at);
+            }
+            if let tauri::WindowEvent::Destroyed = event
+                && let Some(id) = window.label().strip_prefix("plugin-")
+            {
+                crate::plugins::widgets::close_all(window.app_handle(), id);
+            }
             if window.label() == "main"
                 && let tauri::WindowEvent::CloseRequested { api, .. } = event
             {
@@ -3343,6 +3355,14 @@ pub fn run() {
             crate::plugins::plugin_open,
             crate::plugins::plugin_set_enabled,
             crate::plugins::plugin_hello,
+            crate::plugins::widgets::plugin_widget_open,
+            crate::plugins::widgets::plugin_widget_close,
+            crate::plugins::widgets::plugin_widget_send,
+            crate::plugins::widgets::plugin_widgets_lock,
+            crate::plugins::widgets::plugin_widgets_locked,
+            crate::plugins::widgets::plugin_widget_hello,
+            crate::plugins::widgets::plugin_widget_post,
+            crate::plugins::widgets::plugin_widget_drag,
             crate::plugins::plugin_storage_get,
             crate::plugins::plugin_boss_timers,
             crate::plugins::plugin_storage_set,

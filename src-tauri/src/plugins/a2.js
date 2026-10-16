@@ -34,6 +34,23 @@
 //                                              its title bar hidden; then back to its size and
 //                                              title bar (meter 2.0.65 on)
 //                                              (permission "window", plugin API 2)
+//   Widgets (permission "widgets", meter 2.0.68 on): small windows of the plugin's own, each
+//   showing its widget.html (?name=<name>), which the player can drag anywhere and lock in place.
+//   From the plugin's page:
+//   await a2.widgets.open("name", { width, height })  open one, or show it again; at most 16
+//   await a2.widgets.close("name")
+//   await a2.widgets.send("name", data)        the widget hears it: a2.on("widget", (data) => ...)
+//   await a2.widgets.lock(true / false)        locked, clicks go through them and they stay put
+//   await a2.widgets.locked()                  whether they are locked
+//   a2.on("widget-message", ({ name, data }) => ...)  what a widget posted
+//   From a widget's page (widget.html):
+//   a2.widget.name                             its name
+//   a2.widget.drag()                           call on mousedown: the widget follows the pointer
+//                                              (not while locked)
+//   a2.widget.post(data)                       to the plugin's page ("widget-message")
+//   a2.on("widget", (data) => ...)             what the plugin sent it
+//   a2.on("locked", (locked) => ...)           whether the widgets are locked, at start and on change
+//
 //   a2.ready()                                 call once the handlers are set
 //
 // A link (<a href="https://...">) clicked in the page opens in the browser
@@ -83,6 +100,18 @@
       show: () => call("window.show", []),
       hide: () => call("window.hide", []),
       fit: (height) => call("window.fit", [height ?? null]),
+    }),
+    widgets: Object.freeze({
+      open: (name, size) => call("widgets.open", [String(name), size || {}]),
+      close: (name) => call("widgets.close", [String(name)]),
+      send: (name, data) => call("widgets.send", [String(name), data]),
+      lock: (locked) => call("widgets.lock", [!!locked]),
+      locked: () => call("widgets.locked", []),
+    }),
+    widget: Object.freeze({
+      name: new URLSearchParams(location.search).get("name") || "",
+      drag: () => call("widget.drag", []),
+      post: (data) => call("widget.post", [data]),
     }),
     ready: () => call("ready", []),
   });

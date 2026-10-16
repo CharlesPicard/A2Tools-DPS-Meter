@@ -83,6 +83,28 @@
       if (!allowed("window")) throw new Error('the plugin lacks the "window" permission');
       return invoke("plugin_window", { visible: false });
     },
+    // Small windows of the plugin's own, which the player can move and lock
+    // (plugin widgets, #77; permission "widgets").
+    "widgets.open": ([name, size]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widget_open", { name: String(name), width: Number(size?.width) || 64, height: Number(size?.height) || 64 });
+    },
+    "widgets.close": ([name]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widget_close", { name: String(name) });
+    },
+    "widgets.send": ([name, data]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widget_send", { name: String(name), data: data ?? null });
+    },
+    "widgets.lock": ([locked]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widgets_lock", { locked: !!locked });
+    },
+    "widgets.locked": () => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widgets_locked");
+    },
     notify: ([text]) => {
       if (!allowed("notify")) throw new Error('the plugin lacks the "notify" permission');
       showToast(String(text));
@@ -168,6 +190,9 @@
     // name passed the permission check: with a copy of the Pet Soul Tracker
     // open beside it, every soul counted twice in both.
     if (payload.plugin !== undefined && payload.plugin !== id) return;
+    // Sent to this plugin's widgets, not to its window.
+    if (payload.event === "widget" || payload.event === "locked") return;
+    if (payload.event === "widget-message" && !allowed("widgets")) return;
     if (typeof payload.seq !== "number") deliver(payload.event, payload.data);
     else if (early) early.push(payload);
     else deliverLogged(payload);
