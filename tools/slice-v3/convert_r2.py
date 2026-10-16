@@ -1,7 +1,7 @@
 """Converts this shard's stored slices in R2 to slice v3 (zstd), in place.
 
 Run by .github/workflows/slice-v3-convert.yml. Every slice key is listed,
-sorted, cut to LIMIT if set, and every SHARDS-th one from SHARD is taken. Each
+sorted, cut to LIMIT if set, and this shard takes the keys that hash to it. Each
 batch is downloaded, converted and verified by the `slice-v3` binary, and only
 a verified slice is put back: under the same key, as application/zstd, after a
 server-side copy of the original to backup/slice-v2/<key>.
@@ -13,6 +13,7 @@ R2 under migrations/slice-v3/<RUN>/, for the site to apply to D1.
 
 import collections
 import concurrent.futures as cf
+import hashlib
 import os
 import shutil
 import subprocess
@@ -50,7 +51,10 @@ def slice_keys():
     keys.sort()
     if LIMIT:
         keys = keys[:LIMIT]
-    return keys[SHARD::SHARDS]
+    # By the key itself, not its place in the list: each runner lists the
+    # bucket on its own, and a log uploaded meanwhile moved every later place,
+    # so shards overlapped and missed slices (run 38873218544).
+    return [k for k in keys if int(hashlib.sha256(k.encode()).hexdigest(), 16) % SHARDS == SHARD]
 
 
 def log_id(key):
