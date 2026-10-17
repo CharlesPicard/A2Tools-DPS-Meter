@@ -403,7 +403,7 @@ if (typeof module !== "undefined" && module.exports) {
           ownRender = true;
           const started = performance.now();
           try {
-            hooks.renderFigures({ details, unfiltered: unfiltered || details, target });
+            hooks.renderFigures({ details, unfiltered: unfiltered || details, target, playing });
           } finally {
             observer.takeRecords();
             ownRender = false;

@@ -1234,7 +1234,9 @@ const createDetailsUI = ({
       const cap = Math.max(170, Math.round((skillsContainer.clientWidth || 0) * 0.24));
       const nameWidth = skillsContainer.clientWidth > 0 ? Math.min(lastMeasuredNameWidth, cap) : lastMeasuredNameWidth;
       const template = `${nameWidth}px ${dataCols.map((col) => GRID_COL_DEFS[col]).join(" ")}`;
-      skillsContainer.style.setProperty("--skill-grid-cols", template);
+      if (skillsContainer.style.getPropertyValue("--skill-grid-cols") !== template) {
+        skillsContainer.style.setProperty("--skill-grid-cols", template);
+      }
     } else {
       const cols = visibleCols.map((col) => GRID_COL_DEFS[col]);
       skillsContainer.style.setProperty("--skill-grid-cols", cols.join(" "));
@@ -1267,6 +1269,12 @@ const createDetailsUI = ({
   bindSkillHeaderSorting();
   updateGridColumns();
 
+  // What renderSkills measured last: the names it showed, their widths and
+  // the font they were measured in.
+  let lastNameKey = "";
+  let nameFont = "";
+  const nameWidths = new Map();
+  const nameCanvas = document.createElement("canvas").getContext("2d");
   const renderSkills = (details, { compact = false } = {}) => {
     if (sectionsHeld) return;
     const skills =
@@ -1329,24 +1337,43 @@ const createDetailsUI = ({
 
     ensureSkillSlots(topDisplay.length);
 
-    // Measure longest skill name and set name column width
-    const iconSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--details-skill-icon-size") || "36", 10);
-    const iconMargin = 6;
-    const namePad = 4;
-    const measureCanvas = document.createElement("canvas").getContext("2d");
-    // .skillRow .cell is 0.875em of the panel font and .skillNameText another
-    // 0.84em inside it (styles.css), so the name renders at their product.
-    // Measuring at any other size sizes the column for text never drawn.
-    const fontSize = parseFloat(getComputedStyle(skillsListEl).fontSize) * 0.875 * 0.84;
-    measureCanvas.font = `700 ${fontSize}px ${getComputedStyle(skillsListEl).fontFamily}`;
-    let maxNameWidth = 0;
-    topDisplay.forEach((skill) => {
-      const w = measureCanvas.measureText(skill?.name ?? "").width;
-      if (w > maxNameWidth) maxNameWidth = w;
-    });
-    const arrowSpace = 14; // dotToggle: 10px width + 2px margin each side
-    lastMeasuredNameWidth = Math.ceil(iconSize + iconMargin + arrowSpace + maxNameWidth + namePad);
-    updateGridColumns();
+    // Measure longest skill name and set name column width. Only when the
+    // names shown change: reading the styles after the rows were rebuilt laid
+    // the page out at once, and a replay redraws the table ten times a second
+    // (it lagged a whole browser by the end of a long fight, 2026-10-18).
+    const nameKey = `${detailsMode}|${topDisplay.map((s) => s?.name ?? "").join("")}`;
+    if (nameKey !== lastNameKey || !(lastMeasuredNameWidth > 0)) {
+      lastNameKey = nameKey;
+      const iconSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--details-skill-icon-size") || "36", 10);
+      const iconMargin = 6;
+      const namePad = 4;
+      // .skillRow .cell is 0.875em of the panel font and .skillNameText another
+      // 0.84em inside it (styles.css), so the name renders at their product.
+      // Measuring at any other size sizes the column for text never drawn.
+      const fontSize = parseFloat(getComputedStyle(skillsListEl).fontSize) * 0.875 * 0.84;
+      const font = `700 ${fontSize}px ${getComputedStyle(skillsListEl).fontFamily}`;
+      if (font !== nameFont) {
+        nameFont = font;
+        nameWidths.clear();
+      }
+      nameCanvas.font = font;
+      let maxNameWidth = 0;
+      topDisplay.forEach((skill) => {
+        const name = skill?.name ?? "";
+        let w = nameWidths.get(name);
+        if (w === undefined) {
+          w = nameCanvas.measureText(name).width;
+          nameWidths.set(name, w);
+        }
+        if (w > maxNameWidth) maxNameWidth = w;
+      });
+      const arrowSpace = 14; // dotToggle: 10px width + 2px margin each side
+      const measured = Math.ceil(iconSize + iconMargin + arrowSpace + maxNameWidth + namePad);
+      if (measured !== lastMeasuredNameWidth) {
+        lastMeasuredNameWidth = measured;
+        updateGridColumns();
+      }
+    }
 
     for (let i = 0; i < skillSlots.length; i++) {
       const view = skillSlots[i];
@@ -3625,6 +3652,7 @@ const createDetailsUI = ({
   // window's own state (lastDetails, the targets) stays the whole fight's, so
   // the timeline, a sort or a reload still draw that; the replay draws over
   // them again. renderFigures(null) draws the whole fight's figures.
+  let replaySkillsAt = 0;
   window.fightReplay?.attach?.({
     root: detailsPanel,
     timeline: fightTimeline,
@@ -3649,7 +3677,14 @@ const createDetailsUI = ({
         const ctx = buildPartyBarStats();
         renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
         renderStats(lastDetails, { compact: activeCompactMode });
-        renderSkills(lastDetails, { compact: activeCompactMode });
+        // The skill table at most four times a second while a replay plays
+        // (it is the costly part). Paused or moved by hand, it is drawn every
+        // time, so it always ends exact.
+        const now = performance.now();
+        if (!cut?.playing || now - replaySkillsAt >= 250) {
+          replaySkillsAt = now;
+          renderSkills(lastDetails, { compact: activeCompactMode });
+        }
         // Damage taken has no times: it stays the whole fight's, greyed.
         const shownStats = detailsMode === "heal" ? HEAL_STATUS : STATUS;
         statSlots.forEach((slot, i) => slot.statEl.classList.toggle("isWholeFight",
