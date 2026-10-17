@@ -634,6 +634,10 @@ const createDetailsUI = ({
   };
 
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  // While a fight's first show waits to build its skills, chart and
+  // timeline (renderRest), nothing else draws them: a resize as the window
+  // settled drew the whole chart, which then vanished to be drawn in.
+  let sectionsHeld = false;
   // The chart's draw-in waits until every section is built (renderRest), so
   // no section's build lands in the middle of it and drops its frames.
   let pendingStarts = null;
@@ -1243,6 +1247,7 @@ const createDetailsUI = ({
   updateGridColumns();
 
   const renderSkills = (details, { compact = false } = {}) => {
+    if (sectionsHeld) return;
     const skills =
       detailsMode === "heal"
         ? (Array.isArray(details?.healSkills) ? details.healSkills : [])
@@ -1924,6 +1929,7 @@ const createDetailsUI = ({
 
   const renderDpsChart = (details) => {
     if (!dpsChartCanvas || !dpsChartXAxis || !dpsChartLegend) return;
+    if (sectionsHeld) return;
     // A redraw (a refresh, a resize) ends a reveal still under way.
     chartRevealSeq++;
 
@@ -2339,6 +2345,7 @@ const createDetailsUI = ({
   };
 
   const renderTimeline = (details) => {
+    if (sectionsHeld) return;
     if (!timelineCanvas || !timelineViewport || !timelineLegend || !timelineXAxis) return;
 
     const laneSource = detailsMode === "heal" ? details?.healSkills : details?.skills;
@@ -3145,12 +3152,14 @@ const createDetailsUI = ({
       [() => renderBuffs(), null],
     ];
     if (stagedForSeq === openSeq) {
+      sectionsHeld = false;
       for (const [step] of steps) step();
       chartRevealPending = false;
       startPending();
       return;
     }
     stagedForSeq = openSeq;
+    sectionsHeld = true;
     (async () => {
       // The party bars and figures animate first (render): the rest is
       // built once they have, as building it would make them stutter.
@@ -3159,9 +3168,12 @@ const createDetailsUI = ({
         await nextFrame();
         // A newer render took over: it draws everything itself.
         if (token !== stageToken) return startPending();
+        sectionsHeld = false;
         step();
         popIn(section?.());
+        sectionsHeld = true;
       }
+      sectionsHeld = false;
       // Let the last section's layout and paint land, then animate.
       await nextFrame();
       await nextFrame();
