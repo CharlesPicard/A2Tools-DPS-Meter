@@ -882,6 +882,20 @@ impl StreamProcessor {
                     .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
                     .filter(|l| (1..=99).contains(l));
                 self.data_storage.note_self_profile(&sanitized, job, level);
+                // Then the gear score (equipment item level), twice: 383 for
+                // Naicha (2026-10-04), 2040 for Nullception (2026-10-11, as the
+                // character sheet showed). Taken only when both copies agree.
+                let gear = |at: usize| {
+                    data.get(after + at..after + at + 4).map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+                };
+                if let (Some(_), Some(gs), Some(again)) = (level, gear(11), gear(15)) {
+                    if gs == again && (1..=100_000).contains(&gs) {
+                        self.data_storage.note_self_gear_score(&sanitized, gs as i32);
+                    }
+                }
+                if let Some(cp) = self_combat_power(data.get(after..).unwrap_or_default()) {
+                    self.data_storage.note_self_combat_power(&sanitized, cp);
+                }
             } else {
                 tracing::debug!("player record: '{}' -> entity {}", sanitized, id);
             }
@@ -2792,6 +2806,23 @@ struct MaskedRecord {
 
 /// Every masked identity record in `data`:
 /// `<opcode 2B> <entity_id varint> <mask1 u32 LE> <mask2 u8> [mask2 & 0x01] <len u8><utf8 name>`.
+/// Your combat power, from the self record's end: two u64 (the first is the
+/// character sheet's: 109,396 for Nullception on 2026-10-16, and 27,564 for
+/// Nully) right before a count of 5 and the entries keyed 01 to 05 (a u16
+/// each). What comes before them varies (a legion name, buffs), so they are
+/// found by what follows. The second u64 is a little higher, or the same.
+fn self_combat_power(rest: &[u8]) -> Option<i64> {
+    let u64_at = |at: usize| rest.get(at..at + 8).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
+    (0..rest.len().saturating_sub(32)).find_map(|p| {
+        let tail = &rest[p + 16..p + 32];
+        if tail[0] != 5 || (0..5).any(|k| tail[1 + 3 * k] != k as u8 + 1) {
+            return None;
+        }
+        let (cp, other) = (u64_at(p)?, u64_at(p + 8)?);
+        ((1..100_000_000).contains(&cp) && (1..100_000_000).contains(&other)).then_some(cp as i64)
+    })
+}
+
 fn masked_records(data: &[u8]) -> Vec<MaskedRecord> {
     let mut out = Vec::new();
     if data.len() < 9 {
@@ -4199,6 +4230,54 @@ mod tests {
         assert_eq!(me.name.as_deref(), Some("Naicha"));
         assert_eq!(storage.local_player_id(), Some(14957));
         assert_eq!((me.server_id, me.class, me.level), (1304, Some(crate::entity::job_class::JobClass::Cleric), Some(28)));
+        assert_eq!(me.gear_score, Some(383));
+    }
+
+    /// The start of another self record (2026-10-11): Nullception, server
+    /// 2312, level 45, gear score 2040 as the character sheet showed it.
+    #[test]
+    fn the_self_record_says_your_gear_score() {
+        let storage = Arc::new(DataStorage::new());
+        let processor = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
+        let record = hex("3336ef295fa1c128370b4e756c6c63657074696f6e080924000000022d000000f8070000f80700002d000000");
+        processor.scan_masked_identity(&record);
+        let me = storage.local_profile();
+        assert_eq!(me.name.as_deref(), Some("Nullception"));
+        assert_eq!((me.server_id, me.level, me.gear_score), (2312, Some(45), Some(2040)));
+    }
+
+    /// Nully's self record (2026-10-16 21:56): its start, then its end, where
+    /// the combat power is (27,564, as the character sheet showed it).
+    #[test]
+    fn the_self_record_says_your_combat_power() {
+        let storage = Arc::new(DataStorage::new());
+        let processor = StreamProcessor::new(storage.clone(), Arc::new(SkillLookup::new()), Arc::new(NpcLookup::new()));
+        let record = hex(concat!(
+            "3336a91d5f81c12837054e756c6c790809200000000223000000aa010000aa01000023000000",
+            "047c45a1010000000000aaa024000220050000000000000000000000000000000000000000000000000000000000000000",
+            "ac6b000000000000ac6b0000000000000501790002000003000004000005000005011900020000030000040000050000",
+            "010300000001000000",
+        ));
+        processor.scan_masked_identity(&record);
+        let me = storage.local_profile();
+        assert_eq!(me.name.as_deref(), Some("Nully"));
+        assert_eq!((me.level, me.gear_score, me.combat_power), (Some(35), Some(426), Some(27_564)));
+    }
+
+    /// The end of Nullception's self record while in a legion (2026-10-14):
+    /// its name sits before the combat power (100,387; the next u64 is
+    /// 100,687), and the entries after it also match once more further on,
+    /// with numbers too large to be one.
+    #[test]
+    fn the_combat_power_is_found_by_what_follows_it() {
+        let tail = hex(concat!(
+            "0000000321f4cb1fae9901000000000090010000ffbedf3fa1010000b959c03ba10100002005055241594f550000000001",
+            "2005000000000000000000000000000000000000000004000000000000000000000023880100000000004f890100000000",
+            "0005019a01020000032400040000050000050112010200000327000400000500000501000000300000000200000002000000",
+            "030000000400000004000000020000000500000002000000",
+        ));
+        assert_eq!(self_combat_power(&tail), Some(100_387));
+        assert_eq!(self_combat_power(&tail[..40]), None);
     }
 
     /// Two frames from a capture (2026-10-06 18:12:55): a `2a 37` record that

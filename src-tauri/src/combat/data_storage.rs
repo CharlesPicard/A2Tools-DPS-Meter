@@ -282,6 +282,16 @@ pub struct LocalProfile {
     pub server_id: u16,
     pub class: Option<JobClass>,
     pub level: Option<u32>,
+    /// Equipment item level: your own entry in the party roster, else the last
+    /// self record's.
+    pub gear_score: Option<i32>,
+    /// Combat power, from the same two places.
+    pub combat_power: Option<i64>,
+}
+
+/// A value the self record gave, if it was for this character.
+fn stated_for<T: Copy>(stated: &Option<(String, T)>, me: Option<&str>) -> Option<T> {
+    stated.as_ref().filter(|(name, _)| Some(name.trim()) == me).map(|(_, v)| *v)
 }
 
 /// One entry of the party roster packet (`0x9702`). Keyed by character name,
@@ -666,6 +676,10 @@ struct Inner {
     /// The class and level your own self record last stated, with the name it
     /// was for, so a character switch does not carry the last one's over.
     self_profile: Option<(String, Option<JobClass>, Option<u32>)>,
+    /// The gear score the last self record gave, with the name it was for.
+    self_gear_score: Option<(String, i32)>,
+    /// The combat power the last self record gave, with the name it was for.
+    self_combat_power: Option<(String, i64)>,
 }
 
 #[derive(Default)]
@@ -757,6 +771,8 @@ impl DataStorage {
                 player_servers: HashMap::new(),
                 self_server: 0,
                 self_profile: None,
+                self_gear_score: None,
+                self_combat_power: None,
             }),
             damage_generation: AtomicI64::new(0),
             last_damage_ms: AtomicI64::new(NEVER_MS),
@@ -1147,6 +1163,17 @@ impl DataStorage {
         inner.self_profile = Some((name.to_string(), class.or(old_class), level.or(old_level)));
     }
 
+    /// Your gear score as the self record states it (sent on login and on
+    /// every teleport).
+    pub fn note_self_gear_score(&self, name: &str, gear_score: i32) {
+        self.inner.write().self_gear_score = Some((name.to_string(), gear_score));
+    }
+
+    /// Your combat power as the self record states it.
+    pub fn note_self_combat_power(&self, name: &str, combat_power: i64) {
+        self.inner.write().self_combat_power = Some((name.to_string(), combat_power));
+    }
+
     /// Who you are playing, as far as the game has said: name, server, class
     /// and level. Class falls back to the one your skills show, for a meter
     /// started before the self record came; level has no such fallback.
@@ -1164,7 +1191,15 @@ impl DataStorage {
         if class.is_none() {
             class = inner.local_player_id.and_then(|id| inner.actor_jobs.get(&(id as i32)).copied());
         }
-        LocalProfile { name, server_id: server, class, level }
+        // The roster's is the fresher while in a party (it follows gear
+        // changes); the self record's is from the last teleport.
+        let me = name.as_deref().map(str::trim);
+        let roster = me.and_then(|n| inner.party_members.get(n));
+        let gear_score =
+            roster.map(|m| m.gear_score).filter(|&g| g > 0).or_else(|| stated_for(&inner.self_gear_score, me));
+        let combat_power =
+            roster.map(|m| m.combat_power).filter(|&c| c > 0).or_else(|| stated_for(&inner.self_combat_power, me));
+        LocalProfile { name, server_id: server, class, level, gear_score, combat_power }
     }
 
     /// The server the fights being recorded are on: the local player's home

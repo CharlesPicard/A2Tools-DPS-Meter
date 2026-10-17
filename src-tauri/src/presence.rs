@@ -37,6 +37,9 @@ type IpcResult<T> = Result<T, IpcError>;
 const DISCORD_APPLICATION_ID: &str = "1556021373401432214";
 
 pub const SETTING_KEY: &str = "dpsMeter.discordActivity";
+/// The number after the level: "combatPower", "gearScore" or "off" (the
+/// default: a public status shows no number the player didn't choose).
+pub const STAT_KEY: &str = "dpsMeter.discordStat";
 
 const TICK: Duration = Duration::from_secs(10);
 /// Discord not running: try again this often, not every tick.
@@ -87,6 +90,8 @@ fn run(app: tauri::AppHandle) {
     let mut shown: Option<Shown> = None;
     let mut game_since: Option<i64> = None;
     let mut last_scan: Option<Instant> = None;
+    // Kept for the same character when nothing states them for a while.
+    let mut last_stats = LastStats::default();
     loop {
         std::thread::sleep(TICK);
         let Some(state) = app.try_state::<AppState>() else { continue };
@@ -107,7 +112,8 @@ fn run(app: tauri::AppHandle) {
 
         let lang = state.settings.get("dpsMeter.language").unwrap_or_else(|| "en".into());
         let text = Texts::load(i18n_dir(&state).as_ref(), &lang);
-        let next = describe(&state.data_storage, &state, &text, &lang);
+        let stat = Stat::from_setting(state.settings.get(STAT_KEY).as_deref());
+        let next = describe(&state.data_storage, &state, &text, &lang, stat, &mut last_stats);
 
         // A Discord started after the game is picked up on a later scan, and
         // told the current activity even when it has not changed.
@@ -308,8 +314,16 @@ fn class_key(class: JobClass) -> &'static str {
     }
 }
 
-fn describe(storage: &Arc<DataStorage>, state: &AppState, text: &Texts, lang: &str) -> Shown {
+fn describe(
+    storage: &Arc<DataStorage>,
+    state: &AppState,
+    text: &Texts,
+    lang: &str,
+    stat: Stat,
+    last_stats: &mut LastStats,
+) -> Shown {
     let profile = storage.local_profile();
+    let stat_text = stat_text(&profile, stat, last_stats, text);
     let class_name = profile.class.map(|c| text.class(c));
     let mut details: Vec<String> = Vec::new();
     if let Some(name) = &class_name {
@@ -318,10 +332,20 @@ fn describe(storage: &Arc<DataStorage>, state: &AppState, text: &Texts, lang: &s
     if let Some(level) = profile.level {
         details.push(text.get("level", "Lv {level}").replace("{level}", &level.to_string()));
     }
+    if let Some(t) = &stat_text {
+        details.push(t.clone());
+    }
     let class_line = if details.is_empty() { text.get("inGame", "In game") } else { details.join(" · ") };
-    // The character's name leads: "Naicha · Cleric · Lv 30".
+    // The character's name leads: "Naicha · Cleric · Lv 30". With a combat
+    // power or gear score the class gives way to it ("Naicha · Lv 30 · CP
+    // 42k"): the profile popout cuts the line at about 30 characters, and the
+    // class icon beside it (hover: class, level and the number) already says it.
+    let short_line = match (&class_name, &stat_text) {
+        (Some(_), Some(_)) if details.len() > 1 => details[1..].join(" · "),
+        _ => class_line.clone(),
+    };
     let details = match profile.name.as_deref().map(str::trim).filter(|n| !n.is_empty()) {
-        Some(name) => format!("{name} · {class_line}"),
+        Some(name) => format!("{name} · {short_line}"),
         None => class_line.clone(),
     };
 
@@ -337,6 +361,57 @@ fn describe(storage: &Arc<DataStorage>, state: &AppState, text: &Texts, lang: &s
         class_key: profile.class.map(class_key),
         class_name,
     }
+}
+
+/// Which number follows the level.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Stat {
+    CombatPower,
+    GearScore,
+    Off,
+}
+
+impl Stat {
+    fn from_setting(value: Option<&str>) -> Self {
+        match value {
+            Some("combatPower") => Stat::CombatPower,
+            Some("gearScore") => Stat::GearScore,
+            _ => Stat::Off,
+        }
+    }
+}
+
+/// The last combat power and gear score seen, with the character's name.
+#[derive(Default)]
+struct LastStats {
+    combat_power: Option<(String, i64)>,
+    gear_score: Option<(String, i32)>,
+}
+
+/// "CP 109k" or "GS 2040", as chosen, for this character.
+fn stat_text(profile: &LocalProfile, stat: Stat, last: &mut LastStats, text: &Texts) -> Option<String> {
+    let name = profile.name.as_deref().map(str::trim).filter(|n| !n.is_empty())?;
+    let combat_power = remembered(name, profile.combat_power, &mut last.combat_power);
+    let gear_score = remembered(name, profile.gear_score, &mut last.gear_score);
+    match stat {
+        // In thousands, as the meter shows it beside names.
+        Stat::CombatPower => combat_power.map(|cp| {
+            let thousands = (cp as f64 / 1000.0).round() as i64;
+            let cp = if thousands > 0 { format!("{thousands}k") } else { cp.to_string() };
+            text.get("combatPower", "CP {cp}").replace("{cp}", &cp)
+        }),
+        Stat::GearScore => gear_score.map(|gs| text.get("gearScore", "GS {gs}").replace("{gs}", &gs.to_string())),
+        Stat::Off => None,
+    }
+}
+
+/// The value now, else the last one for the same character.
+fn remembered<T: Copy>(name: &str, now: Option<T>, last: &mut Option<(String, T)>) -> Option<T> {
+    if let Some(v) = now {
+        *last = Some((name.to_string(), v));
+        return Some(v);
+    }
+    last.as_ref().filter(|(n, _)| n == name).map(|(_, v)| *v)
 }
 
 /// The meter's translations: `i18n` inside its data folder. Without it the
@@ -524,6 +599,28 @@ mod tests {
         assert_eq!(in_dungeon(600012, Some(&dir), &texts(), "en").as_deref(), Some("Urugugu Canyon · Conquest (Normal)"));
         assert_eq!(in_dungeon(600091, Some(&dir), &texts(), "en").as_deref(), Some("Ferocious Horn Den · Expedition"));
         assert_eq!(in_dungeon(0, Some(&dir), &texts(), "en"), None);
+    }
+
+    #[test]
+    fn the_number_outlives_the_party_for_the_same_character() {
+        let mut last = LastStats::default();
+        let in_party = LocalProfile { name: Some("Naicha".into()), gear_score: Some(1520), combat_power: Some(41_600), ..Default::default() };
+        assert_eq!(stat_text(&in_party, Stat::CombatPower, &mut last, &texts()).as_deref(), Some("CP 42k"));
+        let solo = LocalProfile { name: Some("Naicha".into()), ..Default::default() };
+        assert_eq!(stat_text(&solo, Stat::GearScore, &mut last, &texts()).as_deref(), Some("GS 1520"));
+        assert_eq!(stat_text(&solo, Stat::CombatPower, &mut last, &texts()).as_deref(), Some("CP 42k"));
+        assert_eq!(stat_text(&solo, Stat::Off, &mut last, &texts()), None);
+        let other = LocalProfile { name: Some("Alt".into()), ..Default::default() };
+        assert_eq!(stat_text(&other, Stat::CombatPower, &mut last, &texts()), None);
+    }
+
+    #[test]
+    fn the_number_follows_the_setting() {
+        assert_eq!(Stat::from_setting(None), Stat::Off);
+        assert_eq!(Stat::from_setting(Some("combatPower")), Stat::CombatPower);
+        assert_eq!(Stat::from_setting(Some("gearScore")), Stat::GearScore);
+        assert_eq!(Stat::from_setting(Some("off")), Stat::Off);
+        assert_eq!(Stat::from_setting(Some("nonsense")), Stat::Off);
     }
 
     #[test]

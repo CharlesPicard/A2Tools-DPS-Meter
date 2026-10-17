@@ -6,6 +6,8 @@ const SETTING_CHOICES = {
   trainSelectionMode: { allowed: ["all", "highestDamage"], fallback: "all" },
   // The figure beside each player's name, in the meter and in Details.
   partyStat: { allowed: ["combatPower", "gearScore", "both", "off"], fallback: "combatPower" },
+  // The number after the level in the Discord activity (presence.rs).
+  discordStat: { allowed: ["combatPower", "gearScore", "off"], fallback: "off" },
   // A pattern over the meter's bars: a supporter's perk (applyBarTexture).
   barTexture: { allowed: ["none", "flames", "crystal", "glacier", "feathers", "wing", "storm", "nebula", "galaxy", "aura"], fallback: "none" },
 };
@@ -115,6 +117,7 @@ class DpsApp {
       saveRawPackets: "dpsMeter.saveRawPackets",
       autoUpload: "dpsMeter.autoUpload",
       discordActivity: "dpsMeter.discordActivity",
+      discordStat: "dpsMeter.discordStat",
       discordPromoShown: "dpsMeter.discordPromoShown",
       partyPresence: "dpsMeter.partyPresence",
       partyPromoShown: "dpsMeter.partyPromoShown",
@@ -2543,6 +2546,8 @@ class DpsApp {
     this.barTextureHint = document.querySelector(".barTextureHint");
     this.textureOffsetCheckbox = document.querySelector(".textureOffsetCheckbox");
     this.partyStatDropdownMenu = document.querySelector(".partyStatDropdownMenu");
+    this.discordStatDropdownBtn = document.querySelector(".discordStatDropdownBtn");
+    this.discordStatDropdownMenu = document.querySelector(".discordStatDropdownMenu");
     this.trainSelectionModeDropdownMenu = document.querySelector(".trainSelectionModeDropdownMenu");
     this.defaultMeterModeDropdownBtn = document.querySelector(".defaultMeterModeDropdownBtn");
     this.defaultMeterModeDropdownMenu = document.querySelector(".defaultMeterModeDropdownMenu");
@@ -2613,6 +2618,7 @@ class DpsApp {
       allTargetsWindowMs: "120000",
       trainSelectionMode: "all",
       partyStat: "combatPower",
+      discordStat: "off",
       barTexture: "none",
     };
 
@@ -2759,6 +2765,7 @@ class DpsApp {
     this.partyStat = pickSettingChoice("partyStat", storedPartyStat);
     this.settingsSelections.partyStat = this.partyStat;
     this.syncPreviewPartyStat();
+    this.settingsSelections.discordStat = pickSettingChoice("discordStat", this.safeGetSetting(this.storageKeys.discordStat));
     this.barTexture = pickSettingChoice("barTexture", this.safeGetSetting(this.storageKeys.barTexture));
     this.settingsSelections.barTexture = this.barTexture;
     this.applyBarTexture(this.barTexture);
@@ -3026,8 +3033,7 @@ class DpsApp {
     Promise.resolve(window.javaBridge?.discordActivityAvailable?.())
       .catch(() => false)
       .then((ok) => {
-        const group = document.querySelector(".discordActivityGroup");
-        if (group && ok) group.style.display = "";
+        if (ok) for (const group of document.querySelectorAll(".discordActivityGroup")) group.style.display = "";
         if (window.A2_VIEW !== "main") return;
         if (window.a2Build?.online === false) return;   // nothing to offer
         // At most one offer per launch: the account one waits for a launch
@@ -3628,6 +3634,7 @@ class DpsApp {
       { value: "both", label: this.i18n?.t("settings.partyStat.options.both", "Both") },
       { value: "off", label: this.i18n?.t("settings.partyStat.options.off", "Off") },
     ];
+    const discordStatOptions = partyStatOptions.filter((opt) => SETTING_CHOICES.discordStat.allowed.includes(opt.value));
 
     const trainModeOptions = [
       { value: "all", label: this.i18n?.t("settings.trainingMode.options.all", "All") },
@@ -3727,6 +3734,18 @@ class DpsApp {
         this.settingsSelections.partyStat = value;
         this.applyPartyStat(value);
         this.safeSetSetting(this.storageKeys.partyStat, value);
+      }
+    );
+
+    setupDropdown(
+      this.discordStatDropdownBtn,
+      this.discordStatDropdownMenu,
+      discordStatOptions,
+      this.settingsSelections.discordStat,
+      (value) => {
+        if (!value) return;
+        this.settingsSelections.discordStat = value;
+        this.safeSetSetting(this.storageKeys.discordStat, value);
       }
     );
 
@@ -5338,6 +5357,7 @@ class DpsApp {
       allTargetsWindowMs: "allTargetsWindow",
       updateRateMs: "updateRate",
       partyStat: "partyStat",
+      discordStat: "discordStat",
       barTexture: "barTexture",
     };
     for (const [name, control] of Object.entries(choices)) {

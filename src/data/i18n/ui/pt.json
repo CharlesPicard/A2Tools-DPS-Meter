@@ -275,7 +275,9 @@
     "discord": {
       "title": "Discord",
       "activity": "Mostrar no Discord o que estou jogando",
-      "activityHint": "Enquanto o AION2 estiver aberto, seu status do Discord mostra o nome do seu personagem, classe, nível e servidor, e o chefe que você está enfrentando. Isso passa pelo aplicativo do Discord neste computador; não é preciso conta."
+      "activityHint": "Enquanto o AION2 estiver aberto, seu status do Discord mostra o nome do seu personagem, classe, nível e servidor, e o chefe que você está enfrentando. Isso passa pelo aplicativo do Discord neste computador; não é preciso conta. Com um Número no Discord escolhido, ele também mostra seu poder de combate ou sua pontuação de equipamento.",
+      "stat": "Número no Discord",
+      "statHint": "O número que seu status do Discord mostra depois do seu nível."
     },
     "streamOverlay": {
       "title": "Transmissão",
@@ -611,6 +613,8 @@
   },
   "presence": {
     "level": "Nv. {level}",
+    "combatPower": "CP {cp}",
+    "gearScore": "GS {gs}",
     "fighting": "Enfrentando {boss}",
     "inGame": "Em jogo",
     "elyos": "Elyos",
