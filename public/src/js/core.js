@@ -3310,8 +3310,11 @@ class DpsApp {
       window.javaBridge?.openBrowser?.("https://ko-fi.com/W7W51T1YW9");
     });
 
+    // This version's release notes; the list when the version isn't known.
     this.settingsVersionLink?.addEventListener("click", () => {
-      window.javaBridge?.openBrowser?.("https://github.com/taengu/AION2-DPS-Meter/releases");
+      const releases = "https://github.com/taengu/A2Tools-DPS-Meter/releases";
+      const version = /^v\d+\.\d+\.\d+$/.exec(this.settingsVersionValue?.textContent?.trim() || "")?.[0];
+      window.javaBridge?.openBrowser?.(version ? `${releases}/tag/${version}` : releases);
     });
 
     // Quit is wired in startApp, before anything that can be slow.
