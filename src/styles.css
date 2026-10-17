@@ -7875,3 +7875,13 @@ html.a2-offline .historyUploadBtn {
   .detailsPanel.isReplaying .detailsPartyBarFill,
   .detailsPanel.isReplaying .skills .rowFill { transition: none; }
 }
+
+/* Replaying: the skill table is redrawn four times a second. Rows scrolled
+   out of view are skipped (laid out and painted only when shown), and each
+   row's changes stay inside it, so a redraw no longer lays out and repaints
+   the whole long table (2026-10-18). */
+.detailsPanel.isReplaying .detailsSkills .skills .skillRow {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 28px;
+  contain: layout style paint;
+}
