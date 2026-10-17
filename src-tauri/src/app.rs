@@ -1879,6 +1879,58 @@ fn details_geometry_is_user_placed(app: &tauri::AppHandle) -> bool {
 
 const DETAILS_USER_PLACED_KEY: &str = "window.details.userPlaced";
 
+/// The windows that float apart from the overlay and reopen where they were
+/// left. Per-fight windows (details-*) are deliberately absent: they are
+/// opened to be read and closed, and keying geometry by fight id would grow
+/// settings without bound.
+const TOOL_WINDOWS: [&str; 3] = ["details", "settings", "history"];
+
+/// Remember where tool window `label` is and its size. Called on every move
+/// and resize, and every 5 s as before: with only the timer, a window moved
+/// and closed within 5 s reopened where it had been (Battle History,
+/// 2026-10-18).
+fn save_tool_window_geometry(handle: &tauri::AppHandle, label: &str) {
+    let Some(state) = handle.try_state::<AppState>() else { return };
+    // While Details is pinned to a monitor its rect comes from the setting,
+    // not from the user. Saving it poisons the windowed geometry: turn the
+    // setting off and Details would reopen full-size on that same screen.
+    if label == "details" && details_monitor_setting(handle).is_some() {
+        return;
+    }
+    let Some(w) = handle.get_webview_window(label) else { return };
+    if !w.is_visible().unwrap_or(false) || w.is_minimized().unwrap_or(false) {
+        return;
+    }
+    if let Ok(pos) = w.outer_position() {
+        if pos.x > -10000 && pos.y > -10000 {
+            state.settings.set(&format!("window.{}.x", label), &pos.x.to_string());
+            state.settings.set(&format!("window.{}.y", label), &pos.y.to_string());
+        }
+    }
+    // Inner, not outer: restore applies it with set_size, which sets the
+    // inner size. Saving the outer size grew every tool window by its border
+    // (16x9 px here) on each reopen.
+    if let Ok(size) = w.inner_size() {
+        if size.width > 100 && size.height > 100 {
+            state.settings.set(&format!("window.{}.w", label), &size.width.to_string());
+            state.settings.set(&format!("window.{}.h", label), &size.height.to_string());
+        }
+    }
+    // Details is unpinned here, but the window may still be sitting on the
+    // fill rect from before the setting was switched off. A rect that
+    // swallows a whole screen is not a placement anyone chose by dragging, so
+    // it never earns the marker.
+    if label == "details" {
+        let filling = match (w.outer_position(), w.outer_size()) {
+            (Ok(pos), Ok(size)) => rect_covers_a_monitor(handle, pos, size),
+            _ => true,
+        };
+        if !filling {
+            state.settings.set(DETAILS_USER_PLACED_KEY, "true");
+        }
+    }
+}
+
 /// Whether a window rect swallows a whole monitor — the shape of a
 /// monitor-filling placement rather than somewhere the user dragged a window.
 fn rect_covers_a_monitor(
@@ -2888,6 +2940,11 @@ pub fn run() {
             {
                 crate::plugins::note_resized(window.app_handle(), window, *size);
             }
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_))
+                && TOOL_WINDOWS.contains(&window.label())
+            {
+                save_tool_window_geometry(window.app_handle(), window.label());
+            }
             // Plugin widgets (#77) open where they were left, and close with
             // their plugin's window.
             if let tauri::WindowEvent::Moved(at) = event
@@ -3342,53 +3399,8 @@ pub fn run() {
                             // (details-*) are deliberately absent: they are
                             // opened to be read and closed, and keying geometry
                             // by fight id would grow settings without bound.
-                            for label in ["details", "settings", "history"] {
-                                // While Details is pinned to a monitor its rect
-                                // comes from the setting, not from the user.
-                                // Saving it poisons the windowed geometry: turn
-                                // the setting off and Details would reopen
-                                // full-size on that same screen.
-                                if label == "details"
-                                    && details_monitor_setting(&handle).is_some()
-                                {
-                                    continue;
-                                }
-                                if let Some(w) = handle.get_webview_window(label) {
-                                    if !w.is_visible().unwrap_or(false) {
-                                        continue;
-                                    }
-                                    if let Ok(pos) = w.outer_position() {
-                                        if pos.x > -10000 && pos.y > -10000 {
-                                            state.settings.set(&format!("window.{}.x", label), &pos.x.to_string());
-                                            state.settings.set(&format!("window.{}.y", label), &pos.y.to_string());
-                                        }
-                                    }
-                                    // Inner, not outer: restore applies it with
-                                    // set_size, which sets the inner size. Saving
-                                    // the outer size grew every tool window by its
-                                    // border (16x9 px here) on each reopen.
-                                    if let Ok(size) = w.inner_size() {
-                                        if size.width > 100 && size.height > 100 {
-                                            state.settings.set(&format!("window.{}.w", label), &size.width.to_string());
-                                            state.settings.set(&format!("window.{}.h", label), &size.height.to_string());
-                                        }
-                                    }
-                                    // Details is unpinned here, but the window
-                                    // may still be sitting on the fill rect from
-                                    // before the setting was switched off. A rect
-                                    // that swallows a whole screen is not a
-                                    // placement anyone chose by dragging, so it
-                                    // never earns the marker.
-                                    if label == "details" {
-                                        let filling = match (w.outer_position(), w.outer_size()) {
-                                            (Ok(pos), Ok(size)) => rect_covers_a_monitor(&handle, pos, size),
-                                            _ => true,
-                                        };
-                                        if !filling {
-                                            state.settings.set(DETAILS_USER_PLACED_KEY, "true");
-                                        }
-                                    }
-                                }
+                            for label in TOOL_WINDOWS {
+                                save_tool_window_geometry(&handle, label);
                             }
                         }
 
