@@ -634,8 +634,8 @@ const createDetailsUI = ({
   };
 
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
-  // Opening animations wait until every section is built (renderRest), so
-  // no section's build lands in the middle of one and drops its frames.
+  // The chart's draw-in waits until every section is built (renderRest), so
+  // no section's build lands in the middle of it and drops its frames.
   let pendingStarts = null;
   const whenBuilt = (start) => {
     if (pendingStarts) pendingStarts.push(start);
@@ -688,7 +688,9 @@ const createDetailsUI = ({
       }
       if (t < 1) requestAnimationFrame(step);
     };
-    whenBuilt(() => requestAnimationFrame(step));
+    // At once: the party and its figures go first, and the other sections
+    // are built after (renderRest), so nothing interrupts them.
+    requestAnimationFrame(step);
   };
 
   // The first time a fight's figures show, its bars slide out from empty
@@ -882,7 +884,7 @@ const createDetailsUI = ({
       detailsPartyListEl.appendChild(bar);
     });
     if (sliding) {
-      whenBuilt(() => {
+      requestAnimationFrame(() => {
         slides.forEach((fillEl, i) => {
           fillEl.style.transitionDelay = `${i * 40}ms`;
           fillEl.style.transform = "scaleX(1)";
@@ -3150,6 +3152,9 @@ const createDetailsUI = ({
     }
     stagedForSeq = openSeq;
     (async () => {
+      // The party bars and figures animate first (render): the rest is
+      // built once they have, as building it would make them stutter.
+      if (!reducedMotion()) await new Promise((resolve) => setTimeout(resolve, 760));
       for (const [step, section] of steps) {
         await nextFrame();
         // A newer render took over: it draws everything itself.
