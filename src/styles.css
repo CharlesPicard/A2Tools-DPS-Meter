@@ -7862,18 +7862,21 @@ html.a2-offline .historyUploadBtn {
   .detailsPanel .ftlFoldChevron { transition: none; }
 }
 
-/* Replaying: the figures are drawn ten times a second; the bars glide to
-   each new length over that tenth (details.js renderPartyBars). */
-.detailsPanel.isReplaying .detailsPartyBarFill {
-  transition: transform 110ms linear;
+/* Replaying: the figures are redrawn several times a second. No transition
+   inside the party list or the skill table: each running one put its row on
+   a GPU layer of its own, made and dropped with every redraw (about a
+   hundred, several times a second), which lagged the whole desktop
+   (2026-10-18). Each of the three blocks is instead one steady layer of its
+   own, so its redraws repaint only itself, not the page. */
+.detailsPanel.isReplaying .detailsPartyList *,
+.detailsPanel.isReplaying .detailsSkills * {
+  transition: none !important;
+}
+.detailsPanel.isReplaying .detailsPartyList,
+.detailsPanel.isReplaying .detailsStats,
+.detailsPanel.isReplaying .detailsSkills {
+  contain: layout paint;
   will-change: transform;
-}
-.detailsPanel.isReplaying .skills .rowFill {
-  transition: transform 110ms linear;
-}
-@media (prefers-reduced-motion: reduce) {
-  .detailsPanel.isReplaying .detailsPartyBarFill,
-  .detailsPanel.isReplaying .skills .rowFill { transition: none; }
 }
 
 /* Replaying: the skill table is redrawn four times a second. Rows scrolled

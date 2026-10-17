@@ -700,16 +700,11 @@ const createDetailsUI = ({
   // The first time a fight's figures show, its bars slide out from empty
   // (render sets this; see `renderRest`).
   let fillBarsFromZero = false;
-  // During a replay the bars are drawn ten times a second: each starts where
-  // it was and glides to its new length (styles.css), rather than jumping.
-  const lastBarWidth = new Map();
   const renderPartyBars = (stats, battleTimeMs) => {
     if (!detailsPartyListEl) return;
     const sliding = fillBarsFromZero && !reducedMotion();
     fillBarsFromZero = false;
     const slides = [];
-    const gliding = !sliding && detailsPanel.classList.contains("isReplaying") && !reducedMotion();
-    const glides = [];
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
@@ -768,20 +763,7 @@ const createDetailsUI = ({
       // A width rather than a stretch, so a bar texture keeps its size.
       fillEl.style.transform = "none";
       const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
-      const wasWidth = lastBarWidth.get(actorId);
-      lastBarWidth.set(actorId, fillWidth);
-      if (gliding) {
-        // Stretched rather than sized while replaying: a transform glides on
-        // the GPU, where a width laid the page out and repainted it every
-        // frame of the replay.
-        const scale = (w) => `scaleX(${(parseFloat(w) / 100).toFixed(4)})`;
-        fillEl.style.width = "100%";
-        fillEl.style.transformOrigin = "left center";
-        fillEl.style.transform = scale(wasWidth ?? fillWidth);
-        if (wasWidth !== undefined && wasWidth !== fillWidth) glides.push([fillEl, scale(fillWidth)]);
-      } else {
-        fillEl.style.width = fillWidth;
-      }
+      fillEl.style.width = fillWidth;
       if (sliding) {
         // A transform, not the width: the width made every frame lay the
         // page out again, and the slide stuttered.
@@ -905,9 +887,6 @@ const createDetailsUI = ({
 
       detailsPartyListEl.appendChild(bar);
     });
-    if (glides.length) {
-      requestAnimationFrame(() => glides.forEach(([fillEl, transform]) => { fillEl.style.transform = transform; }));
-    }
     if (sliding) {
       requestAnimationFrame(() => {
         slides.forEach((fillEl, i) => {
