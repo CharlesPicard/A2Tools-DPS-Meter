@@ -264,6 +264,20 @@ if (typeof module !== "undefined" && module.exports) {
     head.hidden = true;
     head.setAttribute("aria-hidden", "true");
     timeline.appendChild(head);
+    // The part of the timeline after the moment, dimmed by a shade that
+    // slides with it. A mask over the timeline, changed every frame, made the
+    // browser repaint the whole timeline every frame, and a web page's replay
+    // slowed the whole browser down (2026-10-18). A shade moved by transform
+    // repaints nothing.
+    const shade = document.createElement("div");
+    shade.className = "fightReplayShade";
+    shade.hidden = true;
+    shade.setAttribute("aria-hidden", "true");
+    const shadeFill = document.createElement("div");
+    shadeFill.className = "fightReplayShadeFill";
+    shade.appendChild(shadeFill);
+    timeline.appendChild(shade);
+    let shadeFor = null;
 
     try { window.lucide?.createIcons?.(); } catch { /* text-less buttons keep their labels */ }
 
@@ -307,24 +321,31 @@ if (typeof module !== "undefined" && module.exports) {
     const paintTimeline = () => {
       if (!scroll) return;
       if (!active) {
-        scroll.style.removeProperty("mask-image");
-        scroll.style.removeProperty("-webkit-mask-image");
         head.hidden = true;
+        shade.hidden = true;
+        shadeFor = null;
         return;
       }
       if (!geometry) geometry = readGeometry();
       const dur = durationMs();
       if (!geometry || dur <= 0) return;
-      const x = geometry.left + Math.min(1, at / dur) * (geometry.right - geometry.left);
-      const faint = `rgba(0,0,0,${FUTURE_ALPHA})`;
-      const mask = `linear-gradient(to right, #000 ${x.toFixed(1)}px, ${faint} ${x.toFixed(1)}px, `
-        + `${faint} ${geometry.right}px, #000 ${geometry.right}px)`;
-      scroll.style.setProperty("-webkit-mask-image", mask);
-      scroll.style.setProperty("mask-image", mask);
+      const width = geometry.right - geometry.left;
+      const x = geometry.left + Math.min(1, at / dur) * width;
+      if (shadeFor !== geometry) {
+        // Placed once per layout; each frame only moves it.
+        shadeFor = geometry;
+        shade.style.left = `${geometry.x0 + geometry.left}px`;
+        shade.style.top = `${geometry.top}px`;
+        shade.style.width = `${width}px`;
+        shade.style.height = `${geometry.height}px`;
+        shadeFill.style.opacity = String(1 - FUTURE_ALPHA);
+        head.style.top = `${geometry.top}px`;
+        head.style.height = `${geometry.height}px`;
+      }
+      shade.hidden = false;
       head.hidden = false;
+      shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
-      head.style.top = `${geometry.top}px`;
-      head.style.height = `${geometry.height}px`;
     };
 
     const paintControls = () => {
@@ -332,9 +353,13 @@ if (typeof module !== "undefined" && module.exports) {
       scrub.max = String(dur);
       scrub.value = String(active ? at : dur);
       const shown = active ? at : dur;
-      timeEl.textContent = `${clock(shown)} / ${clock(dur)}`;
-      scrub.setAttribute("aria-valuetext", t("details.replay.positionText", "{at} of {total}")
-        .replace("{at}", clock(shown)).replace("{total}", clock(dur)));
+      const text = `${clock(shown)} / ${clock(dur)}`;
+      // Once a second, not every frame: the clock shows whole seconds.
+      if (text !== timeEl.textContent) {
+        timeEl.textContent = text;
+        scrub.setAttribute("aria-valuetext", t("details.replay.positionText", "{at} of {total}")
+          .replace("{at}", clock(shown)).replace("{total}", clock(dur)));
+      }
       scrub.style.setProperty("--range-pct", `${dur > 0 ? ((shown / dur) * 100).toFixed(2) : 100}%`);
     };
 

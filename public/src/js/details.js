@@ -770,9 +770,15 @@ const createDetailsUI = ({
       const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
       const wasWidth = lastBarWidth.get(actorId);
       lastBarWidth.set(actorId, fillWidth);
-      if (gliding && wasWidth !== undefined && wasWidth !== fillWidth) {
-        fillEl.style.width = wasWidth;
-        glides.push([fillEl, fillWidth]);
+      if (gliding) {
+        // Stretched rather than sized while replaying: a transform glides on
+        // the GPU, where a width laid the page out and repainted it every
+        // frame of the replay.
+        const scale = (w) => `scaleX(${(parseFloat(w) / 100).toFixed(4)})`;
+        fillEl.style.width = "100%";
+        fillEl.style.transformOrigin = "left center";
+        fillEl.style.transform = scale(wasWidth ?? fillWidth);
+        if (wasWidth !== undefined && wasWidth !== fillWidth) glides.push([fillEl, scale(fillWidth)]);
       } else {
         fillEl.style.width = fillWidth;
       }
@@ -900,7 +906,7 @@ const createDetailsUI = ({
       detailsPartyListEl.appendChild(bar);
     });
     if (glides.length) {
-      requestAnimationFrame(() => glides.forEach(([fillEl, width]) => { fillEl.style.width = width; }));
+      requestAnimationFrame(() => glides.forEach(([fillEl, transform]) => { fillEl.style.transform = transform; }));
     }
     if (sliding) {
       requestAnimationFrame(() => {

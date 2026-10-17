@@ -7366,6 +7366,9 @@ html.a2-offline .historyUploadBtn {
   height: 16px;
   margin: 0;
   background: transparent;
+  /* Moved every frame of a replay: on its own layer, so the panel around it
+     is not repainted with it. */
+  will-change: transform;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;
@@ -7424,6 +7427,23 @@ html.a2-offline .historyUploadBtn {
   border-left: 2px solid var(--isUser-fill);
   pointer-events: none;
   z-index: 29;
+  /* Moved every frame of a replay: its own layer, so nothing repaints. */
+  will-change: transform;
+}
+.detailsPanel .fightReplayShade {
+  position: absolute;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 28;
+}
+.detailsPanel .fightReplayShade[hidden] {
+  display: none;
+}
+.detailsPanel .fightReplayShadeFill {
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--hud-bg));
+  will-change: transform;
 }
 .detailsPanel .fightReplayHead[hidden] {
   display: none;
@@ -7845,7 +7865,8 @@ html.a2-offline .historyUploadBtn {
 /* Replaying: the figures are drawn ten times a second; the bars glide to
    each new length over that tenth (details.js renderPartyBars). */
 .detailsPanel.isReplaying .detailsPartyBarFill {
-  transition: width 110ms linear;
+  transition: transform 110ms linear;
+  will-change: transform;
 }
 .detailsPanel.isReplaying .skills .rowFill {
   transition: transform 110ms linear;
