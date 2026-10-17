@@ -340,6 +340,9 @@
     "windowOpacity": {
       "label": "Opacité du fond"
     },
+    "titleOpacity": {
+      "label": "Opacité de la barre de titre"
+    },
     "meterOpacity": {
       "label": "Opacité des barres"
     },
@@ -448,6 +451,7 @@
       "showSuspendBtn": "Un bouton sur le compteur qui arrête la lecture du trafic du jeu jusqu'à ce que tu appuies à nouveau.",
       "showLockBtn": "Un bouton qui fait ignorer la souris au compteur, pour que les clics passent au jeu.",
       "windowOpacity": "La transparence du fond du compteur. Les barres et le texte ne changent pas.",
+      "titleOpacity": "La transparence de la barre de titre du meter, à part du fond en dessous. Tant que vous ne le bougez pas, il suit le fond.",
       "meterOpacity": "L'opacité des barres de dégâts colorées.",
       "meterSaturation": "L'intensité des couleurs des barres : plus bas pour plus doux, plus haut pour plus vif.",
       "bossNameSize": "Taille du nom du boss ou de la cible au-dessus des barres.",

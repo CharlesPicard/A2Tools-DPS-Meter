@@ -120,6 +120,7 @@ class DpsApp {
       partyPromoShown: "dpsMeter.partyPromoShown",
       accountPromoShown: "dpsMeter.accountPromoShown",
       windowOpacity: "dpsMeter.windowOpacity",
+      titleOpacity: "dpsMeter.titleOpacity",
       bossNameSize: "dpsMeter.bossNameSize",
       betaUi: "dpsMeter.betaUi",
       detailsMonitor: "dpsMeter.detailsMonitor",
@@ -1777,6 +1778,33 @@ class DpsApp {
     if (persist) {
       this.safeSetSetting(this.storageKeys.windowOpacity, String(normalized));
     }
+    // The title bar follows the background until it is set apart.
+    if (!this.titleOpacitySet()) this.syncSettingsRangeValue?.(this.titleOpacityInput, this.titleOpacityValue, normalized);
+  }
+
+  // The title bar's own opacity, or null: it follows the background's.
+  titleOpacitySet() {
+    const stored = this.safeGetStorage(this.storageKeys.titleOpacity);
+    return stored !== null && String(stored).trim() !== "" && Number.isFinite(Number(stored));
+  }
+
+  applyTitleOpacity(percent, { persist } = {}) {
+    const numeric = Number(percent);
+    const normalized = Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric))) : 40;
+    document.documentElement.style.setProperty("--title-opacity", String(normalized / 100));
+    if (persist) {
+      this.safeSetSetting(this.storageKeys.titleOpacity, String(normalized));
+    }
+  }
+
+  // The title bar's height, for the background layer behind it.
+  watchTitleHeight() {
+    const meter = document.querySelector(".meter");
+    const header = meter?.querySelector(".header");
+    if (!meter || !header || typeof ResizeObserver !== "function") return;
+    const sync = () => meter.style.setProperty("--title-h", `${header.offsetHeight}px`);
+    new ResizeObserver(sync).observe(header);
+    sync();
   }
 
   resetAllSettings() {
@@ -2557,6 +2585,8 @@ class DpsApp {
     this.bossNameSizeValue = document.querySelector(".bossNameSizeValue");
     this.windowOpacityInput = document.querySelector(".windowOpacityInput");
     this.windowOpacityValue = document.querySelector(".windowOpacityValue");
+    this.titleOpacityInput = document.querySelector(".titleOpacityInput");
+    this.titleOpacityValue = document.querySelector(".titleOpacityValue");
     this.discordButton = document.querySelector(".discordButton");
     this.supportWidget = document.querySelector(".supportWidget");
     this.supportButton = document.querySelector(".supportButton");
@@ -3134,6 +3164,25 @@ class DpsApp {
         const next = Math.max(0, Math.min(100, Math.round(value)));
         this.windowOpacityValue.textContent = `${next}%`;
         this.applyWindowOpacity(next, { persist: true });
+      });
+    }
+
+    // Title bar opacity: its own once moved, else the background's.
+    this.watchTitleHeight();
+    if (this.titleOpacitySet()) this.applyTitleOpacity(this.safeGetStorage(this.storageKeys.titleOpacity), { persist: false });
+    if (this.titleOpacityInput && this.titleOpacityValue) {
+      const shown = this.titleOpacitySet()
+        ? Math.max(0, Math.min(100, Math.round(Number(this.safeGetStorage(this.storageKeys.titleOpacity)))))
+        : Number(this.windowOpacityInput?.value ?? 40);
+      this.titleOpacityInput.value = String(shown);
+      this.titleOpacityValue.textContent = `${shown}%`;
+      const stopDrag = (event) => event.stopPropagation();
+      this.titleOpacityInput.addEventListener("mousedown", stopDrag);
+      this.titleOpacityInput.addEventListener("touchstart", stopDrag, { passive: true });
+      this.titleOpacityInput.addEventListener("input", (event) => {
+        const next = Math.max(0, Math.min(100, Math.round(Number(event.target?.value))));
+        this.titleOpacityValue.textContent = `${next}%`;
+        this.applyTitleOpacity(next, { persist: true });
       });
     }
 
@@ -4659,6 +4708,7 @@ class DpsApp {
       ["meterFillOpacity", get("meterFillOpacity")],
       ["meterFillSaturation", get("meterFillSaturation")],
       ["windowOpacity", get("windowOpacity")],
+      ["titleOpacity", get("titleOpacity")],
       ["barGap", get("barGap")],
     ]) {
       if (isSet(value)) this.applyRemoteSettingChange(this.storageKeys[name], value);
@@ -5247,6 +5297,13 @@ class DpsApp {
       const normalized = this.normalizeMeterSaturation(value);
       this.applyMeterFillSaturation(normalized, { persist: false });
       this.syncSettingsRangeValue(this.meterSaturationInput, this.meterSaturationValue, normalized);
+      return;
+    }
+    if (key === this.storageKeys.titleOpacity) {
+      const numeric = Number(value);
+      const normalized = Number.isFinite(numeric) ? Math.max(0, Math.min(100, Math.round(numeric))) : 40;
+      this.applyTitleOpacity(normalized, { persist: false });
+      this.syncSettingsRangeValue(this.titleOpacityInput, this.titleOpacityValue, normalized);
       return;
     }
     if (key === this.storageKeys.meterFillOpacity || key === this.storageKeys.windowOpacity) {

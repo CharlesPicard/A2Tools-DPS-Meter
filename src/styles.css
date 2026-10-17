@@ -435,7 +435,15 @@ html:lang(zh-Hant), html:lang(zh-Hant) body {
   min-height: 30px;
   position: relative;
   border-radius: var(--rounded);
-  background: rgba(var(--hud-bg), var(--window-opacity));
+  /* Two layers: the title bar (its height measured into --title-h) at its own
+     opacity, which follows the background's until it is set apart in
+     Settings, and the rest at the background's. */
+  background:
+    linear-gradient(rgba(var(--hud-bg), var(--title-opacity, var(--window-opacity))),
+                    rgba(var(--hud-bg), var(--title-opacity, var(--window-opacity))))
+      top / 100% var(--title-h, 31px) no-repeat,
+    linear-gradient(rgba(var(--hud-bg), var(--window-opacity)), rgba(var(--hud-bg), var(--window-opacity)))
+      bottom / 100% calc(100% - var(--title-h, 31px)) no-repeat;
   border: 1px solid rgba(255, 255, 255, min(0.14, calc(var(--window-opacity) * 0.2)));
   box-shadow: 0 8px 28px rgba(0, 0, 0, calc(var(--window-opacity) * 0.45));
 }

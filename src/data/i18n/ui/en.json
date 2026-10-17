@@ -350,6 +350,9 @@
     "windowOpacity": {
       "label": "Background opacity"
     },
+    "titleOpacity": {
+      "label": "Title bar opacity"
+    },
     "meterOpacity": {
       "label": "Bar opacity"
     },
@@ -460,6 +463,7 @@
       "showSuspendBtn": "A button on the meter that stops reading game traffic until you press it again.",
       "showLockBtn": "A button that makes the meter ignore the mouse, so clicks go through to the game.",
       "windowOpacity": "How see-through the meter's background is. Bars and text stay as they are.",
+      "titleOpacity": "How see-through the meter's title bar is, apart from the background under it. Until you move it, it follows the background.",
       "meterOpacity": "How solid the coloured damage bars are.",
       "meterSaturation": "How strong the bars' colours are: lower for softer, higher for more vivid.",
       "bossNameSize": "Size of the boss or target name above the bars.",

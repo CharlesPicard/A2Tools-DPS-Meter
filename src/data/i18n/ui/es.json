@@ -340,6 +340,9 @@
     "windowOpacity": {
       "label": "Opacidad del fondo"
     },
+    "titleOpacity": {
+      "label": "Opacidad de la barra de título"
+    },
     "meterOpacity": {
       "label": "Opacidad de las barras"
     },
@@ -448,6 +451,7 @@
       "showSuspendBtn": "Un botón en el medidor que deja de leer el tráfico del juego hasta que lo pulses de nuevo.",
       "showLockBtn": "Un botón que hace que el medidor ignore el ratón, para que los clics lleguen al juego.",
       "windowOpacity": "Cuán transparente es el fondo del medidor. Las barras y el texto no cambian.",
+      "titleOpacity": "Qué tan transparente es la barra de título del medidor, aparte del fondo de debajo. Hasta que lo muevas, sigue al fondo.",
       "meterOpacity": "Cuán sólidas son las barras de daño de color.",
       "meterSaturation": "La intensidad de los colores de las barras: más bajo para suavizar, más alto para más viveza.",
       "bossNameSize": "Tamaño del nombre del jefe u objetivo sobre las barras.",

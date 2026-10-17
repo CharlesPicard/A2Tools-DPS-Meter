@@ -345,6 +345,9 @@
     "windowOpacity": {
       "label": "背景不透明度"
     },
+    "titleOpacity": {
+      "label": "标题栏不透明度"
+    },
     "meterOpacity": {
       "label": "条形不透明度"
     },
@@ -455,6 +458,7 @@
       "showSuspendBtn": "在计量器上显示一个按钮，按下后停止读取游戏流量，再按一次恢复。",
       "showLockBtn": "让计量器忽略鼠标、点击直接作用于游戏的按钮。",
       "windowOpacity": "计量器背景的透明程度。条形和文字不受影响。",
+      "titleOpacity": "统计窗口标题栏的透明程度，与下方背景分开设置。移动它之前，它跟随背景不透明度。",
       "meterOpacity": "彩色伤害条的不透明程度。",
       "meterSaturation": "条形颜色的浓淡：调低更柔和，调高更鲜艳。",
       "bossNameSize": "条形上方首领或目标名称的大小。",
