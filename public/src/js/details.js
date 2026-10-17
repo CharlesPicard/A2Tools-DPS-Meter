@@ -3327,5 +3327,46 @@ const createDetailsUI = ({
     renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
   };
 
+  // ── Fight replay hooks (fightReplay.js) ──
+  // A saved fight replayed to a moment: fightReplay.js cuts the record to it
+  // and has the party, the stats and the skills drawn from the cut here. The
+  // window's own state (lastDetails, the targets) stays the whole fight's, so
+  // the timeline, a sort or a reload still draw that; the replay draws over
+  // them again. renderFigures(null) draws the whole fight's figures.
+  window.fightReplay?.attach?.({
+    root: detailsPanel,
+    timeline: fightTimeline,
+    timelineScroll: fightTimelineScroll,
+    figureEls: () => [detailsPartyListEl, detailsStatsEl, skillsListEl],
+    record: () => historyRecord,
+    isOpen: () => detailsPanel.classList.contains("open"),
+    metrics: () => ftlMetrics(),
+    durationMs: () => ftlDurationMs,
+    selection: () => ({ attackerIds: selectedAttackerIds, targetId: selectedTargetId }),
+    targets: () => detailsTargets,
+    getDetails,
+    renderFigures: (cut) => {
+      if (!lastDetails) return;
+      const kept = [lastDetails, lastUnfilteredDetails, detailsTargets];
+      if (cut) {
+        lastDetails = cut.details;
+        lastUnfilteredDetails = cut.unfiltered;
+        detailsTargets = [cut.target];
+      }
+      try {
+        const ctx = buildPartyBarStats();
+        renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
+        renderStats(lastDetails, { compact: activeCompactMode });
+        renderSkills(lastDetails, { compact: activeCompactMode });
+        // Damage taken has no times: it stays the whole fight's, greyed.
+        const shownStats = detailsMode === "heal" ? HEAL_STATUS : STATUS;
+        statSlots.forEach((slot, i) => slot.statEl.classList.toggle("isWholeFight",
+          !!cut && shownStats[i]?.key === "details.stats.damageReceived"));
+      } finally {
+        [lastDetails, lastUnfilteredDetails, detailsTargets] = kept;
+      }
+    },
+  });
+
   return { open, close, isOpen, isPinned, render, updateLabels, refresh, updateGridColumns, openHistoryFight, resetDetailsMode, refreshPartyStat };
 };

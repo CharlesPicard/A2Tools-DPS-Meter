@@ -173,6 +173,19 @@
       }
     },
     "fightTimeline": "Cronología del combate",
+    "replay": {
+      "label": "Repetición",
+      "title": "Repetición",
+      "play": "Reproducir repetición",
+      "pause": "Pausa",
+      "speed": "Velocidad de reproducción",
+      "position": "Posición de la repetición",
+      "positionText": "{at} de {total}",
+      "exit": "Terminar repetición (mostrar el combate entero)",
+      "wholeFightNote": "Daño recibido, Mín / Máx y la duración de los beneficios son del combate entero; el daño y los críticos se reparten por igual entre los golpes de cada habilidad.",
+      "noHealTiming": "La curación de este combate no tiene tiempos (la guardó una versión anterior): muestra el combate entero.",
+      "unavailable": "Este combate se guardó sin los tiempos de los golpes, así que no se puede repetir"
+    },
     "casts": "Lanzamientos",
     "resize": "Arrastra para cambiar el tamaño",
     "healTimingNote": "Este combate no tiene tiempos de curación (registrado con una versión anterior).",
