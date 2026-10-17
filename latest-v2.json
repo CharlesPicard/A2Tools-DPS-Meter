@@ -5,8 +5,8 @@
   "debUrl": "https://cdn.a2tools.app/linux/a2tools-dps-meter_2.0.68_amd64.deb",
   "rpmUrl": "https://cdn.a2tools.app/linux/a2tools-dps-meter-2.0.68-1.x86_64.rpm",
   "releaseNotesUrl": "https://github.com/taengu/A2Tools-DPS-Meter/releases/tag/v2.0.68",
-  "msiSha256": "6c4cc87bc86f32a2d7227bd595aed1ccef72b7cf962debda67883dc9aac2c7e6",
-  "archSha256": "cf76b7f66555026edae9d7a69ca93ce4762727c241277dc4ece9c8f1c0ff45f9",
-  "debSha256": "a7ba9eed10ed33024019759363a7912f74982b4532ebad90eb00a0e215eaec29",
-  "rpmSha256": "7d235748ad1db16b140213e6a918c21ccc2a4d55821056bd332ed28b334d900f"
+  "msiSha256": "39fc70f101bc46ba2b1a36f25835433a1d9995e98a4b9676bfdef9060ff89bae",
+  "archSha256": "6a6a56799ca2f66ff9f9c873c8ffea1dc9e8e6a6b89690636d8a21567ca16800",
+  "debSha256": "c71e991076e15f8b95865c3e9ed2a1ae9dd965980127dc1b3fcaa3f7dfcd083b",
+  "rpmSha256": "9b6aaf200d80ac52f4ea610b808e4991ad3ca86712761148e4dc094285b4d9a5"
 }
