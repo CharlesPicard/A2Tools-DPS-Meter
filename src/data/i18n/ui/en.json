@@ -178,6 +178,19 @@
       }
     },
     "fightTimeline": "Fight timeline",
+    "replay": {
+      "label": "Replay",
+      "title": "Replay",
+      "play": "Play replay",
+      "pause": "Pause",
+      "speed": "Playback speed",
+      "position": "Replay position",
+      "positionText": "{at} of {total}",
+      "exit": "End replay (show the whole fight)",
+      "wholeFightNote": "Damage Taken, Min / Max and buff uptimes are for the whole fight; damage and crits are shared evenly over each skill's hits.",
+      "noHealTiming": "Healing in this fight has no times (an older version saved it): it shows the whole fight.",
+      "unavailable": "This fight was saved without hit times, so it cannot be replayed"
+    },
     "casts": "Casts",
     "resize": "Drag to resize",
     "healTimingNote": "No heal timing for this fight (recorded by an older version).",

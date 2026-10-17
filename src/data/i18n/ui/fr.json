@@ -173,6 +173,19 @@
       }
     },
     "fightTimeline": "Chronologie du combat",
+    "replay": {
+      "label": "Relecture",
+      "title": "Relecture",
+      "play": "Lancer la relecture",
+      "pause": "Pause",
+      "speed": "Vitesse de lecture",
+      "position": "Position de la relecture",
+      "positionText": "{at} sur {total}",
+      "exit": "Terminer la relecture (afficher tout le combat)",
+      "wholeFightNote": "Dégâts subis, Min / Max et durées des buffs portent sur tout le combat ; dégâts et critiques sont répartis également entre les coups de chaque compétence.",
+      "noHealTiming": "Les soins de ce combat n'ont pas d'horodatage (enregistré par une ancienne version) : ils montrent tout le combat.",
+      "unavailable": "Ce combat a été enregistré sans les instants des coups, il ne peut pas être relu"
+    },
     "casts": "Lancers",
     "resize": "Faire glisser pour redimensionner",
     "healTimingNote": "Pas de moments de soin pour ce combat (enregistré par une version plus ancienne).",

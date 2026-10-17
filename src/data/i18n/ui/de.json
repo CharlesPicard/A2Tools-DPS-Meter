@@ -173,6 +173,19 @@
       }
     },
     "fightTimeline": "Kampfverlauf",
+    "replay": {
+      "label": "Wiedergabe",
+      "title": "Wiedergabe",
+      "play": "Wiedergabe abspielen",
+      "pause": "Pause",
+      "speed": "Wiedergabegeschwindigkeit",
+      "position": "Wiedergabeposition",
+      "positionText": "{at} von {total}",
+      "exit": "Wiedergabe beenden (ganzen Kampf zeigen)",
+      "wholeFightNote": "Erlittener Schaden, Min / Max und Buff-Laufzeiten gelten für den ganzen Kampf; Schaden und Krits sind gleichmäßig auf die Treffer jeder Fertigkeit verteilt.",
+      "noHealTiming": "Die Heilung in diesem Kampf hat keine Zeiten (von einer älteren Version gespeichert): Sie zeigt den ganzen Kampf.",
+      "unavailable": "Dieser Kampf wurde ohne Trefferzeiten gespeichert und kann nicht wiedergegeben werden"
+    },
     "casts": "Wirkungen",
     "resize": "Ziehen zum Ändern der Größe",
     "healTimingNote": "Für diesen Kampf gibt es keine Heilzeitpunkte (mit einer älteren Version aufgezeichnet).",

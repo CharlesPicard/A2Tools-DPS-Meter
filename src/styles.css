@@ -7242,6 +7242,190 @@ html.a2-offline .historyUploadBtn {
   transform: translateX(-100%);
 }
 
+/* Fight replay (fightReplay.js): under the axis, the controls in the gutter
+   and the scrubber over the lanes, so its thumb sits on the chart's moment. */
+.detailsPanel .fightReplayBar {
+  flex: none;
+  display: grid;
+  grid-template-columns: var(--ftl-gutter) minmax(0, 1fr) calc(var(--ftl-right) + var(--ftl-sb, 0px));
+  align-items: center;
+  min-height: 30px;
+  border-top: 1px solid var(--hud-hairline);
+}
+.detailsPanel .fightReplayBar[hidden] {
+  display: none;
+}
+.detailsPanel .fightReplayControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 3px 8px 3px 12px;
+}
+.detailsPanel .fightReplayBtn {
+  appearance: none;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+}
+.detailsPanel .fightReplayBtn:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: var(--hud-num, #fff);
+}
+.detailsPanel .fightReplayBtn:focus-visible,
+.detailsPanel .fightReplaySpeed:focus-visible,
+.detailsPanel .fightReplayScrub:focus-visible {
+  outline: 1px solid var(--isUser-fill);
+  outline-offset: 1px;
+}
+.detailsPanel .fightReplayBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.detailsPanel .fightReplayBtn svg {
+  width: 14px;
+  height: 14px;
+}
+.detailsPanel .fightReplayPlay {
+  color: var(--isUser-fill);
+}
+.detailsPanel .fightReplayBar .fightReplayIconPause,
+.detailsPanel .fightReplayBar.isPlaying .fightReplayIconPlay {
+  display: none;
+}
+.detailsPanel .fightReplayBar.isPlaying .fightReplayIconPause {
+  display: block;
+}
+.detailsPanel .fightReplayLabel {
+  font-family: var(--hud-tech);
+  font-variation-settings: "wght" 650, "wdth" 87.5;
+  font-size: 0.92em;
+  color: var(--hud-sub);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.detailsPanel .fightReplayBar.isActive .fightReplayLabel {
+  display: none;
+}
+.detailsPanel .fightReplayTime {
+  margin-left: auto;
+  font-family: var(--hud-tech);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.95em;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+}
+.detailsPanel .fightReplayBar.isActive .fightReplayTime {
+  color: var(--hud-num, #fff);
+}
+.detailsPanel .fightReplaySpeed {
+  flex: none;
+  height: 22px;
+  padding: 0 2px;
+  border: none;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: var(--hud-tech);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.9em;
+  cursor: pointer;
+}
+.detailsPanel .fightReplaySpeed option {
+  background: rgb(var(--hud-bg));
+  color: #fff;
+}
+.detailsPanel .fightReplayScrubWrap {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.detailsPanel .fightReplayScrub {
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.detailsPanel .fightReplayScrub:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.detailsPanel .fightReplayScrub::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    var(--isUser-fill) 0 var(--range-pct, 100%),
+    rgba(255, 255, 255, 0.14) var(--range-pct, 100%) 100%
+  );
+}
+.detailsPanel .fightReplayBar:not(.isActive) .fightReplayScrub::-webkit-slider-runnable-track {
+  background: rgba(255, 255, 255, 0.14);
+}
+.detailsPanel .fightReplayScrub::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 9px;
+  height: 13px;
+  margin-top: -5px;
+  border: 0;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+.detailsPanel .fightReplayExit {
+  justify-self: start;
+  margin-left: 8px;
+  visibility: hidden;
+}
+.detailsPanel .fightReplayBar.isActive .fightReplayExit {
+  visibility: visible;
+}
+.detailsPanel .fightReplayNote {
+  display: none;
+  grid-column: 2 / -1;
+  padding: 0 12px 5px 0;
+  font-size: 0.85em;
+  color: var(--hud-sub);
+}
+.detailsPanel .fightReplayBar.isActive .fightReplayNote:not(.fightReplayHealNote),
+.detailsPanel .fightReplayBar.isActive.noHealTiming .fightReplayHealNote {
+  display: block;
+}
+/* The moment, through the timeline's lanes (which past it are faint). */
+.detailsPanel .fightReplayHead {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 0;
+  border-left: 2px solid var(--isUser-fill);
+  pointer-events: none;
+  z-index: 29;
+}
+.detailsPanel .fightReplayHead[hidden] {
+  display: none;
+}
+/* What a replay cannot cut by time stays the whole fight's, greyed. */
+.detailsPanel.isReplaying .detailsStats .stat.isWholeFight,
+.detailsPanel.isReplaying .skillRow .cell.mindmg,
+.detailsPanel.isReplaying .skillRow .cell.maxdmg,
+.detailsPanel.isReplaying .fightTimeline .buffUptime {
+  opacity: 0.4;
+}
+
 /* HEAL draws healing per second and the heal casts; a fight saved before
    heals had times keeps only the buffs, with a note. */
 .detailsPanel .ftlHealNote {
