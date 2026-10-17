@@ -54,6 +54,10 @@
 //   a2.widget.name                             its name
 //   a2.widget.drag()                           call on mousedown: the widget follows the pointer
 //                                              (not while locked)
+//   a2.widget.area({ x, y, width, height })    the part of the page that takes the mouse (CSS px);
+//                                              elsewhere clicks go through to what is under the
+//                                              window, so widgets set close together don't catch
+//                                              each other's drags (Linux; meter 2.0.70 on)
 //   a2.widget.post(data)                       to the plugin's page ("widget-message")
 //   a2.on("widget", (data) => ...)             what the plugin sent it
 //   a2.on("locked", (locked) => ...)           whether the widgets are locked, at start and on change
@@ -119,6 +123,7 @@
     widget: Object.freeze({
       name: new URLSearchParams(location.search).get("name") || "",
       drag: () => call("widget.drag", []),
+      area: (r) => call("widget.area", [r || {}]),
       post: (data) => call("widget.post", [data]),
     }),
     ready: () => call("ready", []),

@@ -1331,13 +1331,15 @@ pub fn plugin_window_fit(app: tauri::AppHandle, window: tauri::WebviewWindow, he
     Ok(())
 }
 
-/// The window's close button: close it until the next start (turning the
-/// plugin off in Settings keeps it closed).
+/// The window's × button: hide it (see below).
 #[tauri::command]
 pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<(), String> {
+    // Hidden, not stopped: a plugin that is on keeps running (its widgets,
+    // its alerts) until it is turned off in Settings; Open shows it again.
+    // Closing it stopped everything it did, which players did not expect.
     let id = window_plugin(&window)?;
-    host(&app)?.closed.lock().unwrap_or_else(|e| e.into_inner()).insert(id);
-    let _ = window.close();
+    crate::platform::window::hide_in_place(&window);
+    remember_window(&app, &id, Some("hidden"));
     Ok(())
 }
 

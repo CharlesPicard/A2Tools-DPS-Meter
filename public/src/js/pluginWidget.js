@@ -24,6 +24,11 @@
       return true;
     },
     "widget.drag": () => invoke("plugin_widget_drag"),
+    // The frame fills the window, so its CSS px are the window's.
+    "widget.area": ([r]) => invoke("plugin_widget_area", {
+      x: Number(r?.x), y: Number(r?.y), width: Number(r?.width), height: Number(r?.height),
+      scale: window.devicePixelRatio || 1,
+    }),
     "widget.post": ([data]) => invoke("plugin_widget_post", { data: data ?? null }),
   };
 

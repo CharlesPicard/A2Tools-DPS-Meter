@@ -67,12 +67,29 @@ fn open_widgets(app: &tauri::AppHandle, id: &str) -> Vec<tauri::WebviewWindow> {
         .collect()
 }
 
-/// Locked: clicks go through to the game. On Linux by an input region, which
-/// needs the window on screen (tao's own call would abort without one; see
-/// `platform::window::hide_in_place`), so a widget not yet shown is locked
-/// again once its page has loaded (`plugin_widget_hello`).
+/// The part of each widget that takes the mouse, as its page reported it
+/// (`a2.widget.area`): CSS px and the page's scale. Unlocked, clicks
+/// elsewhere in its window go through (Linux, by an input region), so icons
+/// set close together don't catch each other's drags.
+type Area = (f64, f64, f64, f64, f64);
+fn areas() -> &'static Mutex<HashMap<String, Area>> {
+    static AREAS: std::sync::OnceLock<Mutex<HashMap<String, Area>>> = std::sync::OnceLock::new();
+    AREAS.get_or_init(Mutex::default)
+}
+
+/// Locked: clicks go through to the game. Unlocked: only its area (when it
+/// reported one) takes them. On Linux by an input region, which needs the
+/// window on screen (tao's own call would abort without one; see
+/// `platform::window::hide_in_place`), so a widget is locked again once its
+/// page has loaded (`plugin_widget_hello`) and each time it is shown again.
 fn apply_lock(window: &tauri::WebviewWindow, locked: bool) {
-    if !crate::platform::window::click_through_except(window, locked, None) && !cfg!(target_os = "linux") {
+    let area = areas().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).copied();
+    let applied = match (locked, area) {
+        (true, _) => crate::platform::window::click_through_except(window, true, None),
+        (false, Some(area)) => crate::platform::window::click_through_except(window, true, Some(area)),
+        (false, None) => crate::platform::window::click_through_except(window, false, None),
+    };
+    if !applied && !cfg!(target_os = "linux") {
         let _ = window.set_ignore_cursor_events(locked);
     }
 }
@@ -105,6 +122,7 @@ pub async fn plugin_widget_open(
         if !crate::platform::window::reveal_in_place(&widget) {
             crate::platform::window::show_on_top_without_focus(&widget);
         }
+        apply_lock(&widget, is_locked(&app, &id));
         return Ok(());
     }
     if open_widgets(&app, &id).len() >= MAX_WIDGETS {
@@ -130,9 +148,47 @@ pub async fn plugin_widget_open(
         .focused(false)
         .build()
         .map_err(|e| e.to_string())?;
-    if let Some((x, y)) = saved_place(&app, &id, &name) {
+    // Where it was left; a widget never moved goes beside the plugin's others
+    // rather than wherever the window manager puts a new window (the middle
+    // of the screen).
+    let place = saved_place(&app, &id, &name).or_else(|| {
+        let others: Vec<_> = open_widgets(&app, &id).into_iter().filter(|w| w.label() != widget.label()).collect();
+        beside(others.iter().filter_map(|w| {
+            let at = w.outer_position().ok()?;
+            let size = w.outer_size().ok()?;
+            Some((at.x, at.y, size.width as i32, size.height as i32))
+        }))
+    });
+    if let Some((x, y)) = place {
         let _ = widget.set_position(tauri::PhysicalPosition::new(x, y));
     }
+    Ok(())
+}
+
+/// Just right of the rightmost of these places, on its row, with a gap.
+pub fn beside(places: impl Iterator<Item = (i32, i32, i32, i32)>) -> Option<(i32, i32)> {
+    places.max_by_key(|&(x, _, w, _)| x + w).map(|(x, y, w, _)| (x + w + 6, y))
+}
+
+/// The widget a window label names, beside its plugin's other widgets, for
+/// the window manager to place it (Linux on Wayland, see app.rs): from where
+/// the others were left.
+pub fn place_beside_others(app: &tauri::AppHandle, label: &str, place_of: impl Fn(&str) -> Option<(i32, i32, i32, i32)>) -> Option<(i32, i32)> {
+    let (id, _) = parse_label(label)?;
+    beside(open_widgets(app, &id).iter().filter(|w| w.label() != label).filter_map(|w| place_of(w.label())))
+}
+
+/// The part of the calling widget that takes the mouse while unlocked (CSS
+/// px from its top left, and the page's scale), from `a2.widget.area`.
+#[tauri::command]
+pub fn plugin_widget_area(app: tauri::AppHandle, window: tauri::WebviewWindow, x: f64, y: f64, width: f64, height: f64, scale: f64) -> Result<(), String> {
+    let (id, _) = widget_of(&window)?;
+    let ok = |v: f64| v.is_finite() && (0.0..=4000.0).contains(&v);
+    if !(ok(x) && ok(y) && ok(width) && ok(height) && scale.is_finite() && scale > 0.0 && scale <= 8.0) {
+        return Err("not an area".into());
+    }
+    areas().lock().unwrap_or_else(|p| p.into_inner()).insert(window.label().to_string(), (x, y, width, height, scale));
+    apply_lock(&window, is_locked(&app, &id));
     Ok(())
 }
 
@@ -142,6 +198,7 @@ pub fn plugin_widget_close(app: tauri::AppHandle, window: tauri::WebviewWindow, 
     let id = window_plugin(&window)?;
     require(&app, &id, "widgets")?;
     if let Some(widget) = app.get_webview_window(&label(&id, &name)) {
+        areas().lock().unwrap_or_else(|p| p.into_inner()).remove(widget.label());
         let _ = widget.close();
     }
     Ok(())
@@ -220,6 +277,7 @@ pub fn plugin_widget_drag(app: tauri::AppHandle, window: tauri::WebviewWindow) -
 /// Close every widget of plugin `id`: its main window has gone.
 pub fn close_all(app: &tauri::AppHandle, id: &str) {
     for widget in open_widgets(app, id) {
+        areas().lock().unwrap_or_else(|p| p.into_inner()).remove(widget.label());
         let _ = widget.close();
     }
 }
@@ -256,5 +314,12 @@ mod tests {
         assert_eq!(parse_label("plugin-event-timers"), None);
         assert_eq!(parse_label("pw_Bad_name"), None);
         assert!(!valid_name("has_underscore") && !valid_name("") && valid_name("boss-101006"));
+    }
+
+    #[test]
+    fn a_new_widget_goes_right_of_the_rightmost_one() {
+        assert_eq!(beside([].into_iter()), None);
+        let places = [(100, 50, 80, 90), (300, 400, 80, 90), (200, 60, 80, 90)];
+        assert_eq!(beside(places.into_iter()), Some((386, 400)));
     }
 }

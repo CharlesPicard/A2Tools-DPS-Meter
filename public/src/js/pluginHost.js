@@ -152,8 +152,8 @@
     invoke("start_tool_drag").catch(() => {});
   });
   document.querySelector(".pluginClose").addEventListener("click", () => {
-    // Closed until the next start; turning the plugin off in Settings keeps
-    // it closed.
+    // Hidden: the plugin keeps running (its widgets and alerts) until it is
+    // turned off in Settings, where Open shows it again.
     invoke("plugin_close").catch(() => {});
   });
 

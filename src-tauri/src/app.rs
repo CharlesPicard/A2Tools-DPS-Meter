@@ -191,10 +191,17 @@ fn save_window_place(app: &tauri::AppHandle, title: &str, (x, y, w, h): (i32, i3
 fn load_window_place(app: &tauri::AppHandle, title: &str) -> Option<(i32, i32, i32, i32)> {
     let label = window_titled(app, title)?;
     let state = app.try_state::<AppState>()?;
-    let value = state.settings.get(&format!("window.{label}.placed"))?;
-    let n: Vec<i32> = value.split(',').filter_map(|v| v.trim().parse().ok()).collect();
-    let [x, y, w, h] = n[..] else { return None };
-    Some(if label == "main" { (x, y, 0, 0) } else { (x, y, w, h) })
+    let placed = |label: &str| {
+        let value = state.settings.get(&format!("window.{label}.placed"))?;
+        let n: Vec<i32> = value.split(',').filter_map(|v| v.trim().parse().ok()).collect();
+        let [x, y, w, h] = n[..] else { return None };
+        Some((x, y, w, h))
+    };
+    match placed(&label) {
+        Some((x, y, w, h)) => Some(if label == "main" { (x, y, 0, 0) } else { (x, y, w, h) }),
+        // A plugin's widget never moved: beside its others, not mid-screen.
+        None => crate::plugins::widgets::place_beside_others(app, &label, placed).map(|(x, y)| (x, y, 0, 0)),
+    }
 }
 
 /// Auto-hide at once, when the desktop says the active window changed (KWin,
@@ -3435,6 +3442,7 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_post,
             crate::plugins::widgets::plugin_widget_drag,
             crate::plugins::boss_live::plugin_boss_follow,
+            crate::plugins::widgets::plugin_widget_area,
             set_meter_shown,
             meter_shown,
             crate::plugins::plugin_storage_get,
