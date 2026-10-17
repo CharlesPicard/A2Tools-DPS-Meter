@@ -355,8 +355,15 @@ impl DpsCalculator {
 
             entry.amount += damage as f64;
 
-            if entry.job.is_empty() {
-                if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
+            // The class this player is seen to play wins over the cache, which
+            // is keyed by name alone and outlives the session's fights: a name
+            // once cached with another class (a stale binding, or a namesake
+            // on another server) showed the wrong class, and in an instance
+            // the class rule then merged two players' rows. A summon's own
+            // class never decides its owner's.
+            if let Some(job) = combined_jobs.get(&actor_id).and_then(|j| *j) {
+                let player_itself = actor_id == raw_uid;
+                if entry.job.is_empty() || (player_itself && entry.job != job.class_name()) {
                     entry.job = job.class_name().to_string();
                     self.cache_job(&nickname, job.class_name());
                 }
@@ -2034,6 +2041,37 @@ mod tests {
         let rows: HashSet<i32> = details.skills.iter().map(|s| s.actor_id).collect();
         assert_eq!(rows, HashSet::from([1490, 5886, 7001, 7002, 119]),
             "spirit to the Spiritmaster; the old id and the aura to the Cleric; two Gladiators: unknown");
+    }
+
+    /// A main-window row's class came from a cache keyed by name alone and was
+    /// never corrected, so a Sorcerer whose name had once been cached as a
+    /// Templar showed as one, and in an instance the class rule then merged
+    /// the two players' rows (Details, which reads the class seen, kept them
+    /// apart). Reported 2026-10-17, log tMRqyYEStEUK7HJPC9GS6g.
+    #[test]
+    fn the_class_seen_on_a_player_beats_a_stale_cached_class() {
+        use crate::combat::data_storage::PartyMember;
+        use crate::entity::job_class::JobClass;
+        let storage = Arc::new(DataStorage::new());
+        storage.set_current_dungeon(600_072);
+        let member = |slot, job| PartyMember { slot, job: Some(job), ..Default::default() };
+        storage.set_party_roster(vec![
+            ("Tank".into(), member(1, JobClass::Templar)),
+            ("X".into(), member(2, JobClass::Sorcerer)),
+        ], true);
+        storage.append_nickname_authoritative(4186, "Tank");
+        storage.append_nickname_authoritative(5740, "X");
+        rotation(&storage, 4186, 50_000, 12, 8);     // the Templar
+        rotation(&storage, 5740, 50_000, 15, 8);     // the Sorcerer
+        let mut calc = meter(&storage);
+        calc.cache_job("X", JobClass::Templar.class_name());   // a stale class for the name
+        calc.set_target_selection_mode("allTargets");
+        let shown = calc.get_dps();
+        let mut rows: Vec<(String, String)> = shown.map.values().map(|d| (d.nickname.clone(), d.job.clone())).collect();
+        rows.sort();
+        let (templar, sorcerer) = (JobClass::Templar.class_name().to_string(), JobClass::Sorcerer.class_name().to_string());
+        assert_eq!(rows, vec![("Tank".to_string(), templar), ("X".to_string(), sorcerer.clone())]);
+        assert_eq!(calc.cached_job("X"), Some(sorcerer), "the cache is corrected");
     }
 
     #[test]
