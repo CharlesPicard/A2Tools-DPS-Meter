@@ -963,8 +963,9 @@ impl DpsCalculator {
         // stats here; the saved record's timestamps come from get_target_details.
         let combat_data = self.data_storage.get_combat_snapshot_light();
         // Once per snapshot rather than once per actor: the roster is a clone
-        // behind a lock, and it does not change between targets here.
-        let party_members = self.data_storage.get_party_members();
+        // behind a lock, and it does not change between targets here. With
+        // those who have left: this fight may be saved again after they go.
+        let party_members = self.data_storage.fight_roster();
         let supporters = self.data_storage.supporters();
         let roster_dungeon = self.data_storage.current_dungeon_id();
         let now_ms = crate::clock::now_ms();

@@ -548,6 +548,12 @@ struct Inner {
     low_id_entities: HashSet<i32>,
     /// Party roster from the `0x9702` packet, keyed by character name.
     party_members: HashMap<String, PartyMember>,
+    /// Members who have left the roster, as it last had them. A fight is saved
+    /// again every 30 s until the next one, and members who leave the party
+    /// before its last save would otherwise go out with no level, gear score
+    /// or combat power (Vakron, 2026-10-17: three of five, who left at the
+    /// end of the run). See `fight_roster`.
+    former_party_members: HashMap<String, PartyMember>,
     /// When the last roster arrived, and whether its members who have not
     /// fought should still get rows. See `party_placeholders_wanted`.
     party_roster_at_ms: i64,
@@ -733,6 +739,7 @@ impl DataStorage {
                 summon_spawn_ids: HashSet::new(),
                 low_id_entities: HashSet::new(),
                 party_members: HashMap::new(),
+                former_party_members: HashMap::new(),
                 party_roster_at_ms: 0,
                 damage_since_roster_bind: 0,
                 party_placeholders_hidden: false,
@@ -1758,6 +1765,12 @@ impl DataStorage {
             inner.party_generation += 1;
         }
         if complete {
+            let gone: Vec<String> = inner.party_members.keys().filter(|n| !members.iter().any(|(m, _)| m == *n)).cloned().collect();
+            for name in gone {
+                if let Some(member) = inner.party_members.remove(&name) {
+                    inner.former_party_members.insert(name, member);
+                }
+            }
             inner.party_members.clear();
         }
         for (name, member) in members {
@@ -1774,7 +1787,8 @@ impl DataStorage {
         // whose they are; the hook reads this storage, so no lock is held.
         self.run_before_reset();
         let mut inner = self.inner.write();
-        inner.party_members.clear();
+        let members = std::mem::take(&mut inner.party_members);
+        inner.former_party_members.extend(members);
         inner.party_generation += 1;
         inner.party_ended_at_ms = now_ms();
         inner.roster_dungeon_id = 0;
@@ -1842,6 +1856,17 @@ impl DataStorage {
 
     pub fn get_party_members(&self) -> HashMap<String, PartyMember> {
         self.inner.read().party_members.clone()
+    }
+
+    /// The roster a saved fight takes its players' level, gear score, combat
+    /// power and identity from: the party now, and those who have left it as
+    /// it last had them. Only for what a fight record keeps; who is in the
+    /// party is `get_party_members`.
+    pub fn fight_roster(&self) -> HashMap<String, PartyMember> {
+        let inner = self.inner.read();
+        let mut roster = inner.former_party_members.clone();
+        roster.extend(inner.party_members.iter().map(|(n, m)| (n.clone(), m.clone())));
+        roster
     }
 
     /// Whether party members who have not fought should still be shown, with
@@ -2977,6 +3002,27 @@ mod tests {
         s.inner.write().party_roster_at_ms -= 15 * 60 * 1000;
         assert!(!s.party_placeholders_wanted());
         assert_eq!(s.get_party_members().len(), 2, "the roster itself is kept, for combat power");
+    }
+
+    /// Members leaving after the boss falls (Vakron, 2026-10-17) keep their
+    /// combat power in the fight's later saves, but are no longer the party.
+    #[test]
+    fn a_fight_keeps_the_stats_of_members_who_have_left() {
+        let s = DataStorage::new();
+        let three = || vec![("Nyxera".into(), member(1)), ("Alfira".into(), member(2)), ("Sherhana".into(), member(3))];
+        s.set_party_roster(three(), true);
+        s.set_party_roster(vec![("Nyxera".into(), member(1)), ("Sherhana".into(), member(3))], true);
+        assert!(!s.get_party_members().contains_key("Alfira"));
+        assert_eq!(s.fight_roster().get("Alfira").map(|m| m.combat_power), Some(39_000));
+
+        // The roster now wins over what a member had before they left.
+        s.set_party_roster(vec![("Nyxera".into(), member(1)), ("Sherhana".into(), member(3)), ("Alfira".into(), PartyMember { combat_power: 41_000, ..member(2) })], true);
+        assert_eq!(s.fight_roster().get("Alfira").map(|m| m.combat_power), Some(41_000));
+
+        // The party ending keeps them too.
+        s.set_party_roster(vec![("Nyxera".into(), member(1))], true);
+        assert!(s.get_party_members().is_empty());
+        assert_eq!(s.fight_roster().len(), 3);
     }
 
     fn hit(actor: i32, target: i32, at: i64, damage: i32, dot: bool) -> ParsedDamagePacket {
