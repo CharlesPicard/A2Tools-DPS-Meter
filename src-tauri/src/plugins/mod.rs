@@ -1340,6 +1340,7 @@ pub fn plugin_close(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
     let id = window_plugin(&window)?;
     crate::platform::window::hide_in_place(&window);
     remember_window(&app, &id, Some("hidden"));
+    crate::app::keep_something_on_screen(&app, window.label());
     Ok(())
 }
 

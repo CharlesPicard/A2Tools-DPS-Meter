@@ -145,6 +145,22 @@ fn set_meter_wanted(app: &tauri::AppHandle, shown: bool) {
     let _ = app.emit("meter-shown", shown);
 }
 
+/// The meter hidden and no plugin window left on screen: nothing would be
+/// left to open anything with (a tester hid both, 2026-10-17), so the meter
+/// comes back. `except` is a window about to go.
+pub(crate) fn keep_something_on_screen(app: &tauri::AppHandle, except: &str) {
+    if meter_wanted(app) {
+        return;
+    }
+    let shown = app.webview_windows().into_iter().any(|(label, w)| {
+        label != except && label.starts_with("plugin-")
+            && w.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&w)
+    });
+    if !shown {
+        set_meter_wanted(app, true);
+    }
+}
+
 #[tauri::command]
 fn set_meter_shown(app: tauri::AppHandle, shown: bool) {
     set_meter_wanted(&app, shown);
@@ -3031,16 +3047,15 @@ pub fn run() {
                     platform::window_startup::arm_main_fallback(window);
                 } else {
                     // Plugins only: the meter stays hidden, unless no plugin
-                    // has started by then (all turned off or removed).
+                    // window is on screen by then.
                     platform::window::hide_in_place(&window);
                     let handle = app.handle().clone();
                     tauri::async_runtime::spawn(async move {
                         tokio::time::sleep(std::time::Duration::from_secs(8)).await;
-                        let plugins = handle.webview_windows().into_keys().any(|l| l.starts_with("plugin-"));
-                        if !plugins && !meter_wanted(&handle) {
-                            let h = handle.clone();
-                            let _ = handle.run_on_main_thread(move || set_meter_wanted(&h, true));
-                        }
+                        // No plugin window on screen by then (none started,
+                        // or all hidden): the meter comes back.
+                        let h = handle.clone();
+                        let _ = handle.run_on_main_thread(move || keep_something_on_screen(&h, ""));
                     });
                 }
             }

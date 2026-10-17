@@ -1106,6 +1106,8 @@
           meter.style.width = style.width;
           meter.style.minHeight = style.height;
           meter.style.height = "";
+          // Kept across restarts (core.js bindResizeHandle).
+          if (!operation.cancel) window.dispatchEvent(new Event("meter-resized"));
         }
       }
       nativeResize = null;

@@ -123,6 +123,8 @@ class DpsApp {
       partyPromoShown: "dpsMeter.partyPromoShown",
       accountPromoShown: "dpsMeter.accountPromoShown",
       windowOpacity: "dpsMeter.windowOpacity",
+      meterWidth: "dpsMeter.meterWidth",
+      meterMinHeight: "dpsMeter.meterMinHeight",
       titleOpacity: "dpsMeter.titleOpacity",
       bossNameSize: "dpsMeter.bossNameSize",
       betaUi: "dpsMeter.betaUi",
@@ -6228,6 +6230,25 @@ class DpsApp {
     const minWidth = 300;
     const minHeight = 30;
 
+    // The size the player gave the meter, kept across restarts: it went back
+    // to the default on every start (Windows, 2026-10-17). Saved by both
+    // resizes, the corner handle here and the window's edges (tauriBridge.js
+    // sends "meter-resized").
+    const px = (v) => Math.round(parseFloat(v));
+    const saveSize = () => {
+      const width = px(this.meterEl.style.width);
+      const height = px(this.meterEl.style.minHeight);
+      if (width >= minWidth && width <= 3000) this.safeSetSetting(this.storageKeys.meterWidth, String(width));
+      if (height >= minHeight && height <= 3000) this.safeSetSetting(this.storageKeys.meterMinHeight, String(height));
+    };
+    if (window.A2_VIEW === "main") {
+      const width = px(this.safeGetSetting(this.storageKeys.meterWidth));
+      const height = px(this.safeGetSetting(this.storageKeys.meterMinHeight));
+      if (width >= minWidth && width <= 3000) this.meterEl.style.width = `${width}px`;
+      if (height >= minHeight && height <= 3000) this.meterEl.style.minHeight = `${height}px`;
+      window.addEventListener("meter-resized", saveSize);
+    }
+
     // Screen coordinates, not client ones: a window manager that keeps windows
     // on screen (KWin) moves the window while it grows during the drag, which
     // shifts clientX/Y and made the size jump past the cursor (issue #11).
@@ -6259,6 +6280,7 @@ class DpsApp {
         this.meterEl.style.minHeight = currentHeight;
         this.meterEl.style.height = "";
       }
+      saveSize();
     };
 
     this.resizeHandle.addEventListener("mousedown", (event) => {
