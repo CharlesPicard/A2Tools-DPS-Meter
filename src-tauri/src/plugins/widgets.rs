@@ -134,10 +134,12 @@ pub async fn plugin_widget_open(
         serde_json::to_string(&id).unwrap_or_default(),
         serde_json::to_string(&name).unwrap_or_default(),
     );
+    let title = format!("{plugin_name} · {name}");
+    crate::app::note_window_title(&title, &label(&id, &name));
     let widget = tauri::WebviewWindowBuilder::new(&app, label(&id, &name), tauri::WebviewUrl::App("plugin-widget.html".into()))
         .initialization_script(script)
         // Its own title, so KWin can keep it where it was left (#76).
-        .title(format!("{plugin_name} · {name}"))
+        .title(title)
         .inner_size(width, height)
         .decorations(false)
         .transparent(true)

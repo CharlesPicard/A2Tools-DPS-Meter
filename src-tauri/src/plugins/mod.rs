@@ -1206,6 +1206,7 @@ fn open_window(app: &tauri::AppHandle, id: &str, visible: bool) -> Result<(), St
     }
     // The size it was left at, else the manifest's panel and its title bar.
     let (inner_w, inner_h) = saved_size(app, id).unwrap_or((width, height + 30.0));
+    crate::app::note_window_title(&format!("{name} (plugin)"), &label);
     tauri::WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App("plugin-host.html".into()))
         .initialization_script(format!("window.__A2_PLUGIN_ID__ = {};", serde_json::to_string(id).unwrap_or_default()))
         .title(format!("{name} (plugin)"))

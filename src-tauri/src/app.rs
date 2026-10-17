@@ -199,6 +199,21 @@ fn window_titled(app: &tauri::AppHandle, title: &str) -> Option<String> {
         .into_iter()
         .find(|(_, window)| window.title().ok().as_deref() == Some(title))
         .map(|(label, _)| label)
+        .or_else(|| titles().lock().unwrap_or_else(|p| p.into_inner()).get(title).cloned())
+}
+
+/// Each window's title and label, noted before the window is built: KWin
+/// asks where a window goes the moment it appears, which can be before the
+/// app has the new window in its list, and a window it could not name
+/// opened in the middle of the screen (widgets moved before, a tester on
+/// KDE Wayland, 2026-10-17).
+fn titles() -> &'static std::sync::Mutex<HashMap<String, String>> {
+    static TITLES: std::sync::OnceLock<std::sync::Mutex<HashMap<String, String>>> = std::sync::OnceLock::new();
+    TITLES.get_or_init(Default::default)
+}
+
+pub(crate) fn note_window_title(title: &str, label: &str) {
+    titles().lock().unwrap_or_else(|p| p.into_inner()).insert(title.to_string(), label.to_string());
 }
 
 /// Where the window manager says a window was left, by its label (#76).
@@ -2782,6 +2797,13 @@ pub fn run() {
             platform::window_startup::loads_hidden(),
             platform::window_startup::reuses_settings(),
         ))
+        // One meter at a time: a second start shows this one instead. Two
+        // ran side by side (a tester), each with its plugins, and every alert
+        // came twice. First, as the plugin asks.
+        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+            tracing::info!("A second start: showing this meter instead");
+            set_meter_wanted(app, true);
+        }))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri::plugin::Builder::<_, ()>::new("settings-persistence")
             .on_event(|app, event| {
