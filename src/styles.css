@@ -7249,8 +7249,10 @@ html.a2-offline .historyUploadBtn {
   display: grid;
   grid-template-columns: var(--ftl-gutter) minmax(0, 1fr) calc(var(--ftl-right) + var(--ftl-sb, 0px));
   align-items: center;
-  min-height: 30px;
+  min-height: 34px;
   border-top: 1px solid var(--hud-hairline);
+  /* A little larger than the timeline's labels: it is read while playing. */
+  font-size: 1.15em;
 }
 .detailsPanel .fightReplayBar[hidden] {
   display: none;
@@ -7331,7 +7333,7 @@ html.a2-offline .historyUploadBtn {
 }
 .detailsPanel .fightReplaySpeed {
   flex: none;
-  height: 22px;
+  height: 25px;
   padding: 0 2px;
   border: none;
   border-radius: 4px;
