@@ -289,6 +289,23 @@ impl PcapLib {
     }
 }
 
+/// The port to filter for: the locked one, unless it has carried nothing the
+/// dispatcher could parse for its stale time. Then the filter widens, so other
+/// traffic reaches the dispatcher again and its stale check (which runs only
+/// when a packet comes) can clear the lock: a relay that reconnected on a new
+/// local port would otherwise leave every device filtered for the old one,
+/// with nothing ever arriving to notice. Where a filter change empties the
+/// kernel's queue (Npcap), the filter is never narrowed at all.
+fn filter_port(detector: &CombatPortDetector, now: i64) -> Option<u16> {
+    if !crate::platform::pcap::FILTER_CHANGE_KEEPS_QUEUE {
+        return None;
+    }
+    let port = detector.locked_port_now()?;
+    let last = detector.last_parsed_at_ms();
+    let stale = last > 0 && now - last > crate::combat::capture_dispatcher::STALE_CONNECTION_MS;
+    (!stale).then_some(port)
+}
+
 /// The capture filter, as libpcap filter text: the game's port once it is
 /// locked (both directions, as the dispatcher reads it), and before that all
 /// IPv4 TCP but the web's ports (the game has never used them; what comes on
@@ -341,9 +358,10 @@ struct Shared {
 const DEVICE_SCAN_MS: u64 = 15_000;
 
 /// Without blocking reads: how long to wait after finding nothing. Packets
-/// wait in the kernel meanwhile, with their capture times; only an empty
-/// read waits, so a busy device is read straight through.
-const IDLE_WAIT_MS: u64 = 10;
+/// wait in the kernel meanwhile and keep their capture times (the pcap
+/// header's, which ping uses); only an empty read waits, so a busy device is
+/// read straight through.
+const IDLE_WAIT_MS: u64 = 20;
 
 impl PcapCapturer {
     pub fn new(sender: mpsc::Sender<CapturedPayload>, port_detector: Arc<CombatPortDetector>) -> Self {
@@ -560,7 +578,7 @@ fn start_capture_thread(
             nonblocking = unsafe { (f.setnonblock)(handle, 1, errbuf.as_mut_ptr() as *mut c_char) } == 0;
         }
         while running.load(Ordering::SeqCst) {
-            let port = shared.port_detector.locked_port_now();
+            let port = filter_port(&shared.port_detector, now_ms());
             if filtered_for != Some(port) && !filter_failed {
                 filtered_for = Some(port);
                 let [full, plain] = capture_filters(port);
@@ -571,9 +589,14 @@ fn start_capture_thread(
                         None => "IPv4 TCP, not ports 80/443".to_string(),
                     }),
                     // Unfiltered, as before filters: the dispatcher still
-                    // keeps only the game's packets.
+                    // keeps only the game's packets. An empty filter clears a
+                    // narrower one still in place, so a failed widening never
+                    // leaves the capture on the old port.
                     Err(e) => {
                         warn!("No capture filter on {}: {}", label, e);
+                        if let Err(e) = pcap.set_filter(handle, "") {
+                            warn!("Could not clear the capture filter on {}: {}", label, e);
+                        }
                         filter_failed = true;
                     }
                 }
@@ -842,6 +865,23 @@ mod tests {
             }
             unsafe { close(dead) };
         }
+    }
+
+    #[test]
+    fn the_filter_narrows_to_a_live_lock_and_widens_once_it_goes_quiet() {
+        let detector = CombatPortDetector::new();
+        assert_eq!(filter_port(&detector, now_ms()), None, "nothing locked");
+        let loopback = Some("NPF_Loopback");
+        detector.register_candidate(13328, (13328, 50000), loopback);
+        detector.confirm_candidate(13328, 50000, loopback);
+        detector.mark_packet_parsed();
+        let now = now_ms();
+        let live = if crate::platform::pcap::FILTER_CHANGE_KEEPS_QUEUE { Some(13328) } else { None };
+        assert_eq!(filter_port(&detector, now), live);
+        // A relay that reconnected elsewhere: nothing parsed for the stale
+        // time, so the filter lets other traffic through to notice it.
+        let quiet = now + crate::combat::capture_dispatcher::STALE_CONNECTION_MS + 1;
+        assert_eq!(filter_port(&detector, quiet), None);
     }
 
     #[test]

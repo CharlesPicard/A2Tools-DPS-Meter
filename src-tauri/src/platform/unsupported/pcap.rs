@@ -9,6 +9,8 @@ pub const OFFERS_INSTALL: bool = false;
 
 pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
 
+pub const FILTER_CHANGE_KEEPS_QUEUE: bool = false;
+
 pub fn prepare() {}
 
 pub fn run_installer(_installer: &std::path::Path) -> Result<(), String> {

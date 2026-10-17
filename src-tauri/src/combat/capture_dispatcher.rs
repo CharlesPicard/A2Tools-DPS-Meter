@@ -45,7 +45,7 @@ const TLS_CONTENT_TYPES: [u8; 4] = [0x14, 0x15, 0x16, 0x17];
 const TLS_VERSIONS: [u8; 5] = [0x00, 0x01, 0x02, 0x03, 0x04];
 const WINDOW_CHECK_STOPPED_MS: i64 = 10_000;
 const WINDOW_CHECK_RUNNING_MS: i64 = 60_000;
-const STALE_CONNECTION_MS: i64 = 120_000;
+pub(crate) const STALE_CONNECTION_MS: i64 = 120_000;
 /// Once locked, the game's stream on another device takes over the lock when
 /// the locked device has carried nothing from the game's port for this long
 /// and the other one sustains the lock's signature rate. A relay or ping

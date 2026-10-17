@@ -19,6 +19,11 @@ pub const OFFERS_INSTALL: bool = false;
 /// its capture filter could not change meanwhile (`pcap_capturer`).
 pub const READ_TIMES_OUT_WHEN_IDLE: bool = false;
 
+/// Whether a filter can change while capturing without losing what the
+/// kernel has queued: libpcap runs a new filter over the packets already in
+/// the ring rather than dropping them.
+pub const FILTER_CHANGE_KEEPS_QUEUE: bool = true;
+
 /// Nothing to set up before loading libpcap.
 pub fn prepare() {}
 
