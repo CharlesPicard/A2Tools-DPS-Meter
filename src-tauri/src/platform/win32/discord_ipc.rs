@@ -12,8 +12,8 @@ pub fn socket_paths() -> Vec<PathBuf> {
 }
 
 /// A pipe opened as a `File` has no read timeout: a Discord that hangs
-/// without closing its end blocks the read until it does. The crate has the
-/// same limit; bounding it would take overlapped I/O.
+/// without closing its end blocks the read until it does. So `presence.rs`
+/// runs each handshake on its own thread and waits for it only so long.
 pub fn connect(path: &Path) -> std::io::Result<Stream> {
     std::fs::OpenOptions::new().read(true).write(true).open(path)
 }

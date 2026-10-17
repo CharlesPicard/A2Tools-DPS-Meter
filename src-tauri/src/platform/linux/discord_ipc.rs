@@ -19,8 +19,12 @@ pub fn socket_paths() -> Vec<PathBuf> {
         "snap.discord/",
     ];
     let mut found = Vec::new();
-    for key in ["XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"] {
-        let Ok(base) = std::env::var(key) else { continue };
+    // `/tmp` last, as the crate falls back to it when none is set.
+    let bases = ["XDG_RUNTIME_DIR", "TMPDIR", "TMP", "TEMP"]
+        .into_iter()
+        .filter_map(|key| std::env::var(key).ok())
+        .chain(std::iter::once("/tmp".to_string()));
+    for base in bases {
         let base = PathBuf::from(base);
         for sub in SUBPATHS {
             for i in 0..10 {

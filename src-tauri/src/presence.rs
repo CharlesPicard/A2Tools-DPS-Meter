@@ -12,9 +12,10 @@
 //! record, the server from it or from loot. A field nobody has stated yet is
 //! left out rather than guessed.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
@@ -174,13 +175,33 @@ impl DiscordIpc for Socket {
     }
 }
 
+/// How long a scan waits for the Discords it is connecting to.
+const HANDSHAKE_WAIT: Duration = Duration::from_secs(5);
+
+/// A connection attempt's outcome, from its own thread.
+type Attempt = (Socket, Result<(), String>);
+
 /// Every Discord running, one connection each.
-#[derive(Default)]
 struct Discords {
     open: Vec<Socket>,
     /// Sockets that refused the handshake, by which socket file it was: not
     /// tried again until a Discord makes a new one there.
     refused: HashMap<PathBuf, Option<u64>>,
+    /// Handshakes still running. Each runs on its own thread: a Windows pipe
+    /// has no read timeout, so a Discord that hangs mid-handshake holds only
+    /// its own thread, never the others (and never this one past
+    /// HANDSHAKE_WAIT). It is not tried again while it hangs; if it ever
+    /// answers, a later scan takes it.
+    pending: HashSet<PathBuf>,
+    done_tx: Sender<Attempt>,
+    done_rx: Receiver<Attempt>,
+}
+
+impl Default for Discords {
+    fn default() -> Self {
+        let (done_tx, done_rx) = mpsc::channel();
+        Self { open: Vec::new(), refused: HashMap::new(), pending: HashSet::new(), done_tx, done_rx }
+    }
 }
 
 impl Discords {
@@ -192,17 +213,46 @@ impl Discords {
     fn connect_new(&mut self) -> bool {
         let paths = discord_ipc::socket_paths();
         self.refused.retain(|p, _| paths.contains(p));
-        let mut added = false;
+        let mut started = HashSet::new();
         for path in paths {
-            if self.open.iter().any(|s| s.path == path) {
+            if self.pending.contains(&path) || self.open.iter().any(|s| s.path == path) {
                 continue;
             }
             let id = discord_ipc::socket_id(&path);
             if id.is_some() && self.refused.get(&path) == Some(&id) {
                 continue;
             }
-            let mut socket = Socket { path, stream: None };
-            match socket.connect() {
+            let tx = self.done_tx.clone();
+            let mut socket = Socket { path: path.clone(), stream: None };
+            let spawned = std::thread::Builder::new().name("discord-ipc".into()).spawn(move || {
+                let result = socket.connect().map_err(|e| e.to_string());
+                let _ = tx.send((socket, result));
+            });
+            if spawned.is_ok() {
+                self.pending.insert(path.clone());
+                started.insert(path);
+            }
+        }
+        // This scan's attempts, for up to HANDSHAKE_WAIT; any earlier one
+        // that has finished meanwhile comes in too.
+        let mut added = false;
+        let deadline = Instant::now() + HANDSHAKE_WAIT;
+        loop {
+            let attempt = if started.is_empty() {
+                match self.done_rx.try_recv() {
+                    Ok(a) => a,
+                    Err(_) => break,
+                }
+            } else {
+                match self.done_rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(a) => a,
+                    Err(_) => break,
+                }
+            };
+            let (socket, result) = attempt;
+            self.pending.remove(&socket.path);
+            started.remove(&socket.path);
+            match result {
                 Ok(()) => {
                     tracing::info!("Discord activity: connected to {}", socket.path.display());
                     self.refused.remove(&socket.path);
@@ -212,9 +262,13 @@ impl Discords {
                 // A socket left behind by a Discord that crashed.
                 Err(e) => {
                     tracing::debug!("Discord activity: {} not reachable ({e})", socket.path.display());
+                    let id = discord_ipc::socket_id(&socket.path);
                     self.refused.insert(socket.path, id);
                 }
             }
+        }
+        for path in &started {
+            tracing::info!("Discord activity: {} has not answered yet; leaving it", path.display());
         }
         added
     }
