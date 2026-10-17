@@ -817,7 +817,15 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
             let h = hotkey_handle.clone();
             move || {
                 // Show or hide the meter, and remember it (as Settings →
-                // Plugins → Show the DPS meter does).
+                // Plugins → Show the DPS meter does). Hidden by auto-hide
+                // only, it is shown, as before, and nothing changes.
+                if meter_wanted(&h)
+                    && let Some(window) = h.get_webview_window("main")
+                    && (!window.is_visible().unwrap_or(true) || platform::window::is_hidden_in_place(&window))
+                {
+                    show_meter_again(&h, &window);
+                    return;
+                }
                 let shown = !meter_wanted(&h);
                 set_meter_wanted(&h, shown);
             }
