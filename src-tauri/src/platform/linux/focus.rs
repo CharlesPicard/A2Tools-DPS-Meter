@@ -33,6 +33,32 @@ function report(w) {
 function mine(w) {
     return !!w && Number(w.pid) === MY_PID;
 }
+// A plugin's widget (an alert's icon), titled "<plugin> · <name>".
+function widget(w) {
+    return mine(w) && String(w.caption).indexOf(" · ") >= 0;
+}
+// The last window not ours to be active, and our widgets that just appeared:
+// Wayland activates a new window, so each icon an alert opened took the
+// focus from the game (a tester, mid-PvP, 2026-10-17). An icon activated
+// because it appeared hands the focus straight back; one clicked keeps it.
+var lastOther = null;
+var fresh = [];
+function activate(w) {
+    if (workspace.windowActivated) workspace.activeWindow = w;
+    else workspace.activeClient = w;
+}
+function onActivated(w) {
+    if (w && !mine(w)) lastOther = w;
+    var i = fresh.indexOf(w);
+    if (i >= 0) {
+        fresh.splice(i, 1);
+        if (lastOther) {
+            activate(lastOther);
+            return;
+        }
+    }
+    report(w);
+}
 function remember(w) {
     var g = w.frameGeometry;
     callDBus(SERVICE, PATH, IFACE, "Geometry", String(w.caption), String(Math.round(g.x)), String(Math.round(g.y)),
@@ -57,17 +83,21 @@ function place(w) {
 }
 function follow(w) {
     if (!mine(w)) return;
+    if (widget(w)) {
+        fresh.push(w);
+        if (fresh.length > 32) fresh.shift();
+    }
     var done = w.interactiveMoveResizeFinished || w.clientFinishUserMovedResized;
     if (done) done.connect(function () { remember(w); });
     place(w);
 }
 if (workspace.windowActivated) {
-    workspace.windowActivated.connect(report);
+    workspace.windowActivated.connect(onActivated);
     report(workspace.activeWindow);
     workspace.windowAdded.connect(follow);
     workspace.windowList().forEach(follow);
 } else {
-    workspace.clientActivated.connect(report);
+    workspace.clientActivated.connect(onActivated);
     report(workspace.activeClient);
     workspace.clientAdded.connect(follow);
     workspace.clientList().forEach(follow);
