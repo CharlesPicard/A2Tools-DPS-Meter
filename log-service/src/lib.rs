@@ -28,7 +28,10 @@ const DOTS: &str = include_str!("../../src/data/dot_skill_ids.json");
 /// tens or hundreds of KB) and tight against anything built to make this Worker
 /// work. The second is on the fight's packets as version 2 stores them (see
 /// `read_slice`), so it takes or refuses a fight alike in every version.
-const MAX_GZIPPED: usize = 4 * 1024 * 1024;
+// 16 MiB, as the site takes (was 4): a slice carries 30 minutes of the zone's
+// state before the pull, which in a crowded place passed 4 MiB for a short
+// fight (2026-10-17).
+const MAX_GZIPPED: usize = 16 * 1024 * 1024;
 const MAX_RECORD_BYTES: usize = 24 * 1024 * 1024;
 
 /// The slice inside an upload: zstd from meters 2.0.67 on, gzip before, told
