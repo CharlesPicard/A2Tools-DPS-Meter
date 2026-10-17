@@ -300,7 +300,6 @@ if (typeof module !== "undefined" && module.exports) {
     let playing = false;
     let at = 0; // ms into the fight
     let frame = 0;
-    let lastFrameTs = 0;
     let lastFiguresTs = 0;
     let figuresPending = false;
     let cutSeq = 0;
@@ -356,6 +355,8 @@ if (typeof module !== "undefined" && module.exports) {
       }
       shade.hidden = false;
       head.hidden = false;
+      shadeFill.style.transition = "none";
+      head.style.transition = "none";
       shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
     };
@@ -365,15 +366,14 @@ if (typeof module !== "undefined" && module.exports) {
       const dur = durationMs();
       const shown = active ? at : dur;
       const share = dur > 0 ? Math.min(1, shown / dur) : 1;
-      if (playing) {
-        if (!progWidth) progWidth = scrubWrap.clientWidth;
-        progFill.style.transform = `scaleX(${share.toFixed(4)})`;
-        progKnob.style.transform = `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`;
-      } else {
+      if (!playing) {
         scrub.max = String(dur);
         scrub.value = String(shown);
         scrub.style.setProperty("--range-pct", `${(share * 100).toFixed(2)}%`);
       }
+      paintClock(shown, dur);
+    };
+    const paintClock = (shown, dur) => {
       const text = `${clock(shown)} / ${clock(dur)}`;
       // Once a second, not every frame: the clock shows whole seconds.
       if (text !== timeEl.textContent) {
@@ -445,32 +445,69 @@ if (typeof module !== "undefined" && module.exports) {
       drawFigures();
     };
 
-    let lastPaintTs = 0;
+    // While playing, nothing is written to move the playhead, the shade or
+    // the progress knob: each gets one CSS transition, from where it is to
+    // the fight's end at the speed chosen, and the GPU draws it. Written per
+    // frame (or even 30 times a second), every write repainted the page and
+    // a frame was asked for at every screen refresh (130 Hz on the owner's
+    // PC), lagging the whole system (2026-10-18). Time is kept by a timer
+    // that draws the figures and the clock; pause, a seek, a speed change or
+    // a resize starts a fresh glide.
+    let playTimer = 0;
+    let playFrom = 0;
+    let playStart = 0;
+    const playedAt = () => playFrom + (performance.now() - playStart) * speed;
+    const moversAt = (share) => {
+      const width = geometry.right - geometry.left;
+      if (!progWidth) progWidth = scrubWrap.clientWidth;
+      return [
+        [head, `translateX(${(geometry.x0 + geometry.left + share * width).toFixed(1)}px)`],
+        [shadeFill, `translateX(${(share * width).toFixed(1)}px)`],
+        [progFill, `scaleX(${share.toFixed(4)})`],
+        [progKnob, `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`],
+      ];
+    };
+    const glide = () => {
+      const dur = durationMs();
+      if (!playing || dur <= 0) return;
+      at = Math.min(dur, at);
+      paintTimeline(); // places the shade and playhead, no transition
+      if (!geometry) return;
+      const now = moversAt(at / dur);
+      now.forEach(([el, transform]) => { el.style.transition = "none"; el.style.transform = transform; });
+      void head.offsetWidth; // the start position is in place before the transition
+      const ms = Math.max(0, (dur - at) / speed);
+      moversAt(1).forEach(([el, transform]) => {
+        el.style.transition = `transform ${ms.toFixed(0)}ms linear`;
+        el.style.transform = transform;
+      });
+    };
+    const stopGlide = () => {
+      // Wherever it has got to: written plainly, with no transition.
+      [head, shadeFill, progFill, progKnob].forEach((el) => { el.style.transition = "none"; });
+      paintTimeline();
+    };
+    const playTick = () => {
+      if (!active || !playing) return;
+      const now = performance.now();
+      at = playedAt();
+      const dur = durationMs();
+      if (at >= dur) {
+        // The end: back to the whole fight.
+        exit();
+        return;
+      }
+      requestFigures(now);
+      paintClock(at, dur);
+    };
+
     const tick = (now) => {
       frame = 0;
-      if (!active) return;
-      if (playing) {
-        const dt = lastFrameTs ? Math.min(250, now - lastFrameTs) : 0;
-        lastFrameTs = now;
-        at += dt * speed;
-        if (at >= durationMs()) {
-          // The end: back to the whole fight.
-          exit();
-          return;
-        }
-        requestFigures(now);
-      } else if (figuresPending) {
-        requestFigures(now);
-      }
-      // The page is written at most 30 times a second while playing; what
-      // moves in between glides on the GPU (styles.css). At the screen's own
-      // rate (130 Hz on the owner's) every frame laid out and painted.
-      if (!playing || now - lastPaintTs >= 33) {
-        lastPaintTs = now;
-        paintControls();
-        paintTimeline();
-      }
-      if (playing || figuresPending) frame = requestAnimationFrame(tick);
+      if (!active || playing) return;
+      if (figuresPending) requestFigures(now);
+      paintControls();
+      paintTimeline();
+      if (figuresPending) frame = requestAnimationFrame(tick);
     };
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(tick);
@@ -499,7 +536,8 @@ if (typeof module !== "undefined" && module.exports) {
       cutSeq++;
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      lastFrameTs = 0;
+      clearInterval(playTimer);
+      playTimer = 0;
       figuresPending = false;
       panel.classList.remove("isReplaying");
       bar.classList.remove("isActive");
@@ -519,14 +557,21 @@ if (typeof module !== "undefined" && module.exports) {
         at = 0;
       }
       playing = true;
-      lastFrameTs = 0;
+      playFrom = at;
+      playStart = performance.now();
       syncPlayButton();
-      requestFigures(performance.now(), true);
-      schedule();
+      requestFigures(playStart, true);
+      glide();
+      clearInterval(playTimer);
+      playTimer = setInterval(playTick, FIGURE_INTERVAL_MS);
     };
     const pause = () => {
+      if (playing) at = Math.min(durationMs(), playedAt());
       playing = false;
+      clearInterval(playTimer);
+      playTimer = 0;
       syncPlayButton();
+      stopGlide();
       requestFigures(performance.now(), true);
       schedule();
     };
@@ -534,6 +579,15 @@ if (typeof module !== "undefined" && module.exports) {
     const seek = (ms) => {
       if (!active && !enter()) return;
       at = Math.max(0, Math.min(durationMs(), Number(ms) || 0));
+      if (playing) {
+        // Arrow keys while playing: carry on from the new moment.
+        playFrom = at;
+        playStart = performance.now();
+        requestFigures(playStart, true);
+        paintClock(at, durationMs());
+        glide();
+        return;
+      }
       figuresPending = true;
       schedule();
     };
@@ -547,8 +601,14 @@ if (typeof module !== "undefined" && module.exports) {
     speedSel.addEventListener("change", () => {
       const next = Number(speedSel.value);
       if (!SPEEDS.includes(next)) return;
+      if (playing) {
+        at = playedAt();
+        playFrom = at;
+        playStart = performance.now();
+      }
       speed = next;
       try { localStorage.setItem(SPEED_KEY, String(next)); } catch { /* not kept */ }
+      if (playing) glide();
     });
     // Dragging holds playback and lets go where it was.
     let resumeAfterDrag = false;
@@ -650,7 +710,15 @@ if (typeof module !== "undefined" && module.exports) {
       new ResizeObserver(() => {
         geometry = null;
         progWidth = 0;
-        if (active) paintTimeline();
+        if (!active) return;
+        if (playing) {
+          at = playedAt();
+          playFrom = at;
+          playStart = performance.now();
+          glide();
+        } else {
+          paintTimeline();
+        }
       }).observe(scroll);
     }
     window.i18n?.onChange?.(() => {

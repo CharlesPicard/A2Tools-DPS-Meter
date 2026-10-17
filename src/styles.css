@@ -7329,6 +7329,8 @@ html.a2-offline .historyUploadBtn {
   display: none;
 }
 .detailsPanel .fightReplayTime {
+  /* Changes once a second while playing: kept to itself. */
+  contain: layout paint style;
   margin-left: auto;
   font-family: var(--hud-tech);
   font-variant-numeric: tabular-nums;
@@ -7411,19 +7413,13 @@ html.a2-offline .historyUploadBtn {
   background: #fff;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
 }
-/* Written thirty times a second while playing: each glides to the next on
-   the GPU in between. */
+/* Moved by one long transition while playing (fightReplay.js glide): each
+   on a steady layer of its own. */
 .detailsPanel .fightReplayProgFill,
 .detailsPanel .fightReplayProgKnob,
 .detailsPanel .fightReplayHead,
 .detailsPanel .fightReplayShadeFill {
   will-change: transform;
-}
-.detailsPanel .fightReplayBar.isPlaying .fightReplayProgFill,
-.detailsPanel .fightReplayBar.isPlaying .fightReplayProgKnob,
-.detailsPanel.isReplaying .fightReplayHead,
-.detailsPanel.isReplaying .fightReplayShadeFill {
-  transition: transform 34ms linear;
 }
 .detailsPanel .fightReplayScrub {
   width: 100%;
