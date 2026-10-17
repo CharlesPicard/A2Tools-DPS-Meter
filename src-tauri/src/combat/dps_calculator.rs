@@ -1028,6 +1028,22 @@ impl DpsCalculator {
                     (nick, job)
                 });
             }
+            // A player who only healed (a Cleric who never hit the boss) has
+            // no damage row, and was left out of the record with their heals.
+            // Their heals name them: one of their own class's skills.
+            let heal_class = |uid: i32| {
+                class_by_damage(details.heal_skills.iter().filter(|s| s.actor_id == uid).map(|s| (s.code, s.dmg)))
+            };
+            for skill in &details.heal_skills {
+                let uid = skill.actor_id;
+                if record_actors.contains_key(&uid) {
+                    continue;
+                }
+                if let Some(job) = heal_class(uid) {
+                    let nick = resolve_nickname(uid, &nickname_data, &summon_data_snap);
+                    record_actors.insert(uid, (nick, job.class_name().to_string()));
+                }
+            }
 
             let local_id = self.data_storage.local_player_id().unwrap_or(-1) as i32;
             let actors: Vec<DetailsActorSummary> = record_actors.iter()
@@ -1039,7 +1055,8 @@ impl DpsCalculator {
                     };
                     let job_class = class_by_damage(
                         details.skills.iter().filter(|s| s.actor_id == id).map(|s| (s.code, s.dmg)),
-                    );
+                    )
+                    .or_else(|| heal_class(id));
                     // Aggregate per-actor stats across all targets
                     let (mut party_heal, mut regen, mut dmg_recv, mut hits_recv) = (0i64, 0i64, 0i64, 0i32);
                     for td in combat_data.values() {
