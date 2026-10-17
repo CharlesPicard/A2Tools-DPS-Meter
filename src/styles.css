@@ -7841,3 +7841,16 @@ html.a2-offline .historyUploadBtn {
 @media (prefers-reduced-motion: reduce) {
   .detailsPanel .ftlFoldChevron { transition: none; }
 }
+
+/* Replaying: the figures are drawn ten times a second; the bars glide to
+   each new length over that tenth (details.js renderPartyBars). */
+.detailsPanel.isReplaying .detailsPartyBarFill {
+  transition: width 110ms linear;
+}
+.detailsPanel.isReplaying .skills .rowFill {
+  transition: transform 110ms linear;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detailsPanel.isReplaying .detailsPartyBarFill,
+  .detailsPanel.isReplaying .skills .rowFill { transition: none; }
+}

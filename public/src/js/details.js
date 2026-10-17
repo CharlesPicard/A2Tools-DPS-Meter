@@ -700,11 +700,16 @@ const createDetailsUI = ({
   // The first time a fight's figures show, its bars slide out from empty
   // (render sets this; see `renderRest`).
   let fillBarsFromZero = false;
+  // During a replay the bars are drawn ten times a second: each starts where
+  // it was and glides to its new length (styles.css), rather than jumping.
+  const lastBarWidth = new Map();
   const renderPartyBars = (stats, battleTimeMs) => {
     if (!detailsPartyListEl) return;
     const sliding = fillBarsFromZero && !reducedMotion();
     fillBarsFromZero = false;
     const slides = [];
+    const gliding = !sliding && detailsPanel.classList.contains("isReplaying") && !reducedMotion();
+    const glides = [];
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
@@ -763,7 +768,14 @@ const createDetailsUI = ({
       // A width rather than a stretch, so a bar texture keeps its size.
       fillEl.style.transform = "none";
       const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
-      fillEl.style.width = fillWidth;
+      const wasWidth = lastBarWidth.get(actorId);
+      lastBarWidth.set(actorId, fillWidth);
+      if (gliding && wasWidth !== undefined && wasWidth !== fillWidth) {
+        fillEl.style.width = wasWidth;
+        glides.push([fillEl, fillWidth]);
+      } else {
+        fillEl.style.width = fillWidth;
+      }
       if (sliding) {
         // A transform, not the width: the width made every frame lay the
         // page out again, and the slide stuttered.
@@ -887,6 +899,9 @@ const createDetailsUI = ({
 
       detailsPartyListEl.appendChild(bar);
     });
+    if (glides.length) {
+      requestAnimationFrame(() => glides.forEach(([fillEl, width]) => { fillEl.style.width = width; }));
+    }
     if (sliding) {
       requestAnimationFrame(() => {
         slides.forEach((fillEl, i) => {
