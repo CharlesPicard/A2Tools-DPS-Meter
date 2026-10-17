@@ -238,7 +238,7 @@ if (typeof module !== "undefined" && module.exports) {
     note.className = "fightReplayNote";
     note.dataset.i18n = "details.replay.wholeFightNote";
     note.textContent = t("details.replay.wholeFightNote",
-      "Damage Taken, Min / Max and buff uptimes are for the whole fight; damage and crits are shared evenly over each skill's hits.");
+      "Damage Taken, Min / Max and buff uptimes show the whole fight.");
     const healNote = document.createElement("div");
     healNote.className = "fightReplayNote fightReplayHealNote";
     healNote.dataset.i18n = "details.replay.noHealTiming";

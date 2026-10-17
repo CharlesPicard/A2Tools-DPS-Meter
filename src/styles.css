@@ -7408,7 +7408,7 @@ html.a2-offline .historyUploadBtn {
   display: none;
   grid-column: 2 / -1;
   padding: 0 12px 5px 0;
-  font-size: 0.85em;
+  font-size: 0.75em;
   color: var(--hud-sub);
 }
 .detailsPanel .fightReplayBar.isActive .fightReplayNote:not(.fightReplayHealNote),

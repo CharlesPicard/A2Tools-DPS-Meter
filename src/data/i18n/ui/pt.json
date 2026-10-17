@@ -182,7 +182,7 @@
       "position": "Posição do replay",
       "positionText": "{at} de {total}",
       "exit": "Encerrar replay (mostrar a luta inteira)",
-      "wholeFightNote": "Dano recebido, Mín / Máx e o tempo ativo dos buffs são da luta inteira; dano e críticos são divididos igualmente entre os acertos de cada habilidade.",
+      "wholeFightNote": "Dano recebido, Mín / Máx e buffs: luta inteira.",
       "noHealTiming": "A cura desta luta não tem horários (salva por uma versão anterior): mostra a luta inteira.",
       "unavailable": "Esta luta foi salva sem os horários dos acertos, por isso não pode ser reproduzida"
     },

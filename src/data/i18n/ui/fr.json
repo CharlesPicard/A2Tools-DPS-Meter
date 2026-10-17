@@ -182,7 +182,7 @@
       "position": "Position de la relecture",
       "positionText": "{at} sur {total}",
       "exit": "Terminer la relecture (afficher tout le combat)",
-      "wholeFightNote": "Dégâts subis, Min / Max et durées des buffs portent sur tout le combat ; dégâts et critiques sont répartis également entre les coups de chaque compétence.",
+      "wholeFightNote": "Dégâts subis, Min / Max et buffs : tout le combat.",
       "noHealTiming": "Les soins de ce combat n'ont pas d'horodatage (enregistré par une ancienne version) : ils montrent tout le combat.",
       "unavailable": "Ce combat a été enregistré sans les instants des coups, il ne peut pas être relu"
     },
