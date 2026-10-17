@@ -3161,10 +3161,15 @@ const createDetailsUI = ({
     stagedForSeq = openSeq;
     sectionsHeld = true;
     (async () => {
-      // The party bars and figures animate first (render): the rest is
-      // built once they have, as building it would make them stutter.
-      if (!reducedMotion()) await new Promise((resolve) => setTimeout(resolve, 760));
-      for (const [step, section] of steps) {
+      // The skills right after the party's bars start (they slide on the
+      // GPU and stay smooth; the counting figures hitch once). The chart and
+      // timeline once the party has finished animating.
+      const partyDone = performance.now() + 760;
+      for (const [i, [step, section]] of steps.entries()) {
+        if (i === 1 && !reducedMotion()) {
+          const left = partyDone - performance.now();
+          if (left > 0) await new Promise((resolve) => setTimeout(resolve, left));
+        }
         await nextFrame();
         // A newer render took over: it draws everything itself.
         if (token !== stageToken) return startPending();
