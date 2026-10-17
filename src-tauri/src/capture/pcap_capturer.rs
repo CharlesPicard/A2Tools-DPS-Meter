@@ -289,6 +289,30 @@ impl PcapLib {
     }
 }
 
+/// With AION2 open this long and no game stream found, the filter may be what
+/// hides it (a relay or accelerator tunnelling the game over port 80 or 443,
+/// say): capture goes on unfiltered, as it did before filters.
+const SAFETY_NET_MS: i64 = 60_000;
+/// How often a capture thread looks for the game's window, for the net.
+const GAME_CHECK_MS: i64 = 5_000;
+
+/// The safety net's clock: when the game was first seen open with nothing
+/// locked. True once that has lasted SAFETY_NET_MS.
+#[derive(Default)]
+struct SafetyNet {
+    unlocked_since: Option<i64>,
+}
+
+impl SafetyNet {
+    fn note(&mut self, game_open: bool, locked: bool, now: i64) -> bool {
+        if !game_open || locked {
+            self.unlocked_since = None;
+            return false;
+        }
+        now - *self.unlocked_since.get_or_insert(now) >= SAFETY_NET_MS
+    }
+}
+
 /// The port to filter for: the locked one, unless it has carried nothing the
 /// dispatcher could parse for its stale time. Then the filter widens, so other
 /// traffic reaches the dispatcher again and its stale check (which runs only
@@ -350,6 +374,9 @@ struct Shared {
     /// Which port the game is on, once found: each capture thread filters
     /// for it.
     port_detector: Arc<CombatPortDetector>,
+    /// Set by the safety net (`SafetyNet`): every device captures without a
+    /// filter for the rest of the session.
+    unfiltered: AtomicBool,
 }
 
 /// How often to look for network devices that appeared after the start: a
@@ -373,6 +400,7 @@ impl PcapCapturer {
                 failed: Mutex::default(),
                 dropped: AtomicU64::new(0),
                 port_detector,
+                unfiltered: AtomicBool::new(false),
             }),
         }
     }
@@ -571,6 +599,10 @@ fn start_capture_thread(
         // port would otherwise wait forever once the game moved to another.
         let mut filtered_for: Option<Option<u16>> = None;
         let mut filter_failed = false;
+        let mut cleared = false;
+        let mut net = SafetyNet::default();
+        let mut game_open = false;
+        let mut last_game_check: i64 = 0;
         let mut nonblocking = false;
         if let (false, Some(f)) = (crate::platform::pcap::READ_TIMES_OUT_WHEN_IDLE, &pcap.filter) {
             let mut errbuf = [0u8; 256];
@@ -578,8 +610,31 @@ fn start_capture_thread(
             nonblocking = unsafe { (f.setnonblock)(handle, 1, errbuf.as_mut_ptr() as *mut c_char) } == 0;
         }
         while running.load(Ordering::SeqCst) {
-            let port = filter_port(&shared.port_detector, now_ms());
-            if filtered_for != Some(port) && !filter_failed {
+            let now = now_ms();
+            if pcap.filter.is_some() && !filter_failed && !shared.unfiltered.load(Ordering::Relaxed) {
+                if now - last_game_check >= GAME_CHECK_MS {
+                    last_game_check = now;
+                    game_open = crate::platform::window_detector::find_aion2_window_title().is_some();
+                }
+                let locked = shared.port_detector.locked_port_now().is_some();
+                if net.note(game_open, locked, now) && !shared.unfiltered.swap(true, Ordering::Relaxed) {
+                    warn!(
+                        "AION2 has been open {} s and no game stream was found: capturing without a filter for this session",
+                        SAFETY_NET_MS / 1000
+                    );
+                }
+            }
+            if shared.unfiltered.load(Ordering::Relaxed) {
+                if !cleared && filtered_for.is_some() && !filter_failed {
+                    cleared = true;
+                    match pcap.set_filter(handle, "") {
+                        Ok(()) => info!("Capture filter on {}: none", label),
+                        Err(e) => warn!("Could not clear the capture filter on {}: {}", label, e),
+                    }
+                }
+            }
+            let port = filter_port(&shared.port_detector, now);
+            if !shared.unfiltered.load(Ordering::Relaxed) && filtered_for != Some(port) && !filter_failed {
                 filtered_for = Some(port);
                 let [full, plain] = capture_filters(port);
                 let result = pcap.set_filter(handle, &full).or_else(|_| pcap.set_filter(handle, &plain));
@@ -865,6 +920,22 @@ mod tests {
             }
             unsafe { close(dead) };
         }
+    }
+
+    #[test]
+    fn the_safety_net_trips_after_a_minute_of_the_game_open_and_nothing_found() {
+        let mut net = SafetyNet::default();
+        assert!(!net.note(false, false, 0), "game closed: never");
+        assert!(!net.note(true, false, 1_000));
+        assert!(!net.note(true, false, 1_000 + SAFETY_NET_MS - 1));
+        assert!(net.note(true, false, 1_000 + SAFETY_NET_MS));
+        // A lock (or the game closing) starts the minute over.
+        let mut net = SafetyNet::default();
+        assert!(!net.note(true, false, 0));
+        assert!(!net.note(true, true, SAFETY_NET_MS));
+        assert!(!net.note(true, false, SAFETY_NET_MS + 1));
+        assert!(!net.note(false, false, 2 * SAFETY_NET_MS));
+        assert!(!net.note(true, false, 2 * SAFETY_NET_MS + 1));
     }
 
     #[test]
