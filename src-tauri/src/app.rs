@@ -145,18 +145,23 @@ fn set_meter_wanted(app: &tauri::AppHandle, shown: bool) {
     let _ = app.emit("meter-shown", shown);
 }
 
-/// The meter hidden and no plugin window left on screen: nothing would be
-/// left to open anything with (a tester hid both, 2026-10-17), so the meter
-/// comes back. `except` is a window about to go.
+/// Whether something would be left to open the meter or a plugin with, with
+/// `except` (a window about to go) gone: the meter, another plugin window,
+/// or an unlocked widget (double-clicked, it opens its plugin's window).
+pub(crate) fn way_back_without(app: &tauri::AppHandle, except: &str) -> bool {
+    meter_wanted(app)
+        || app.webview_windows().into_iter().any(|(label, w)| {
+            label != except && label.starts_with("plugin-")
+                && w.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&w)
+        })
+        || crate::plugins::widgets::any_unlocked_widget_shown(app)
+}
+
+/// The meter hidden and nothing left on screen to open anything with (a
+/// tester hid both, 2026-10-17): the meter comes back. `except` is a window
+/// about to go.
 pub(crate) fn keep_something_on_screen(app: &tauri::AppHandle, except: &str) {
-    if meter_wanted(app) {
-        return;
-    }
-    let shown = app.webview_windows().into_iter().any(|(label, w)| {
-        label != except && label.starts_with("plugin-")
-            && w.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&w)
-    });
-    if !shown {
+    if !way_back_without(app, except) {
         set_meter_wanted(app, true);
     }
 }

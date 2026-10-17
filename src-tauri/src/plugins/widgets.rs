@@ -274,6 +274,16 @@ pub fn plugin_widget_drag(app: tauri::AppHandle, window: tauri::WebviewWindow) -
     Ok(())
 }
 
+/// Whether a widget is on screen and unlocked (so a double-click on it can
+/// open its plugin's window): a way back to the plugins with the meter hidden.
+pub fn any_unlocked_widget_shown(app: &tauri::AppHandle) -> bool {
+    app.webview_windows().into_iter().any(|(label, w)| {
+        parse_label(&label).is_some_and(|(id, _)| !is_locked(app, &id))
+            && w.is_visible().unwrap_or(false)
+            && !crate::platform::window::is_hidden_in_place(&w)
+    })
+}
+
 /// Close every widget of plugin `id`: its main window has gone.
 pub fn close_all(app: &tauri::AppHandle, id: &str) {
     for widget in open_widgets(app, id) {

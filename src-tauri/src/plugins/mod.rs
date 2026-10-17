@@ -1295,6 +1295,12 @@ pub fn plugin_window(app: tauri::AppHandle, window: tauri::WebviewWindow, visibl
             show_in_place(&app, &window, &id, || crate::platform::window::show_on_top_without_focus(&window));
         }
     } else {
+        // A plugin hiding itself (Event Timers when idle) stays shown when
+        // it is the last way back: the meter hidden, no other plugin window
+        // and no unlocked widget on screen.
+        if !crate::app::way_back_without(&app, window.label()) {
+            return Ok(());
+        }
         crate::platform::window::hide_in_place(&window);
     }
     remember_window(&app, &id, Some(if visible { "shown" } else { "hidden" }));
