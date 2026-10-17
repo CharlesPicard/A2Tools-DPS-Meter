@@ -311,6 +311,7 @@ if (typeof module !== "undefined" && module.exports) {
 
     const syncPlayButton = () => {
       bar.classList.toggle("isPlaying", playing);
+      panel.classList.toggle("isReplayPlaying", playing);
       const key = playing ? "details.replay.pause" : "details.replay.play";
       const text = playing ? t(key, "Pause") : t(key, "Play replay");
       playBtn.dataset.i18nTitle = key;
@@ -542,6 +543,7 @@ if (typeof module !== "undefined" && module.exports) {
       panel.classList.remove("isReplaying");
       bar.classList.remove("isActive");
       syncPlayButton();
+      panel.classList.remove("isReplayPlaying");
       paintTimeline();
       paintControls();
       if (was && hooks.isOpen?.()) {

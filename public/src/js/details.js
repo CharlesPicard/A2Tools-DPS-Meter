@@ -3656,11 +3656,12 @@ const createDetailsUI = ({
         const ctx = buildPartyBarStats();
         renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
         renderStats(lastDetails, { compact: activeCompactMode });
-        // The skill table at most four times a second while a replay plays
-        // (it is the costly part). Paused or moved by hand, it is drawn every
-        // time, so it always ends exact.
+        // The skill table once a second while a replay plays: each redraw
+        // repaints every row in view (icon, bar, fifteen cells), the dearest
+        // thing on the page (2026-10-18). Paused or moved by hand, it is drawn
+        // every time, so it always ends exact.
         const now = performance.now();
-        if (!cut?.playing || now - replaySkillsAt >= 250) {
+        if (!cut?.playing || now - replaySkillsAt >= 1000) {
           replaySkillsAt = now;
           renderSkills(lastDetails, { compact: activeCompactMode });
         }

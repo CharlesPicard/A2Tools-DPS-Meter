@@ -7945,3 +7945,14 @@ html.a2-offline .historyUploadBtn {
   contain-intrinsic-size: auto 28px;
   contain: layout style paint;
 }
+
+/* While a replay plays: the skill list is one steady layer that keeps its
+   repaints to itself, and its rows take no hover (each mouse move over them
+   restyled and repainted the table; the list itself still scrolls). */
+.detailsPanel.isReplaying .detailsSkills .skills {
+  contain: layout paint style;
+  will-change: transform;
+}
+.detailsPanel.isReplayPlaying .detailsSkills .skills .skillRow {
+  pointer-events: none;
+}
