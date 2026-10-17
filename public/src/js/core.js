@@ -3500,7 +3500,7 @@ class DpsApp {
     // page and restarting its colour transitions each time, so it repainted
     // and ignored the mouse for seconds (2026-10-18). Elsewhere the list is
     // never seen, and its fixed previews are enough.
-    const themesShown = !window.__A2_VIEW__ || window.__A2_VIEW__ === "settings";
+    const themesShown = !window.__A2_VIEW__ || window.__A2_VIEW__ === "main" || window.__A2_VIEW__ === "settings";
     const previewThemeVars = (themeId) => {
       this._themePreviewCache ||= new Map();
       if (this._themePreviewCache.has(themeId)) return this._themePreviewCache.get(themeId);
