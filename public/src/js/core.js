@@ -7,7 +7,7 @@ const SETTING_CHOICES = {
   // The figure beside each player's name, in the meter and in Details.
   partyStat: { allowed: ["combatPower", "gearScore", "both", "off"], fallback: "combatPower" },
   // The number after the level in the Discord activity (presence.rs).
-  discordStat: { allowed: ["combatPower", "gearScore", "off"], fallback: "combatPower" },
+  discordStat: { allowed: ["combatPower", "gearScore", "off"], fallback: "off" },
   // A pattern over the meter's bars: a supporter's perk (applyBarTexture).
   barTexture: { allowed: ["none", "flames", "crystal", "glacier", "feathers", "wing", "storm", "nebula", "galaxy", "aura"], fallback: "none" },
 };
@@ -2571,7 +2571,7 @@ class DpsApp {
       allTargetsWindowMs: "120000",
       trainSelectionMode: "all",
       partyStat: "combatPower",
-      discordStat: "combatPower",
+      discordStat: "off",
       barTexture: "none",
     };
 

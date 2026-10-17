@@ -1,36 +1,44 @@
 //! Discord activity: "Playing AION2 — Naicha · Cleric · Lv 29 — Kaisinel (Elyos) · Europe".
 //!
 //! Opt-in (`dpsMeter.discordActivity`), and shown only while AION2 is open.
-//! It talks to the Discord app on this computer over its local IPC socket, so
-//! it needs no a2tools.app account and sends nothing anywhere else: Discord
-//! already knows who its own user is.
+//! It talks to the Discord apps on this computer over their local IPC sockets,
+//! so it needs no a2tools.app account and sends nothing anywhere else: Discord
+//! already knows who its own user is. Every Discord running is told (Discord
+//! and Vesktop side by side each have a socket, and Discord shows the activity
+//! of whichever one you use), not only the first one found.
 //!
 //! Everything shown is what the game has told the meter about the local
 //! player (see `DataStorage::local_profile`): class and level from the self
 //! record, the server from it or from loot. A field nobody has stated yet is
 //! left out rather than guessed.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::io::{Read, Write};
 use std::path::PathBuf;
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use discord_rich_presence::activity::{Activity, Assets, Timestamps};
-use discord_rich_presence::{DiscordIpc, DiscordIpcClient};
+use discord_rich_presence::error::Error as IpcError;
+use discord_rich_presence::DiscordIpc;
 use tauri::Manager;
 
 use crate::app::AppState;
 use crate::combat::data_storage::{DataStorage, LocalProfile};
 use crate::entity::job_class::JobClass;
+use crate::platform::discord_ipc::{self, Stream as IpcStream};
 use crate::platform::window_detector;
+
+type IpcResult<T> = Result<T, IpcError>;
 
 /// The Discord application whose name ("AION2") the activity shows under, and
 /// whose art assets hold the class icons (keys as `class_key` returns them).
 const DISCORD_APPLICATION_ID: &str = "1556021373401432214";
 
 pub const SETTING_KEY: &str = "dpsMeter.discordActivity";
-/// The number after the level: "combatPower" (the default), "gearScore" or
-/// "off".
+/// The number after the level: "combatPower", "gearScore" or "off" (the
+/// default: a public status shows no number the player didn't choose).
 pub const STAT_KEY: &str = "dpsMeter.discordStat";
 
 const TICK: Duration = Duration::from_secs(10);
@@ -78,10 +86,10 @@ pub fn spawn(app: tauri::AppHandle) {
 }
 
 fn run(app: tauri::AppHandle) {
-    let mut client: Option<DiscordIpcClient> = None;
+    let mut discords = Discords::default();
     let mut shown: Option<Shown> = None;
     let mut game_since: Option<i64> = None;
-    let mut last_attempt: Option<Instant> = None;
+    let mut last_scan: Option<Instant> = None;
     // Kept for the same character when nothing states them for a while.
     let mut last_stats = LastStats::default();
     loop {
@@ -93,9 +101,8 @@ fn run(app: tauri::AppHandle) {
             game_since = None;
         }
         if !enabled || !playing {
-            if let Some(mut c) = client.take() {
-                let _ = c.clear_activity();
-                let _ = c.close();
+            if !discords.is_empty() {
+                discords.clear_all();
                 tracing::info!("Discord activity cleared");
             }
             shown = None;
@@ -107,28 +114,18 @@ fn run(app: tauri::AppHandle) {
         let text = Texts::load(i18n_dir(&state).as_ref(), &lang);
         let stat = Stat::from_setting(state.settings.get(STAT_KEY).as_deref());
         let next = describe(&state.data_storage, &state, &text, &lang, stat, &mut last_stats);
-        if shown.as_ref() == Some(&next) && client.is_some() {
+
+        // A Discord started after the game is picked up on a later scan, and
+        // told the current activity even when it has not changed.
+        let mut joined = false;
+        if last_scan.is_none_or(|t| t.elapsed() >= RECONNECT_EVERY) {
+            last_scan = Some(Instant::now());
+            joined = discords.connect_new();
+        }
+        if discords.is_empty() || (shown.as_ref() == Some(&next) && !joined) {
             continue;
         }
 
-        if client.is_none() {
-            if last_attempt.is_some_and(|t| t.elapsed() < RECONNECT_EVERY) {
-                continue;
-            }
-            last_attempt = Some(Instant::now());
-            let mut c = DiscordIpcClient::new(DISCORD_APPLICATION_ID);
-            match c.connect() {
-                Ok(()) => {
-                    tracing::info!("Discord activity: connected to Discord");
-                    client = Some(c);
-                }
-                Err(e) => {
-                    tracing::debug!("Discord activity: Discord not reachable ({e})");
-                    continue;
-                }
-            }
-        }
-        let Some(c) = client.as_mut() else { continue };
         let mut assets = Assets::new().small_image("a2tools").small_text("A2Tools DPS Meter");
         // The image's hover text is the class with its level ("Cleric · Lv
         // 30"): the line beside it adds the name.
@@ -142,14 +139,161 @@ fn run(app: tauri::AppHandle) {
         if !next.state.is_empty() {
             activity = activity.state(next.state.as_str());
         }
-        match c.set_activity(activity) {
-            Ok(()) => shown = Some(next),
-            Err(e) => {
-                // Discord closed or restarted: connect again on a later tick.
-                tracing::info!("Discord activity: lost Discord ({e}); will reconnect");
-                client = None;
-                shown = None;
+        discords.set_all(&activity);
+        // Discord closed in the meantime: told again once it is back.
+        shown = if discords.is_empty() { None } else { Some(next) };
+    }
+}
+
+/// One Discord socket (`discord-ipc-0` … `-9`, also inside Flatpak and Snap
+/// sandboxes). The crate speaks Discord's protocol over it; this only opens
+/// it, as `platform::discord_ipc` finds it.
+struct Socket {
+    path: PathBuf,
+    stream: Option<IpcStream>,
+}
+
+impl DiscordIpc for Socket {
+    fn get_client_id(&self) -> &str {
+        DISCORD_APPLICATION_ID
+    }
+
+    fn connect_ipc(&mut self) -> IpcResult<()> {
+        let stream = discord_ipc::connect(&self.path).map_err(|_| IpcError::IPCConnectionFailed)?;
+        self.stream = Some(stream);
+        Ok(())
+    }
+
+    fn write(&mut self, data: &[u8]) -> IpcResult<()> {
+        let stream = self.stream.as_mut().ok_or(IpcError::NotConnected)?;
+        stream.write_all(data).map_err(IpcError::WriteError)?;
+        stream.flush().map_err(IpcError::FlushError)
+    }
+
+    fn read(&mut self, buffer: &mut [u8]) -> IpcResult<()> {
+        let stream = self.stream.as_mut().ok_or(IpcError::NotConnected)?;
+        stream.read_exact(buffer).map_err(IpcError::ReadError)
+    }
+
+    fn close(&mut self) -> IpcResult<()> {
+        self.stream = None;
+        Ok(())
+    }
+}
+
+/// How long a scan waits for the Discords it is connecting to.
+const HANDSHAKE_WAIT: Duration = Duration::from_secs(5);
+
+/// A connection attempt's outcome, from its own thread.
+type Attempt = (Socket, Result<(), String>);
+
+/// Every Discord running, one connection each.
+struct Discords {
+    open: Vec<Socket>,
+    /// Sockets that refused the handshake, by which socket file it was: not
+    /// tried again until a Discord makes a new one there.
+    refused: HashMap<PathBuf, Option<u64>>,
+    /// Handshakes still running. Each runs on its own thread: a Windows pipe
+    /// has no read timeout, so a Discord that hangs mid-handshake holds only
+    /// its own thread, never the others (and never this one past
+    /// HANDSHAKE_WAIT). It is not tried again while it hangs; if it ever
+    /// answers, a later scan takes it.
+    pending: HashSet<PathBuf>,
+    done_tx: Sender<Attempt>,
+    done_rx: Receiver<Attempt>,
+}
+
+impl Default for Discords {
+    fn default() -> Self {
+        let (done_tx, done_rx) = mpsc::channel();
+        Self { open: Vec::new(), refused: HashMap::new(), pending: HashSet::new(), done_tx, done_rx }
+    }
+}
+
+impl Discords {
+    fn is_empty(&self) -> bool {
+        self.open.is_empty()
+    }
+
+    /// Connects to every Discord not connected yet; true when one was added.
+    fn connect_new(&mut self) -> bool {
+        let paths = discord_ipc::socket_paths();
+        self.refused.retain(|p, _| paths.contains(p));
+        let mut started = HashSet::new();
+        for path in paths {
+            if self.pending.contains(&path) || self.open.iter().any(|s| s.path == path) {
+                continue;
             }
+            let id = discord_ipc::socket_id(&path);
+            if id.is_some() && self.refused.get(&path) == Some(&id) {
+                continue;
+            }
+            let tx = self.done_tx.clone();
+            let mut socket = Socket { path: path.clone(), stream: None };
+            let spawned = std::thread::Builder::new().name("discord-ipc".into()).spawn(move || {
+                let result = socket.connect().map_err(|e| e.to_string());
+                let _ = tx.send((socket, result));
+            });
+            if spawned.is_ok() {
+                self.pending.insert(path.clone());
+                started.insert(path);
+            }
+        }
+        // This scan's attempts, for up to HANDSHAKE_WAIT; any earlier one
+        // that has finished meanwhile comes in too.
+        let mut added = false;
+        let deadline = Instant::now() + HANDSHAKE_WAIT;
+        loop {
+            let attempt = if started.is_empty() {
+                match self.done_rx.try_recv() {
+                    Ok(a) => a,
+                    Err(_) => break,
+                }
+            } else {
+                match self.done_rx.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+                    Ok(a) => a,
+                    Err(_) => break,
+                }
+            };
+            let (socket, result) = attempt;
+            self.pending.remove(&socket.path);
+            started.remove(&socket.path);
+            match result {
+                Ok(()) => {
+                    tracing::info!("Discord activity: connected to {}", socket.path.display());
+                    self.refused.remove(&socket.path);
+                    self.open.push(socket);
+                    added = true;
+                }
+                // A socket left behind by a Discord that crashed.
+                Err(e) => {
+                    tracing::debug!("Discord activity: {} not reachable ({e})", socket.path.display());
+                    let id = discord_ipc::socket_id(&socket.path);
+                    self.refused.insert(socket.path, id);
+                }
+            }
+        }
+        for path in &started {
+            tracing::info!("Discord activity: {} has not answered yet; leaving it", path.display());
+        }
+        added
+    }
+
+    fn set_all(&mut self, activity: &Activity) {
+        self.open.retain_mut(|socket| match socket.set_activity(activity.clone()) {
+            Ok(()) => true,
+            // Discord closed or restarted: connect again on a later scan.
+            Err(e) => {
+                tracing::info!("Discord activity: lost {} ({e}); will reconnect", socket.path.display());
+                false
+            }
+        });
+    }
+
+    fn clear_all(&mut self) {
+        for mut socket in std::mem::take(&mut self.open) {
+            let _ = socket.clear_activity();
+            let _ = socket.close();
         }
     }
 }
@@ -230,9 +374,9 @@ enum Stat {
 impl Stat {
     fn from_setting(value: Option<&str>) -> Self {
         match value {
+            Some("combatPower") => Stat::CombatPower,
             Some("gearScore") => Stat::GearScore,
-            Some("off") => Stat::Off,
-            _ => Stat::CombatPower,
+            _ => Stat::Off,
         }
     }
 }
@@ -472,10 +616,11 @@ mod tests {
 
     #[test]
     fn the_number_follows_the_setting() {
-        assert_eq!(Stat::from_setting(None), Stat::CombatPower);
+        assert_eq!(Stat::from_setting(None), Stat::Off);
+        assert_eq!(Stat::from_setting(Some("combatPower")), Stat::CombatPower);
         assert_eq!(Stat::from_setting(Some("gearScore")), Stat::GearScore);
         assert_eq!(Stat::from_setting(Some("off")), Stat::Off);
-        assert_eq!(Stat::from_setting(Some("nonsense")), Stat::CombatPower);
+        assert_eq!(Stat::from_setting(Some("nonsense")), Stat::Off);
     }
 
     #[test]

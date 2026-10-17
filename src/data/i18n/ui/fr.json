@@ -270,7 +270,7 @@
     "discord": {
       "title": "Discord",
       "activity": "Afficher dans Discord ce à quoi je joue",
-      "activityHint": "Tant qu'AION2 est ouvert, votre statut Discord affiche le nom de votre personnage, sa classe, son niveau, votre serveur et le boss que vous combattez. Cela passe par l'application Discord de cet ordinateur ; aucun compte n'est nécessaire.",
+      "activityHint": "Tant qu'AION2 est ouvert, votre statut Discord affiche le nom de votre personnage, sa classe, son niveau, votre serveur et le boss que vous combattez. Cela passe par l'application Discord de cet ordinateur ; aucun compte n'est nécessaire. Avec un Nombre dans Discord choisi, il affiche aussi votre puissance de combat ou votre score d'équipement.",
       "stat": "Nombre dans Discord",
       "statHint": "Le nombre que votre statut Discord affiche après votre niveau."
     },
@@ -600,6 +600,8 @@
   },
   "presence": {
     "level": "Niv. {level}",
+    "combatPower": "CP {cp}",
+    "gearScore": "GS {gs}",
     "fighting": "Combat {boss}",
     "inGame": "En jeu",
     "elyos": "Élyséens",

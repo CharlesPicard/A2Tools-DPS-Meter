@@ -275,7 +275,7 @@
     "discord": {
       "title": "Discord",
       "activity": "在 Discord 顯示我正在玩的內容",
-      "activityHint": "AION2 開啟時，你的 Discord 狀態會顯示角色名稱、職業、等級、伺服器，以及正在對戰的首領。透過這台電腦上的 Discord 應用程式顯示，不需要帳號。",
+      "activityHint": "AION2 開啟時，你的 Discord 狀態會顯示角色名稱、職業、等級、伺服器，以及正在對戰的首領。透過這台電腦上的 Discord 應用程式顯示，不需要帳號。選擇 Discord 中顯示的數值後，還會顯示戰鬥力或裝備分數。",
       "stat": "Discord 中顯示的數值",
       "statHint": "Discord 狀態中顯示在等級後面的數值。"
     },
@@ -607,6 +607,8 @@
   },
   "presence": {
     "level": "Lv {level}",
+    "combatPower": "戰鬥力 {cp}",
+    "gearScore": "裝備分數 {gs}",
     "fighting": "正在挑戰 {boss}",
     "inGame": "遊戲中",
     "elyos": "天族",
