@@ -2313,7 +2313,18 @@ fn parse_party_roster_at(data: &[u8], at: usize) -> Option<Roster> {
         // on the member's world id instead: it is repeated here as a u16 and we
         // already know its value from the top half of `dbid`. Combat power then
         // sits a fixed distance past it.
-        let Some(anchor) = find_u16(data, o, o + 10, server_id) else {
+        // A member on another world than their own has that world here
+        // instead, a byte further on: Aylinn, of 2308, as `07 fe 08` (2302)
+        // where the others had `00 09` (2026-10-17). Not finding it lost her
+        // and every member after her. Any world then, with a combat power
+        // where it would be.
+        let Some(anchor) = find_u16(data, o, o + 10, server_id).or_else(|| {
+            (o..o + 10).find(|&i| {
+                let world = data.get(i..i + 2).map(|b| u16::from_le_bytes([b[0], b[1]]));
+                let power = data.get(i + 5..i + 13).map(|b| u64::from_le_bytes(b.try_into().unwrap()));
+                world.is_some_and(|w| (1000..=2999).contains(&w)) && power.is_some_and(|p| (1..=100_000_000).contains(&p))
+            })
+        }) else {
             break;
         };
         o = anchor + 2 + 2 + 1; // world id, a second u16, one tag byte
@@ -3432,6 +3443,28 @@ mod tests {
         let Roster { members, complete, .. } = parse_party_roster_at(&data, 2).expect("a roster");
         assert_eq!(members.len(), 2);
         assert!(complete, "vacant slots after the last member end the roster");
+    }
+
+    /// A member on another world than their own: Aylinn (slot 4) is of 2308
+    /// but on 2302 (2026-10-17 19:45). The walk stopped at her, losing her
+    /// and RoyBatty, and the meter kept three of five.
+    #[test]
+    fn roster_reads_a_member_on_another_world() {
+        let hex = "029771931a001d416c6c20626f7373657320616c742072756e204c46206368616e74657205cc2709000003f0b3030000000009ff0202051e01f0b303000000000906416c66697261200000002d000000db0500000009cd1004be1201000000000000300000000000000001051e02e9b70200000002090553656c75650c0000002d000000f30600000209cd1004f85201000000000000790000000000000001051e03e212040000000009064e79786572611c0000002d000000cc0500000009cd1004210001000000000000250000000000000001051e04efd10200000004090641796c696e6e1c0000002d0000001d08000007fe08cd1004e85201000000000000750000000000000001051e05b28602000000240508526f794261747479210000002d000000990600002405cd1003234301000000000000b20000000000000001050009";
+        let data: Vec<u8> = (0..hex.len() / 2).map(|i| u8::from_str_radix(&hex[2 * i..2 * i + 2], 16).unwrap()).collect();
+        let Roster { members, complete, .. } = parse_party_roster_at(&data, 2).expect("a roster");
+        let got: Vec<(String, i64, u16)> = members.iter().map(|(n, m)| (n.clone(), m.combat_power, m.server_id)).collect();
+        assert_eq!(
+            got,
+            vec![
+                ("Alfira".to_string(), 70334, 2304),
+                ("Selue".to_string(), 86776, 2306),
+                ("Nyxera".to_string(), 65569, 2304),
+                ("Aylinn".to_string(), 86760, 2308),
+                ("RoyBatty".to_string(), 82723, 1316),
+            ]
+        );
+        assert!(complete);
     }
 
     /// A Spiritmaster's spirits send `04 38` records to their owner on each
