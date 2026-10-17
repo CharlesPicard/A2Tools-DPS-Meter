@@ -634,6 +634,18 @@ const createDetailsUI = ({
   };
 
   const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  // Opening animations wait until every section is built (renderRest), so
+  // no section's build lands in the middle of one and drops its frames.
+  let pendingStarts = null;
+  const whenBuilt = (start) => {
+    if (pendingStarts) pendingStarts.push(start);
+    else requestAnimationFrame(start);
+  };
+  const startPending = () => {
+    const starts = pendingStarts || [];
+    pendingStarts = null;
+    starts.forEach((start) => start());
+  };
   // Count every figure under `root` up from 0 to what it says, keeping its
   // format ("1.23M", "45.6%", "1,234", "9:21"), and end on the exact text.
   // For a fight's first show: figures that appear at once looked jarring.
@@ -664,8 +676,10 @@ const createDetailsUI = ({
         ? v.toLocaleString("en-US", { minimumFractionDigits: p.decimals, maximumFractionDigits: p.decimals })
         : v.toFixed(p.decimals);
     };
-    const start = performance.now();
+    for (const { node, pieces } of nodes) node.nodeValue = pieces.map((p) => (typeof p === "string" ? p : show(p, 0))).join("");
+    let start = 0;
     const step = (now) => {
+      if (!start) start = now;
       const t = Math.min(1, Math.max(0, (now - start) / duration));
       const f = 1 - Math.pow(1 - t, 3);
       for (const { node, text, pieces } of nodes) {
@@ -674,7 +688,7 @@ const createDetailsUI = ({
       }
       if (t < 1) requestAnimationFrame(step);
     };
-    step(start);
+    whenBuilt(() => requestAnimationFrame(step));
   };
 
   // The first time a fight's figures show, its bars slide out from empty
@@ -743,11 +757,13 @@ const createDetailsUI = ({
       // A width rather than a stretch, so a bar texture keeps its size.
       fillEl.style.transform = "none";
       const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
+      fillEl.style.width = fillWidth;
       if (sliding) {
-        fillEl.style.width = "0%";
-        slides.push([fillEl, fillWidth]);
-      } else {
-        fillEl.style.width = fillWidth;
+        // A transform, not the width: the width made every frame lay the
+        // page out again, and the slide stuttered.
+        fillEl.classList.add("isSliding");
+        fillEl.style.transform = "scaleX(0)";
+        slides.push(fillEl);
       }
 
       const contentEl = document.createElement("div");
@@ -866,14 +882,12 @@ const createDetailsUI = ({
       detailsPartyListEl.appendChild(bar);
     });
     if (sliding) {
-      // Two frames: the empty bars are on screen before they start to fill.
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        slides.forEach(([fillEl, width], i) => {
-          fillEl.classList.add("isSliding");
+      whenBuilt(() => {
+        slides.forEach((fillEl, i) => {
           fillEl.style.transitionDelay = `${i * 40}ms`;
-          fillEl.style.width = width;
+          fillEl.style.transform = "scaleX(1)";
         });
-      }));
+      });
       countUpIn(detailsPartyListEl);
     }
   };
@@ -1885,10 +1899,11 @@ const createDetailsUI = ({
     snap.getContext("2d").drawImage(dpsChartCanvas, 0, 0);
     const ctx = dpsChartCanvas.getContext("2d");
     const token = chartRevealSeq;
-    const start = performance.now();
+    let start = 0;
     const duration = 750;
     const paint = (now) => {
       if (token !== chartRevealSeq) return;
+      if (!start) start = now;
       const p = Math.min(1, (now - start) / duration);
       const shown = Math.max(1, Math.round(w * (1 - Math.pow(1 - p, 3))));
       ctx.save();
@@ -1898,7 +1913,11 @@ const createDetailsUI = ({
       ctx.restore();
       if (p < 1) requestAnimationFrame(paint);
     };
-    paint(start);
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, w, h);
+    ctx.restore();
+    whenBuilt(() => requestAnimationFrame(paint));
   };
 
   const renderDpsChart = (details) => {
@@ -3084,6 +3103,7 @@ const createDetailsUI = ({
     // The fight's first show: bars slide out and figures count up.
     const firstShow = stagedForSeq !== openSeq;
     fillBarsFromZero = firstShow;
+    if (firstShow) pendingStarts = [];
     const partyBarCtx = buildPartyBarStats();
     renderPartyBars(partyBarCtx?.stats || details?.perActorStats, partyBarCtx?.battleTimeMs || details?.battleTimeMs);
     renderStats(details, { compact: activeCompactMode });
@@ -3125,6 +3145,7 @@ const createDetailsUI = ({
     if (stagedForSeq === openSeq) {
       for (const [step] of steps) step();
       chartRevealPending = false;
+      startPending();
       return;
     }
     stagedForSeq = openSeq;
@@ -3132,10 +3153,14 @@ const createDetailsUI = ({
       for (const [step, section] of steps) {
         await nextFrame();
         // A newer render took over: it draws everything itself.
-        if (token !== stageToken) return;
+        if (token !== stageToken) return startPending();
         step();
         popIn(section?.());
       }
+      // Let the last section's layout and paint land, then animate.
+      await nextFrame();
+      await nextFrame();
+      startPending();
     })();
   };
 
