@@ -633,8 +633,58 @@ const createDetailsUI = ({
     };
   };
 
+  const reducedMotion = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches;
+  // Count every figure under `root` up from 0 to what it says, keeping its
+  // format ("1.23M", "45.6%", "1,234", "9:21"), and end on the exact text.
+  // For a fight's first show: figures that appear at once looked jarring.
+  const COUNTED = /\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?/g;
+  const countUpIn = (root, duration = 700) => {
+    if (!root || reducedMotion()) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const nodes = [];
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = node.nodeValue || "";
+      if (!/\d/.test(text)) continue;
+      const pieces = [];
+      let last = 0;
+      text.replace(COUNTED, (match, at) => {
+        pieces.push(text.slice(last, at));
+        pieces.push({ value: parseFloat(match.replace(/,/g, "")), decimals: (match.split(".")[1] || "").length, grouped: match.includes(",") });
+        last = at + match.length;
+        return match;
+      });
+      pieces.push(text.slice(last));
+      nodes.push({ node, text, pieces });
+    }
+    if (!nodes.length) return;
+    const show = (p, f) => {
+      const v = p.value * f;
+      return p.grouped
+        ? v.toLocaleString("en-US", { minimumFractionDigits: p.decimals, maximumFractionDigits: p.decimals })
+        : v.toFixed(p.decimals);
+    };
+    const start = performance.now();
+    const step = (now) => {
+      const t = Math.min(1, Math.max(0, (now - start) / duration));
+      const f = 1 - Math.pow(1 - t, 3);
+      for (const { node, text, pieces } of nodes) {
+        if (!node.isConnected) continue;
+        node.nodeValue = t >= 1 ? text : pieces.map((p) => (typeof p === "string" ? p : show(p, f))).join("");
+      }
+      if (t < 1) requestAnimationFrame(step);
+    };
+    step(start);
+  };
+
+  // The first time a fight's figures show, its bars slide out from empty
+  // (render sets this; see `renderRest`).
+  let fillBarsFromZero = false;
   const renderPartyBars = (stats, battleTimeMs) => {
     if (!detailsPartyListEl) return;
+    const sliding = fillBarsFromZero && !reducedMotion();
+    fillBarsFromZero = false;
+    const slides = [];
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
@@ -692,7 +742,13 @@ const createDetailsUI = ({
       fillEl.className = "detailsPartyBarFill";
       // A width rather than a stretch, so a bar texture keeps its size.
       fillEl.style.transform = "none";
-      fillEl.style.width = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
+      const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
+      if (sliding) {
+        fillEl.style.width = "0%";
+        slides.push([fillEl, fillWidth]);
+      } else {
+        fillEl.style.width = fillWidth;
+      }
 
       const contentEl = document.createElement("div");
       contentEl.className = "detailsPartyBarContent";
@@ -809,6 +865,17 @@ const createDetailsUI = ({
 
       detailsPartyListEl.appendChild(bar);
     });
+    if (sliding) {
+      // Two frames: the empty bars are on screen before they start to fill.
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        slides.forEach(([fillEl, width], i) => {
+          fillEl.classList.add("isSliding");
+          fillEl.style.transitionDelay = `${i * 40}ms`;
+          fillEl.style.width = width;
+        });
+      }));
+      countUpIn(detailsPartyListEl);
+    }
   };
 
   // Hit results from the record's flags byte and hit type, after Front:
@@ -3014,9 +3081,13 @@ const createDetailsUI = ({
     }
     selectedAttackerLabel = selectedAttackerLabel || String(row.name ?? "");
     updateHeaderText();
+    // The fight's first show: bars slide out and figures count up.
+    const firstShow = stagedForSeq !== openSeq;
+    fillBarsFromZero = firstShow;
     const partyBarCtx = buildPartyBarStats();
     renderPartyBars(partyBarCtx?.stats || details?.perActorStats, partyBarCtx?.battleTimeMs || details?.battleTimeMs);
     renderStats(details, { compact: activeCompactMode });
+    if (firstShow) countUpIn(detailsPanel.querySelector(".detailsStats"));
     lastRow = row;
     lastDetails = details;
     renderRest(details);
@@ -3281,6 +3352,12 @@ const createDetailsUI = ({
 
     // Clear stats/skills while loading
     clearDetailsValues();
+    // The players at once, in the order their damage will put them, with
+    // empty bars: the figures fill them when they are ready.
+    const waiting = Object.entries(historyActorDamage)
+      .sort((a, b) => b[1] - a[1])
+      .map(([actorId]) => ({ actorId: Number(actorId), totalDmg: 0, contributionPct: 0 }));
+    renderPartyBars(waiting, -1);
 
     if (seq !== openSeq) return;
     const fakeRow = { id: null, job: "", name: record.bossName };
