@@ -1144,13 +1144,19 @@ fn flush_settings_before_exit(app: &tauri::AppHandle) {
     }
 }
 
+/// A skill icon from the disk cache. `async`, like `write_cached_icon`: as
+/// sync commands they ran on the main thread, a hundred or so of each when a
+/// fight opened, and every window stopped moving and painting for seconds
+/// (2026-10-18).
 #[tauri::command]
-fn read_cached_icon(state: tauri::State<'_, AppState>, key: String) -> Option<String> {
+async fn read_cached_icon(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
     if !crate::history::fight_history::is_plain_name(&key) {
-        return None;
+        return Ok(None);
     }
-    let path = state.app_data_dir.join("icon_cache").join(&key);
-    std::fs::read_to_string(&path).ok()
+    crate::blocking::ICONS.run(move || {
+        let path = app.state::<AppState>().app_data_dir.join("icon_cache").join(&key);
+        std::fs::read_to_string(&path).ok()
+    }).await
 }
 
 #[tauri::command]
@@ -1215,15 +1221,21 @@ fn log_from_ui(message: String) {
     tracing::warn!("UI: {message}");
 }
 
+/// Keep a downloaded skill icon (base64) for next time. Off the main thread;
+/// see `read_cached_icon`. An icon already kept is not written again.
 #[tauri::command]
-fn write_cached_icon(state: tauri::State<'_, AppState>, key: String, data: String) {
+async fn write_cached_icon(app: tauri::AppHandle, key: String, data: String) -> Result<(), String> {
     if !crate::history::fight_history::is_plain_name(&key) {
-        return;
+        return Ok(());
     }
-    let cache_dir = state.app_data_dir.join("icon_cache");
-    let _ = std::fs::create_dir_all(&cache_dir);
-    let path = cache_dir.join(&key);
-    let _ = std::fs::write(&path, &data);
+    crate::blocking::ICONS.run(move || {
+        let cache_dir = app.state::<AppState>().app_data_dir.join("icon_cache");
+        let path = cache_dir.join(&key);
+        if !path.exists() {
+            let _ = std::fs::create_dir_all(&cache_dir);
+            let _ = std::fs::write(&path, &data);
+        }
+    }).await
 }
 
 
@@ -2369,6 +2381,9 @@ async fn request_details_view(
 fn open_fight_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
     let step = app.webview_windows().keys().filter(|l| l.starts_with("details-")).count() as f64;
     let offset = (step % 6.0) * 34.0;
+    // Born centred on the overlay's screen and cascaded, not moved there
+    // after `build()`: it showed at the default spot first (see birth_place).
+    let (x, y, _, _) = birth_place(app, None, (1180.0, 760.0), false);
 
     let window = tauri::WebviewWindowBuilder::new(
         app,
@@ -2382,23 +2397,13 @@ fn open_fight_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> 
     .always_on_top(true)
     .resizable(true)
     .skip_taskbar(false)
+    .position(x + offset, y + offset)
     .inner_size(1180.0, 760.0)
     .min_inner_size(520.0, 360.0)
     .background_color(tauri::window::Color(10, 14, 22, 255))
     .build()
     .map_err(|e| e.to_string())?;
     platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: 1180.0, height: 760.0 }));
-
-    center_on_overlay_monitor(app, &window);
-    if offset > 0.0 {
-        if let Ok(pos) = window.outer_position() {
-            let shift = offset as i32;
-            let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
-                x: pos.x + shift,
-                y: pos.y + shift,
-            }));
-        }
-    }
     Ok(())
 }
 

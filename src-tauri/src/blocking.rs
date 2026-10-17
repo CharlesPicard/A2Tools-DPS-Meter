@@ -7,6 +7,9 @@ pub(crate) static CALCULATIONS: WorkQueue = WorkQueue::new();
 /// so the tick must not wait behind them in CALCULATIONS.
 pub(crate) static DPS_TICK: WorkQueue = WorkQueue::new();
 pub(crate) static HISTORY: WorkQueue = WorkQueue::new();
+/// The skill icon cache: small files, many at once when a fight opens, so
+/// they queue apart from history and never behind a fight being read.
+pub(crate) static ICONS: WorkQueue = WorkQueue::new();
 
 pub(crate) struct WorkQueue {
     running: Semaphore,

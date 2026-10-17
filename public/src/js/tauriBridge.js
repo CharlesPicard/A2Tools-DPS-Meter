@@ -943,6 +943,16 @@
       }
       return null;
     },
+    // The cached icon, once read from disk (null when there is none).
+    readCachedIconAsync(key) {
+      if (!key) return Promise.resolve(null);
+      if (window._iconCache?.[key] !== undefined) return Promise.resolve(window._iconCache[key]);
+      return invoke("read_cached_icon", { key }).then((data) => {
+        if (!window._iconCache) window._iconCache = {};
+        window._iconCache[key] = data ?? null;
+        return data ?? null;
+      }).catch(() => null);
+    },
     readCachedIcon(key) {
       // Synchronous read from Rust via cached map
       if (!key) return null;

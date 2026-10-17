@@ -243,10 +243,14 @@
     const bridge = window.javaBridge;
 
     const p = Promise.resolve()
-      .then(() => {
-        // Try disk cache first
-        if (cacheKey && bridge?.readCachedIcon) {
-          const b64 = bridge.readCachedIcon(cacheKey);
+      .then(async () => {
+        // Try disk cache first. Waited for: the synchronous read answered
+        // null on a window's first ask, so every icon was downloaded again
+        // in every window.
+        if (cacheKey && (bridge?.readCachedIconAsync || bridge?.readCachedIcon)) {
+          const b64 = bridge.readCachedIconAsync
+            ? await bridge.readCachedIconAsync(cacheKey)
+            : bridge.readCachedIcon(cacheKey);
           if (b64) {
             const binary = atob(b64);
             const bytes = new Uint8Array(binary.length);

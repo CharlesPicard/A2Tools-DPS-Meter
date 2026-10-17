@@ -1804,8 +1804,40 @@ const createDetailsUI = ({
     if (dpsChartCanvas.title !== title) dpsChartCanvas.title = title;
   });
 
+  // The chart's lines draw in from the left the first time a fight shows:
+  // what is drawn is kept and revealed over a moment, not drawn again.
+  let chartRevealSeq = 0;
+  let chartRevealPending = false;
+  const revealChart = () => {
+    const w = dpsChartCanvas.width;
+    const h = dpsChartCanvas.height;
+    if (!w || !h || window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches) return;
+    const snap = document.createElement("canvas");
+    snap.width = w;
+    snap.height = h;
+    snap.getContext("2d").drawImage(dpsChartCanvas, 0, 0);
+    const ctx = dpsChartCanvas.getContext("2d");
+    const token = chartRevealSeq;
+    const start = performance.now();
+    const duration = 750;
+    const paint = (now) => {
+      if (token !== chartRevealSeq) return;
+      const p = Math.min(1, (now - start) / duration);
+      const shown = Math.max(1, Math.round(w * (1 - Math.pow(1 - p, 3))));
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, w, h);
+      ctx.drawImage(snap, 0, 0, shown, h, 0, 0, shown, h);
+      ctx.restore();
+      if (p < 1) requestAnimationFrame(paint);
+    };
+    paint(start);
+  };
+
   const renderDpsChart = (details) => {
     if (!dpsChartCanvas || !dpsChartXAxis || !dpsChartLegend) return;
+    // A redraw (a refresh, a resize) ends a reveal still under way.
+    chartRevealSeq++;
 
     // Use unfiltered skills for DPS lines + boss health; filtered details for ping + battleTime
     const unfilteredDetails = lastUnfilteredDetails || details;
@@ -2148,6 +2180,10 @@ const createDetailsUI = ({
 
     // Pointing at a cross names who died (see the listener below).
     dpsChartCanvas.deathMarks = deathMarks;
+    if (chartRevealPending) {
+      chartRevealPending = false;
+      revealChart();
+    }
 
     // ── Legend: a line per player, in the colour it is drawn in (the one
     // selected solid, the rest dashed), then the boss's HP and the ping. ──
@@ -2981,12 +3017,9 @@ const createDetailsUI = ({
     const partyBarCtx = buildPartyBarStats();
     renderPartyBars(partyBarCtx?.stats || details?.perActorStats, partyBarCtx?.battleTimeMs || details?.battleTimeMs);
     renderStats(details, { compact: activeCompactMode });
-    renderSkills(details, { compact: activeCompactMode });
-    renderDpsChart(details);
-    renderTimeline(details);
-    renderBuffs();
     lastRow = row;
     lastDetails = details;
+    renderRest(details);
 
     // Unfiltered details are now fetched in parallel by refreshDetailsView,
     // so lastUnfilteredDetails is already set before render() is called.
@@ -2994,6 +3027,45 @@ const createDetailsUI = ({
     if (cacheRowId) {
       detailsCacheByRowId.set(cacheRowId, details);
     }
+  };
+
+  // The rest of the page after the players and the totals. The first time a
+  // fight shows, one section a frame, each fading in: built in one go, a
+  // long fight held the window for a second or more, and it would not move
+  // or answer meanwhile (2026-10-18). Refreshes of a fight already shown
+  // draw everything at once, as before.
+  let stagedForSeq = -1;
+  let stageToken = 0;
+  const nextFrame = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  const popIn = (el) => {
+    if (!el) return;
+    el.classList.remove("detailsPopIn");
+    void el.offsetWidth;
+    el.classList.add("detailsPopIn");
+  };
+  const renderRest = (details) => {
+    const token = ++stageToken;
+    const steps = [
+      [() => renderSkills(details, { compact: activeCompactMode }), () => detailsPanel.querySelector(".detailsSkills")],
+      [() => { chartRevealPending = true; renderDpsChart(details); chartRevealPending = false; }, () => fightTimeline],
+      [() => renderTimeline(details), null],
+      [() => renderBuffs(), null],
+    ];
+    if (stagedForSeq === openSeq) {
+      for (const [step] of steps) step();
+      chartRevealPending = false;
+      return;
+    }
+    stagedForSeq = openSeq;
+    (async () => {
+      for (const [step, section] of steps) {
+        await nextFrame();
+        // A newer render took over: it draws everything itself.
+        if (token !== stageToken) return;
+        step();
+        popIn(section?.());
+      }
+    })();
   };
 
   const getCachedDetails = (rowId) => {

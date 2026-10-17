@@ -2750,6 +2750,13 @@ body.mainPlayerNamesBold .settingsPanel .themeDropdownMenu .settingsDropdownItem
        holds with the shine past the end of the name. */
     animation: a2toolsGoldSweep 2.4s ease-out 1 both;
   }
+  /* Still gold in Details. Each frame of the sweep repainted the page around
+     the name, ~150 ms of every 250 for its 2.4 s, and a fight's window would
+     not move until it ended (2026-10-18). A layer of its own made it worse. */
+  .detailsPanel .detailsPartyBarName.isSupporter {
+    animation: none;
+    background-position: 0% 50%, 0 0;
+  }
 }
 
 /* On a bright bar (gold, yellow, pale: meter.js isBrightColor) the gold has
@@ -7577,4 +7584,23 @@ html.a2-offline .historyUploadBtn {
 }
 .settingsPanel .barPreview .classIconImg {
   visibility: visible;
+}
+
+/* While core.js reads each theme's colours for the theme list. */
+.readingThemes *,
+.readingThemes *::before,
+.readingThemes *::after {
+  transition: none !important;
+}
+
+/* A Details section drawn after the first paint (details.js renderRest). */
+@keyframes detailsPopIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+.detailsPopIn {
+  animation: detailsPopIn 220ms ease-out both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detailsPopIn { animation: none; }
 }

@@ -3494,17 +3494,29 @@ class DpsApp {
   }
 
   initializeSettingsDropdowns() {
+    // Each theme's colours, read by putting the whole page in that theme for
+    // a moment. Only Settings shows the theme list: every other window (a
+    // fight's Details too) ran this for every theme on opening, restyling the
+    // page and restarting its colour transitions each time, so it repainted
+    // and ignored the mouse for seconds (2026-10-18). Elsewhere the list is
+    // never seen, and its fixed previews are enough.
+    const themesShown = !window.__A2_VIEW__ || window.__A2_VIEW__ === "settings";
     const previewThemeVars = (themeId) => {
       this._themePreviewCache ||= new Map();
       if (this._themePreviewCache.has(themeId)) return this._themePreviewCache.get(themeId);
+      if (!themesShown) return { textColor: "", nameShadow: "", rowFill: "" };
       const root = document.documentElement;
       const previous = root.dataset.theme;
+      // No transitions while the page is in another theme for a moment.
+      root.classList.add("readingThemes");
       root.dataset.theme = themeId;
       const computed = getComputedStyle(root);
       const textColor = computed.getPropertyValue("--text-color").trim() || "#ffffff";
       const nameShadow = computed.getPropertyValue("--player-name-shadow").trim() || "none";
       const rowFill = computed.getPropertyValue("--row-fill").trim() || "#2f2f2f";
       root.dataset.theme = previous || "aion2";
+      getComputedStyle(root).color; // settle the page back before transitions return
+      root.classList.remove("readingThemes");
       const preview = { textColor, nameShadow, rowFill };
       this._themePreviewCache.set(themeId, preview);
       return preview;
