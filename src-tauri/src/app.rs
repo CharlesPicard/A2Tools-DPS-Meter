@@ -1916,6 +1916,54 @@ fn center_on_overlay_monitor(app: &tauri::AppHandle, window: &tauri::WebviewWind
     let _ = window.center();
 }
 
+/// Where a tool window should be born, in logical units for its builder: the
+/// spot `label`'s window was left at, and its size unless `keep_size` is
+/// false; else (or with no `label`) centred on the overlay's screen at `size`.
+/// Built at the default spot and moved after `build()` returned, it showed
+/// there first and then jumped: on Windows `build()` waits for WebView2, so
+/// the jump was plain to see (Settings, 2026-10-18). `restore_window_geometry` still runs after, to set
+/// the physical pixels exactly; the window is already there.
+fn birth_place(app: &tauri::AppHandle, label: Option<&str>, size: (f64, f64), keep_size: bool) -> (f64, f64, f64, f64) {
+    let saved = |k: &str| {
+        let label = label?;
+        app.try_state::<AppState>()
+            .and_then(|s| s.settings.get(&format!("window.{}.{}", label, k)))
+            .and_then(|v| v.trim().parse::<i32>().ok())
+    };
+    let monitors = app.available_monitors().unwrap_or_default();
+    if let (Some(x), Some(y)) = (saved("x"), saved("y")) {
+        let screen = monitors.iter().find(|m| {
+            let p = *m.position();
+            let s = *m.size();
+            x >= p.x - 64 && x < p.x + s.width as i32 && y >= p.y - 64 && y < p.y + s.height as i32
+        });
+        if let Some(m) = screen {
+            let scale = m.scale_factor();
+            let (mut w, mut h) = size;
+            if keep_size {
+                if let (Some(sw), Some(sh)) = (saved("w"), saved("h")) {
+                    if sw > 200 && sh > 150 {
+                        (w, h) = (sw as f64 / scale, sh as f64 / scale);
+                    }
+                }
+            }
+            return (x as f64 / scale, y as f64 / scale, w, h);
+        }
+    }
+    let monitor = app
+        .get_webview_window("main")
+        .and_then(|main| main.current_monitor().ok().flatten())
+        .or_else(|| app.primary_monitor().ok().flatten());
+    match monitor {
+        Some(m) => {
+            let scale = m.scale_factor();
+            let (p, s) = (m.position().to_logical::<f64>(scale), m.size().to_logical::<f64>(scale));
+            (p.x + ((s.width - size.0) / 2.0).max(0.0), p.y + ((s.height - size.1) / 2.0).max(0.0), size.0, size.1)
+        }
+        None => (100.0, 100.0, size.0, size.1),
+    }
+}
+
 /// Restore a tool window's remembered geometry. Returns true if anything was
 /// applied, so callers know whether they still need to place it themselves.
 fn restore_window_geometry(app: &tauri::AppHandle, window: &tauri::WebviewWindow, label: &str) -> bool {
@@ -2020,6 +2068,7 @@ window.__A2_VIEW__ = 'settings';
 
 fn build_settings_window(app: &tauri::AppHandle) -> Result<(), String> {
     platform::window_startup::begin_settings_load();
+    let (x, y, _, _) = birth_place(app, Some("settings"), (760.0, 820.0), false);
     let window = tauri::WebviewWindowBuilder::new(
         app,
         "settings",
@@ -2036,6 +2085,7 @@ fn build_settings_window(app: &tauri::AppHandle) -> Result<(), String> {
     .always_on_top(true)
     .resizable(true)
     .skip_taskbar(false)
+    .position(x, y)
     .inner_size(760.0, 820.0)
     .min_inner_size(520.0, 420.0)
     // Built visible on Windows, with the app's background colour to cover the
@@ -2303,6 +2353,7 @@ fn open_fight_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> 
 /// The History window. Persistent by design — it is the browser you pick fights
 /// from, and it stays put while those fights open in windows of their own.
 fn open_history_window_inner(app: &tauri::AppHandle) -> Result<(), String> {
+    let (x, y, w, h) = birth_place(app, Some("history"), (1100.0, 720.0), true);
     let window = tauri::WebviewWindowBuilder::new(
         app,
         "history",
@@ -2315,12 +2366,13 @@ fn open_history_window_inner(app: &tauri::AppHandle) -> Result<(), String> {
     .always_on_top(true)
     .resizable(true)
     .skip_taskbar(false)
-    .inner_size(1100.0, 720.0)
+    .position(x, y)
+    .inner_size(w, h)
     .min_inner_size(480.0, 360.0)
     .background_color(tauri::window::Color(10, 14, 22, 255))
     .build()
     .map_err(|e| e.to_string())?;
-    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: 1100.0, height: 720.0 }));
+    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: w, height: h }));
 
     if !restore_window_geometry(app, &window, "history") {
         center_on_overlay_monitor(app, &window);
@@ -2340,6 +2392,8 @@ fn close_tool_window(window: tauri::Window) {
 /// give them a window they can move, not black out a display over the game.
 /// A remembered position still wins — this is only the first-run geometry.
 fn open_details_windowed(app: &tauri::AppHandle) -> Result<(), String> {
+    let placed = details_geometry_is_user_placed(app).then_some("details");
+    let (x, y, w, h) = birth_place(app, placed, (1180.0, 760.0), true);
     let window = tauri::WebviewWindowBuilder::new(
         app,
         "details",
@@ -2352,14 +2406,15 @@ fn open_details_windowed(app: &tauri::AppHandle) -> Result<(), String> {
     .always_on_top(true)
     .resizable(true)
     .skip_taskbar(false)
-    .inner_size(1180.0, 760.0)
+    .position(x, y)
+    .inner_size(w, h)
     .min_inner_size(520.0, 360.0)
     // Visible, with the app background painted behind the load — same reason as
     // the monitor-filling path: a hidden WebView2 window may never load at all.
     .background_color(tauri::window::Color(10, 14, 22, 255))
     .build()
     .map_err(|e| e.to_string())?;
-    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: 1180.0, height: 760.0 }));
+    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: w, height: h }));
 
     // A remembered position still wins, but only one the user actually chose.
     if !details_geometry_is_user_placed(app)
