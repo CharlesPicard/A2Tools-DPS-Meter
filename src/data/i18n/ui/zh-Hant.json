@@ -572,7 +572,8 @@
   "meter": {
     "identifyingPlayer": "#{id}",
     "a2toolsUser": "使用 A2Tools",
-    "dpsSuffix": "/秒"
+    "dpsSuffix": "/秒",
+    "others": "其他"
   },
   "skills": {
     "fallback": "技能 {code}",

@@ -565,7 +565,8 @@
   "meter": {
     "identifyingPlayer": "#{id}",
     "a2toolsUser": "A2Toolsを使用中",
-    "dpsSuffix": "/s"
+    "dpsSuffix": "/s",
+    "others": "その他"
   },
   "skills": {
     "fallback": "スキル {code}",

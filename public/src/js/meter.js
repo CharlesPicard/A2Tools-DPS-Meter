@@ -349,6 +349,12 @@ const createMeterUI = ({
         view.lastIsUser = isUser;
       }
 
+      const isOthers = !!row.isOthers;
+      if (view.lastIsOthers !== isOthers) {
+        view.rowEl.classList.toggle("isOthers", isOthers);
+        view.lastIsOthers = isOthers;
+      }
+
       const isIdentifying = !!row.isIdentifying;
       if (view.lastIsIdentifying !== isIdentifying) {
         view.rowEl.classList.toggle("isIdentifying", isIdentifying);

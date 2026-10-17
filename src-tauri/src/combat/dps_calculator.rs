@@ -15,6 +15,9 @@ use crate::i18n::lookup::{NpcLookup, SkillLookup};
 /// above the entity-id range (real ids top out at 9,999,999) so it can never
 /// collide, and stays positive because the frontend discards non-positive ids.
 const PARTY_ROW_ID_BASE: i32 = 90_000_000;
+/// The Others row on an open-world boss (`world_boss_rows`), below the party
+/// rows' ids and above every entity's.
+const OTHERS_ROW_ID: i32 = PARTY_ROW_ID_BASE - 1;
 /// A death this long after a fight's last hit still belongs to it: in a
 /// wipe the last of the party can fall after the boss's last damage.
 const DEATH_GRACE_MS: i64 = 5_000;
@@ -78,6 +81,10 @@ pub struct DpsCalculator {
     /// `DataStorage::party_placeholders_wanted` at the last computed snapshot:
     /// the party rows go when it turns false, ten minutes after the roster.
     last_party_rows: bool,
+    /// The open-world boss being fought (entity, first hit of this fight) and
+    /// its HP when this meter first saw the fight, the start of what Others
+    /// counts (`world_boss_rows`).
+    world_boss_start: Option<(i32, i64, i64)>,
     target_selection_mode: TargetSelectionMode,
     last_known_local_id: Option<i64>,
     all_targets_window_ms: i64,
@@ -107,6 +114,7 @@ impl DpsCalculator {
             last_damage_gen: -1,
             last_names_gen: 0,
             last_party_rows: false,
+            world_boss_start: None,
             target_selection_mode: TargetSelectionMode::BossTargets,
             last_known_local_id: None,
             all_targets_window_ms: 120_000,
@@ -565,6 +573,10 @@ impl DpsCalculator {
             dps_data.map.remove(&uid);
         }
 
+        if let Some(shown) = self.world_boss_rows(&mut dps_data, &combat_data, &local_ids, &party_members, total_damage, target_current_hp, bt) {
+            total_damage = shown;
+        }
+
         dps_data.battle_time = battle_time;
         // total_damage here is the cumulative damage to the selected target(s).
         // Paired with target_max_hp it yields remaining = max(0, max_hp - dealt).
@@ -582,6 +594,76 @@ impl DpsCalculator {
         self.last_dps_snapshot = Some(dps_data.clone());
         self.finalize_rows(&mut dps_data);
         dps_data
+    }
+
+    /// An open-world boss shows you, your party and one Others row. Since the
+    /// Global update of 2026-10-15 the server sends no one else's direct hits
+    /// on these bosses, only their damage over time, so their rows showed a
+    /// few percent of what they did (Furious Saursus, 2026-10-17: 7.8M of the
+    /// 152M it lost; #55). Others is the HP the boss has lost since this meter
+    /// first saw the fight, less what your and your party's rows show.
+    /// Returns the total the rows now add up to. `None` when the target is no
+    /// field boss.
+    #[allow(clippy::too_many_arguments)]
+    fn world_boss_rows(
+        &mut self,
+        dps_data: &mut DpsData,
+        combat_data: &HashMap<i32, TargetCombatData>,
+        local_ids: &Option<HashSet<i32>>,
+        party: &HashMap<String, crate::combat::data_storage::PartyMember>,
+        tracked: f64,
+        current_hp: i64,
+        battle_time_ms: i64,
+    ) -> Option<f64> {
+        let target = self.current_target;
+        let code = (target != 0).then(|| self.data_storage.mob_code(target)).flatten()?;
+        // In an instance everyone there is your party, and before the meter
+        // knows who you are it cannot tell who is yours.
+        if !crate::capture::field_bosses::is_field_boss(code)
+            || self.data_storage.current_dungeon_id() != 0
+            || local_ids.is_none()
+        {
+            return None;
+        }
+        let local_name = self.data_storage.local_character_name();
+        dps_data.map.retain(|uid, d| {
+            let name = d.nickname.trim();
+            local_ids.as_ref().is_some_and(|ids| ids.contains(uid))
+                || local_name.as_deref().is_some_and(|n| n.trim() == name)
+                || party.contains_key(name)
+        });
+        let listed: f64 = dps_data.map.values().map(|d| d.amount).sum();
+
+        let hp_now = if self.data_storage.is_entity_dead(target) { 0 } else { current_hp };
+        let first_hit = combat_data.get(&target).map(|t| t.first_damage_time).unwrap_or(0);
+        let mut others = 0.0;
+        if hp_now >= 0 {
+            // The first look at a fight takes its HP then, plus what was
+            // already tracked: the hits before that look are counted, the
+            // fight before this meter came is not.
+            let start = match self.world_boss_start {
+                Some((t, at, hp)) if t == target && at == first_hit => hp,
+                _ => {
+                    let hp = hp_now + tracked as i64;
+                    self.world_boss_start = Some((target, first_hit, hp));
+                    hp
+                }
+            };
+            others = ((start - hp_now) as f64 - listed).max(0.0);
+        }
+        if others > 0.0 {
+            let mut row = PersonalData::new("Others".to_string());
+            row.is_others = true;
+            row.amount = others;
+            dps_data.map.insert(OTHERS_ROW_ID, row);
+        }
+        let total = listed + others;
+        let bt = battle_time_ms.max(1000) as f64;
+        for d in dps_data.map.values_mut() {
+            d.dps = d.amount / bt * 1000.0;
+            d.damage_contribution = if total > 0.0 { d.amount / total * 100.0 } else { 0.0 };
+        }
+        Some(total)
     }
 
     /// Give every party member a row as soon as they join, damage or not, so the
@@ -2209,13 +2291,53 @@ mod tests {
         assert_eq!(shown.target_id, 0);
         assert!(shown.map.is_empty());
 
-        // You join in: the boss is yours, with every player on it.
+        // You join in: the boss is yours. Strangers are no rows on an
+        // open-world boss: the server sends little of theirs (#55), and they
+        // are in Others, from the boss's HP (none read here, so no row).
         storage.append_damage(hit(7983, 44_090, 3_000));
         let shown = calc.get_dps();
         assert_eq!(shown.target_id, 44_090);
-        let mut rows: Vec<i32> = shown.map.keys().copied().collect();
-        rows.sort_unstable();
-        assert_eq!(rows, vec![2653, 7983, 13179, 15468]);
+        assert_eq!(shown.map.keys().copied().collect::<Vec<_>>(), vec![7983]);
+    }
+
+    /// On an open-world boss the rows are you, your party and Others: what
+    /// the boss lost since the meter first saw the fight, less those rows.
+    #[test]
+    fn a_world_boss_shows_others_from_the_hp_it_lost() {
+        use crate::combat::data_storage::PartyMember;
+        let storage = Arc::new(DataStorage::new());
+        storage.set_local_player_id(Some(7983));
+        storage.append_nickname_authoritative(7983, "Naicha");
+        storage.set_party_roster(vec![
+            ("Naicha".into(), PartyMember { slot: 1, ..Default::default() }),
+            ("Oppi".into(), PartyMember { slot: 2, ..Default::default() }),
+        ], true);
+        storage.append_nickname_authoritative(15_130, "Oppi");
+        let mut calc = boss_meter(&storage);
+        storage.set_mob_current_hp(44_090, 1_000_000);
+        storage.append_damage(hit(7983, 44_090, 1_000));
+        let first = calc.get_dps();
+        assert!(!first.map.contains_key(&OTHERS_ROW_ID), "nothing lost yet beyond your own hits");
+
+        // Strangers take 500,000 that the server never shows; you and Oppi
+        // land hits of your own, and a stranger's damage over time shows.
+        storage.append_damage(hit(15_130, 44_090, 2_000));
+        storage.append_damage(hit(2653, 44_090, 2_100));
+        let mine = first.map[&7983].amount;
+        let shown_before = mine + calc.get_dps().map[&15_130].amount;
+        storage.set_mob_current_hp(44_090, 1_000_000 - 500_000 - (shown_before - mine) as i32);
+        storage.append_damage(hit(7983, 44_090, 3_000));
+        let shown = calc.get_dps();
+        let mut ids: Vec<i32> = shown.map.keys().copied().collect();
+        ids.sort_unstable();
+        assert_eq!(ids, vec![7983, 15_130, OTHERS_ROW_ID]);
+        let others = &shown.map[&OTHERS_ROW_ID];
+        assert!(others.is_others);
+        let listed: f64 = shown.map.iter().filter(|(id, _)| **id != OTHERS_ROW_ID).map(|(_, d)| d.amount).sum();
+        let lost = (1_000_000 + mine as i64) - (1_000_000 - 500_000 - (shown_before - mine) as i64);
+        assert_eq!((listed + others.amount) as i64, lost, "the rows add up to what the boss lost");
+        let share: f64 = shown.map.values().map(|d| d.damage_contribution).sum();
+        assert!((share - 100.0).abs() < 0.01);
     }
 
     /// Someone joining between fights shows at once, not at the next hit:
@@ -2271,7 +2393,8 @@ mod tests {
         storage.append_damage(hit(2653, 44_090, 2_100));
         let shown = calc.get_dps();
         assert_eq!(shown.target_id, 44_090);
-        assert!(shown.map.contains_key(&15_130) && shown.map.contains_key(&2653));
+        // Oppi's; the stranger beside them is in Others on a world boss.
+        assert!(shown.map.contains_key(&15_130) && !shown.map.contains_key(&2653));
     }
 
     /// Before the meter knows who you are, an open-world boss is no one's

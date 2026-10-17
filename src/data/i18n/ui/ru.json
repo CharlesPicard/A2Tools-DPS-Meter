@@ -570,7 +570,8 @@
   "meter": {
     "identifyingPlayer": "#{id}",
     "a2toolsUser": "Пользуется A2Tools",
-    "dpsSuffix": "/s"
+    "dpsSuffix": "/s",
+    "others": "Остальные"
   },
   "skills": {
     "fallback": "Умение {code}",

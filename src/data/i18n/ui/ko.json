@@ -572,7 +572,8 @@
   "meter": {
     "identifyingPlayer": "#{id}",
     "a2toolsUser": "A2Tools 사용",
-    "dpsSuffix": "/초"
+    "dpsSuffix": "/초",
+    "others": "기타"
   },
   "skills": {
     "fallback": "스킬 {code}",

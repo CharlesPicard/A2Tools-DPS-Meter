@@ -1093,6 +1093,12 @@ html:not(.hoverStale) .list .item:hover { background: rgba(255, 255, 255, 0.075)
   font-style: italic;
   color: var(--hud-sub);
 }
+/* Everyone not in your party on an open-world boss, from its lost HP. */
+.meter .item.isOthers .content .name {
+  font-style: italic;
+  color: var(--hud-sub);
+}
+.meter .item.isOthers { cursor: default; }
 body.mainPlayerNamesBold :is(.meter, .barPreviewPanel) .item .content .name,
 body.mainPlayerNamesBold :is(.meter, .barPreviewPanel) .item .content .name.isCjk {
   font-weight: 750;

@@ -34,6 +34,10 @@ pub struct PersonalData {
     /// mark beside the name.
     #[serde(default)]
     pub uses_a2tools: bool,
+    /// The Others row on an open-world boss: everyone not in your party,
+    /// from the HP the boss lost (`DpsCalculator::world_boss_rows`).
+    #[serde(default)]
+    pub is_others: bool,
     #[serde(default)]
     pub hps: f64,
     #[serde(default)]
@@ -53,6 +57,7 @@ impl PersonalData {
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            is_others: false,
             hps: 0.0,
             heal_amount: 0.0,
         }
@@ -70,6 +75,7 @@ impl PersonalData {
             gear_score: 0,
             is_supporter: false,
             uses_a2tools: false,
+            is_others: false,
             hps: 0.0,
             heal_amount: 0.0,
         }

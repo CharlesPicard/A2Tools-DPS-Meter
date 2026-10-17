@@ -577,7 +577,8 @@
   "meter": {
     "identifyingPlayer": "#{id}",
     "a2toolsUser": "Uses A2Tools",
-    "dpsSuffix": "/s"
+    "dpsSuffix": "/s",
+    "others": "Others"
   },
   "skills": {
     "fallback": "Skill {code}",

@@ -376,7 +376,7 @@ class DpsApp {
       getPartyStat: () => this.partyStat,
       getJobColor: (job) => this.getJobColor(job),
       onHoverUserRow: (row, event) => {
-        if (this.shouldSuppressRowInteractions()) return;
+        if (row?.isOthers || this.shouldSuppressRowInteractions()) return;
         this.openHoverDetailsRow(row, event);
       },
       onLeaveUserRow: () => {
@@ -394,7 +394,7 @@ class DpsApp {
         });
       },
       onClickUserRow: (row) => {
-        if (!row || this.isWindowDragging) return;
+        if (!row || row.isOthers || this.isWindowDragging) return;
         const rowId = Number(row?.id);
         const pinnedId = Number.isFinite(rowId) && rowId > 0 ? rowId : null;
         this.hideHoverTooltip();
@@ -1536,9 +1536,14 @@ class DpsApp {
       const job = isObj ? (value.job ?? "") : "";
       const nickname = isObj ? (value.nickname ?? "") : "";
       const idText = String(id);
+      // Everyone not in your party on an open-world boss, from the HP it
+      // lost (dps_calculator.rs world_boss_rows).
+      const isOthers = !!(isObj && value.isOthers);
       const hasNickname = !!nickname && nickname !== idText;
       const isIdentifying = !hasNickname;
-      const name = hasNickname ? nickname : idText;
+      const name = isOthers
+        ? this.i18n?.t?.("meter.others", "Others") ?? "Others"
+        : hasNickname ? nickname : idText;
 
       const dpsRaw = isObj ? value.dps : value;
       const dps = Math.trunc(Number(dpsRaw)) || 0;
@@ -1572,7 +1577,8 @@ class DpsApp {
         damageContribution,
         combatPower,
         gearScore,
-        isUser: (!!name && name === this.USER_NAME) || (hasLocalId && numericId === localId),
+        isUser: !isOthers && ((!!name && name === this.USER_NAME) || (hasLocalId && numericId === localId)),
+        isOthers,
         isIdentifying,
         // Resolved in Rust against a downloaded roster; the frontend only
         // renders it. Cosmetic only — it must not reach sorting or bar colour.
