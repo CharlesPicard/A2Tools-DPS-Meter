@@ -957,6 +957,12 @@ pub async fn upload_detailed(
                 .into()
         }
         (429, _) => "Too many uploads in the last hour. Try again later.".into(),
+        // The recording carries 30 minutes of the zone before the pull, which
+        // in a crowded place can outgrow the site's limit.
+        (413, _) => format!(
+            "This fight's recording is too large to upload ({:.1} MB). Please send it to us              with Send logs to dev so we can look at it.",
+            compressed.len() as f64 / (1024.0 * 1024.0)
+        ),
         (_, _) => reply
             .get("message")
             .and_then(|m| m.as_str())
