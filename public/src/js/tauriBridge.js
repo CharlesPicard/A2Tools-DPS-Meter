@@ -855,8 +855,15 @@
       return invoke("load_fight", { id }).then((r) => JSON.stringify(r)).catch(() => null);
     },
 
+    // Asked by the account line and the supporter check together on every
+    // window's start: one request to the site answers both.
     accountStatus() {
-      return invoke("account_status");
+      if (!this._accountStatus) {
+        this._accountStatus = invoke("account_status").finally(() => {
+          this._accountStatus = null;
+        });
+      }
+      return this._accountStatus;
     },
 
     discordActivityAvailable() {

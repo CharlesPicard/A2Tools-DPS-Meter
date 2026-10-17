@@ -127,12 +127,32 @@ async fn get(http: &reqwest::Client, url: &str, cap: usize) -> Result<Vec<u8>, S
     Ok(bytes.to_vec())
 }
 
-/// Download the catalog and check its signature.
+/// Download the catalog and check its signature. The list and its signature
+/// come down side by side: one after the other, they were most of the 0.8 s
+/// Settings waited for its plugin list (2026-10-18).
 pub async fn fetch(http: &reqwest::Client) -> Result<Catalog, String> {
     let base = base_url();
-    let body = get(http, &format!("{base}/index.json"), MAX_CATALOG).await?;
-    let signature = get(http, &format!("{base}/index.json.sig"), 1024).await?;
-    verify_with(&public_key(), &body, &String::from_utf8_lossy(&signature))
+    let (list_url, signature_url) = (format!("{base}/index.json"), format!("{base}/index.json.sig"));
+    let (body, signature) = tokio::join!(get(http, &list_url, MAX_CATALOG), get(http, &signature_url, 1024));
+    let catalog = verify_with(&public_key(), &body?, &String::from_utf8_lossy(&signature?))?;
+    *last_fetched().lock().unwrap_or_else(|p| p.into_inner()) = Some((std::time::Instant::now(), catalog.clone()));
+    Ok(catalog)
+}
+
+/// The catalog as fetched within `max_age`, else a fresh one. For the list
+/// Settings shows on every open; checking for updates and installing always
+/// fetch, and what they fetch is what this hands out next.
+pub async fn recent(http: &reqwest::Client, max_age: std::time::Duration) -> Result<Catalog, String> {
+    let kept = last_fetched().lock().unwrap_or_else(|p| p.into_inner()).clone();
+    match kept {
+        Some((at, catalog)) if at.elapsed() < max_age => Ok(catalog),
+        _ => fetch(http).await,
+    }
+}
+
+fn last_fetched() -> &'static std::sync::Mutex<Option<(std::time::Instant, Catalog)>> {
+    static LAST: std::sync::OnceLock<std::sync::Mutex<Option<(std::time::Instant, Catalog)>>> = std::sync::OnceLock::new();
+    LAST.get_or_init(Default::default)
 }
 
 /// Download a catalog entry's files into `plugins_dir/<id>`, replacing what

@@ -933,7 +933,8 @@ pub async fn plugin_catalog(app: tauri::AppHandle) -> Result<Vec<CatalogItem>, S
     {
         let host = host(&app)?;
         let http = app.try_state::<AppState>().ok_or("no app state")?.http.clone();
-        let catalog = catalog::fetch(&http).await?;
+        // Settings asks on every open; a list from the last few minutes does.
+        let catalog = catalog::recent(&http, std::time::Duration::from_secs(300)).await?;
         let installed: HashMap<String, String> =
             host.list().into_iter().filter(|p| p.reviewed && p.error.is_none()).map(|p| (p.id, p.version)).collect();
         Ok(catalog
