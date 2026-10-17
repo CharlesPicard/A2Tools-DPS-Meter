@@ -3047,7 +3047,7 @@ pub fn run() {
             // Start capture pipeline
             let (tx, rx) = mpsc::channel::<CapturedPayload>(4096);
 
-            let capturer = PcapCapturer::new(tx);
+            let capturer = PcapCapturer::new(tx, port_detector.clone());
             if npcap_available {
                 capturer.start();
             } else {

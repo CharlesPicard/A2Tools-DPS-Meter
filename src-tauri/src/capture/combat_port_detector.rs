@@ -1,5 +1,5 @@
 use std::collections::{HashMap, HashSet};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicI64, AtomicU32, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use parking_lot::Mutex;
@@ -23,6 +23,9 @@ const LOOPBACK_GRACE_MS: i64 = 2500;
 pub struct CombatPortDetector {
     inner: Mutex<Inner>,
     last_parsed_at_ms: AtomicI64,
+    /// The locked port (0: none), readable without the lock: every capture
+    /// thread checks it for every packet, to filter for it (`pcap_capturer`).
+    locked_port_now: AtomicU32,
 }
 
 struct Inner {
@@ -48,11 +51,20 @@ impl CombatPortDetector {
                 first_candidate_ms: 0,
             }),
             last_parsed_at_ms: AtomicI64::new(0),
+            locked_port_now: AtomicU32::new(0),
         }
     }
 
     pub fn current_port(&self) -> Option<u16> {
         self.inner.lock().locked_port
+    }
+
+    /// The locked port, without taking the lock.
+    pub fn locked_port_now(&self) -> Option<u16> {
+        match self.locked_port_now.load(Ordering::Relaxed) {
+            0 => None,
+            port => Some(port as u16),
+        }
     }
 
     pub fn current_device(&self) -> Option<String> {
@@ -128,6 +140,7 @@ impl CombatPortDetector {
         // combat, ahead of any external session.
         if is_loopback_opt(&device_for_lock) {
             Self::lock_inner(&mut inner, port, device_for_lock);
+            self.locked_port_now.store(port as u32, Ordering::Relaxed);
             return;
         }
 
@@ -142,6 +155,7 @@ impl CombatPortDetector {
         }
 
         Self::lock_inner(&mut inner, port, device_for_lock);
+        self.locked_port_now.store(port as u32, Ordering::Relaxed);
     }
 
     fn lock_inner(inner: &mut Inner, port: u16, device: Option<String>) {
@@ -178,6 +192,7 @@ impl CombatPortDetector {
         inner.device_flows.clear();
         inner.first_candidate_ms = 0;
         self.last_parsed_at_ms.store(0, Ordering::Relaxed);
+        self.locked_port_now.store(0, Ordering::Relaxed);
         if was_locked {
             info!("Combat port lock cleared");
         }

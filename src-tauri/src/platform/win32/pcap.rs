@@ -13,6 +13,17 @@ pub const MISSING_HELP: &str = "Is Npcap installed? Download from https://npcap.
 /// The meter can fetch and run Npcap's installer for the player.
 pub const OFFERS_INSTALL: bool = true;
 
+/// Whether a read returns at its timeout on a device with no traffic: Npcap's
+/// does.
+pub const READ_TIMES_OUT_WHEN_IDLE: bool = true;
+
+/// Whether a filter can change while capturing without losing what the
+/// kernel has queued. Not here: Npcap empties its buffer on a new filter
+/// (BIOCSETF), so a lock that narrowed the filter would cut the game's
+/// stream right where it was found. The filter is set once, when the device
+/// opens, and kept (`pcap_capturer`).
+pub const FILTER_CHANGE_KEEPS_QUEUE: bool = false;
+
 /// Npcap puts `wpcap.dll` in System32 only when it is installed in its
 /// WinPcap-compatible mode; otherwise it lives in `System32\Npcap`, where a
 /// plain load does not look. Npcap's guidance for programs is to add that
