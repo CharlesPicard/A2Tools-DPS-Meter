@@ -1799,6 +1799,80 @@ const createDetailsUI = ({
     }
   }));
 
+  // Each section's heading folds it, keeping the heading: the chart and the
+  // casts (kept between openings), and each player's buffs (this window).
+  const FOLD_KEY = "dpsMeter.timelineFolded";
+  const ftlFolded = { dps: false, casts: false };
+  try {
+    const saved = JSON.parse(localStorage.getItem(FOLD_KEY) || "null");
+    if (saved && typeof saved === "object") for (const k of Object.keys(ftlFolded)) ftlFolded[k] = saved[k] === true;
+  } catch { /* all open */ }
+  const foldHeading = (heading, isFolded, onToggle) => {
+    if (!heading || heading.dataset.foldable) return;
+    heading.dataset.foldable = "1";
+    heading.classList.add("ftlFoldHeading");
+    heading.setAttribute("role", "button");
+    heading.tabIndex = 0;
+    // The text in a span of its own, which takes the heading's translation
+    // key: setting the heading's text (a language or DMG/HEAL change) would
+    // drop the chevron.
+    if (heading.dataset.i18n) {
+      const text = document.createElement("span");
+      text.className = "ftlFoldText";
+      text.dataset.i18n = heading.dataset.i18n;
+      text.append(...heading.childNodes);
+      delete heading.dataset.i18n;
+      heading.append(text);
+    }
+    const chevron = document.createElement("i");
+    chevron.className = "ftlFoldChevron";
+    chevron.setAttribute("aria-hidden", "true");
+    heading.prepend(chevron);
+    const sync = () => heading.setAttribute("aria-expanded", String(!isFolded()));
+    sync();
+    const toggle = (event) => {
+      if (event.type === "keydown" && event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      onToggle();
+      sync();
+    };
+    heading.addEventListener("click", toggle);
+    heading.addEventListener("keydown", toggle);
+  };
+  for (const [k, cls] of [["dps", "ftlGroupDps"], ["casts", "ftlGroupCasts"]]) {
+    const groupEl = fightTimeline?.querySelector?.(`.${cls}`);
+    groupEl?.classList?.toggle?.("isFolded", ftlFolded[k]);
+    foldHeading(groupEl?.querySelector?.(".ftlGroupTitle"), () => ftlFolded[k], () => {
+      ftlFolded[k] = !ftlFolded[k];
+      groupEl.classList.toggle("isFolded", ftlFolded[k]);
+      try { localStorage.setItem(FOLD_KEY, JSON.stringify(ftlFolded)); } catch { /* not kept */ }
+      // A canvas folded away has no width: draw it again when it opens.
+      if (!ftlFolded[k] && lastDetails) {
+        if (k === "dps") renderDpsChart(lastDetails);
+        else renderTimeline(lastDetails);
+      }
+    });
+  }
+  // Each player's buffs fold by the group's heading (buffTimeline.js
+  // draws them afresh, so the folded names are remembered here).
+  const foldedBuffGroups = new Set();
+  const buffBodyEl = fightTimeline?.querySelector?.(".buffBody");
+  const foldBuffGroups = () => {
+    buffBodyEl?.querySelectorAll?.(".buffGroup").forEach((g) => {
+      const heading = g.querySelector(".buffGroupHeader");
+      const name = heading?.firstElementChild?.textContent || "";
+      g.classList.toggle("isFolded", foldedBuffGroups.has(name));
+      foldHeading(heading, () => foldedBuffGroups.has(name), () => {
+        if (foldedBuffGroups.has(name)) foldedBuffGroups.delete(name);
+        else foldedBuffGroups.add(name);
+        g.classList.toggle("isFolded", foldedBuffGroups.has(name));
+      });
+    });
+  };
+  if (buffBodyEl && typeof MutationObserver === "function") {
+    new MutationObserver(foldBuffGroups).observe(buffBodyEl, { childList: true });
+  }
+
   // The canvases are drawn to their width: draw again when it changes.
   let ftlWidth = 0;
   if (typeof ResizeObserver === "function" && fightTimeline) {
@@ -3465,7 +3539,8 @@ const createDetailsUI = ({
       heal ? "details.skills.healPctTooltip" : "details.skills.dmgPctTooltip", heal ? "Healing %" : "Damage %");
     fightTimeline?.classList?.toggle?.("isHealMode", heal);
     detailsPanel?.classList?.toggle?.("isHealMode", heal);
-    const chartTitle = fightTimeline?.querySelector?.(".ftlGroupDps .ftlGroupTitle");
+    const chartTitle = fightTimeline?.querySelector?.(".ftlGroupDps .ftlGroupTitle .ftlFoldText")
+      || fightTimeline?.querySelector?.(".ftlGroupDps .ftlGroupTitle");
     if (chartTitle) {
       chartTitle.dataset.i18n = heal ? "details.hpsChart" : "details.dpsChart";
       chartTitle.textContent = heal

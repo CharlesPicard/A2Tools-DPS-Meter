@@ -7254,6 +7254,14 @@ html.a2-offline .historyUploadBtn {
   /* A little larger than the timeline's labels: it is read while playing. */
   font-size: 1.15em;
 }
+/* Under the title row: the timeline's columns, so the slider still lines up
+   with the chart. */
+.detailsPanel .fightReplayBar.isTop {
+  --ftl-gutter: var(--details-sidebar-w);
+  --ftl-right: 52px;
+  border-top: none;
+  border-bottom: 1px solid var(--hud-hairline);
+}
 .detailsPanel .fightReplayBar[hidden] {
   display: none;
 }
@@ -7803,4 +7811,33 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel .detailsPartyBarPct,
 .detailsPanel .detailsStats {
   font-variant-numeric: tabular-nums;
+}
+
+/* Folding a timeline section by its heading (details.js foldHeading). */
+.detailsPanel .ftlFoldHeading {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.detailsPanel .ftlFoldHeading:hover { color: var(--text-color, #fff); }
+.detailsPanel .ftlFoldHeading:focus-visible { outline: 1px solid var(--hud-hairline); outline-offset: 2px; }
+.detailsPanel .ftlFoldChevron {
+  flex: none;
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.7;
+  transition: transform 150ms ease-out;
+}
+.detailsPanel .isFolded > .ftlFoldHeading .ftlFoldChevron { transform: rotate(-90deg); }
+.detailsPanel .ftlGroup.isFolded > :not(.ftlGroupTitle),
+.detailsPanel .buffGroup.isFolded > :not(.buffGroupHeader) {
+  display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .detailsPanel .ftlFoldChevron { transition: none; }
 }

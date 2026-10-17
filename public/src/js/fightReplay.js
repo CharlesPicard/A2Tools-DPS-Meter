@@ -247,9 +247,17 @@ if (typeof module !== "undefined" && module.exports) {
 
     bar.append(controls, scrubWrap, exitBtn, note, healNote);
 
-    const axis = timeline.querySelector(".fightTimelineAxis");
-    if (axis?.nextSibling) timeline.insertBefore(bar, axis.nextSibling);
-    else timeline.appendChild(bar);
+    // Under the title row, where it is seen at once; its columns still line
+    // the slider up with the chart below (styles.css).
+    const header = timeline.closest(".detailsPanel")?.querySelector(".detailsHeader");
+    if (header) {
+      bar.classList.add("isTop");
+      header.after(bar);
+    } else {
+      const axis = timeline.querySelector(".fightTimelineAxis");
+      if (axis?.nextSibling) timeline.insertBefore(bar, axis.nextSibling);
+      else timeline.appendChild(bar);
+    }
 
     const head = document.createElement("div");
     head.className = "fightReplayHead";
