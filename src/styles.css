@@ -7357,18 +7357,79 @@ html.a2-offline .historyUploadBtn {
   color: #fff;
 }
 .detailsPanel .fightReplayScrubWrap {
+  position: relative;
   display: flex;
   align-items: center;
   min-width: 0;
+}
+/* While playing: progress drawn by the GPU, the slider invisible above it
+   (it still takes a drag; fightReplay.js). */
+.detailsPanel .fightReplayProg {
+  display: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 13px;
+  margin-top: -6.5px;
+  pointer-events: none;
+}
+.detailsPanel .fightReplayBar.isPlaying .fightReplayProg {
+  display: block;
+}
+.detailsPanel .fightReplayBar.isPlaying .fightReplayScrub {
+  opacity: 0;
+}
+.detailsPanel .fightReplayProg::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.14);
+}
+.detailsPanel .fightReplayProgFill {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--isUser-fill);
+  transform-origin: left center;
+  transform: scaleX(0);
+}
+.detailsPanel .fightReplayProgKnob {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 9px;
+  height: 13px;
+  border-radius: 1px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.7);
+}
+/* Written thirty times a second while playing: each glides to the next on
+   the GPU in between. */
+.detailsPanel .fightReplayProgFill,
+.detailsPanel .fightReplayProgKnob,
+.detailsPanel .fightReplayHead,
+.detailsPanel .fightReplayShadeFill {
+  will-change: transform;
+}
+.detailsPanel .fightReplayBar.isPlaying .fightReplayProgFill,
+.detailsPanel .fightReplayBar.isPlaying .fightReplayProgKnob,
+.detailsPanel.isReplaying .fightReplayHead,
+.detailsPanel.isReplaying .fightReplayShadeFill {
+  transition: transform 34ms linear;
 }
 .detailsPanel .fightReplayScrub {
   width: 100%;
   height: 16px;
   margin: 0;
   background: transparent;
-  /* Moved every frame of a replay: on its own layer, so the panel around it
-     is not repainted with it. */
-  will-change: transform;
   cursor: pointer;
   -webkit-appearance: none;
   appearance: none;

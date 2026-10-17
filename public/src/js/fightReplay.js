@@ -223,7 +223,19 @@ if (typeof module !== "undefined" && module.exports) {
     scrub.value = "0";
     scrub.dataset.i18nAriaLabel = "details.replay.position";
     scrub.setAttribute("aria-label", t("details.replay.position", "Replay position"));
-    scrubWrap.appendChild(scrub);
+    // While playing, progress shows on a track of its own, moved by the GPU.
+    // The slider stays (invisible, and still takes a drag) and gets the
+    // position only when paused or dragged: written every frame, a native
+    // slider repainted the whole page with it (2026-10-18, on the owner's PC).
+    const prog = document.createElement("div");
+    prog.className = "fightReplayProg";
+    prog.setAttribute("aria-hidden", "true");
+    const progFill = document.createElement("div");
+    progFill.className = "fightReplayProgFill";
+    const progKnob = document.createElement("div");
+    progKnob.className = "fightReplayProgKnob";
+    prog.append(progFill, progKnob);
+    scrubWrap.append(prog, scrub);
 
     const exitBtn = document.createElement("button");
     exitBtn.type = "button";
@@ -348,11 +360,20 @@ if (typeof module !== "undefined" && module.exports) {
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
     };
 
+    let progWidth = 0;
     const paintControls = () => {
       const dur = durationMs();
-      scrub.max = String(dur);
-      scrub.value = String(active ? at : dur);
       const shown = active ? at : dur;
+      const share = dur > 0 ? Math.min(1, shown / dur) : 1;
+      if (playing) {
+        if (!progWidth) progWidth = scrubWrap.clientWidth;
+        progFill.style.transform = `scaleX(${share.toFixed(4)})`;
+        progKnob.style.transform = `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`;
+      } else {
+        scrub.max = String(dur);
+        scrub.value = String(shown);
+        scrub.style.setProperty("--range-pct", `${(share * 100).toFixed(2)}%`);
+      }
       const text = `${clock(shown)} / ${clock(dur)}`;
       // Once a second, not every frame: the clock shows whole seconds.
       if (text !== timeEl.textContent) {
@@ -360,7 +381,6 @@ if (typeof module !== "undefined" && module.exports) {
         scrub.setAttribute("aria-valuetext", t("details.replay.positionText", "{at} of {total}")
           .replace("{at}", clock(shown)).replace("{total}", clock(dur)));
       }
-      scrub.style.setProperty("--range-pct", `${dur > 0 ? ((shown / dur) * 100).toFixed(2) : 100}%`);
     };
 
     // Cut the fight at the moment and draw the figures from it. Resolves in
@@ -425,6 +445,7 @@ if (typeof module !== "undefined" && module.exports) {
       drawFigures();
     };
 
+    let lastPaintTs = 0;
     const tick = (now) => {
       frame = 0;
       if (!active) return;
@@ -441,8 +462,14 @@ if (typeof module !== "undefined" && module.exports) {
       } else if (figuresPending) {
         requestFigures(now);
       }
-      paintControls();
-      paintTimeline();
+      // The page is written at most 30 times a second while playing; what
+      // moves in between glides on the GPU (styles.css). At the screen's own
+      // rate (130 Hz on the owner's) every frame laid out and painted.
+      if (!playing || now - lastPaintTs >= 33) {
+        lastPaintTs = now;
+        paintControls();
+        paintTimeline();
+      }
       if (playing || figuresPending) frame = requestAnimationFrame(tick);
     };
     const schedule = () => {
@@ -458,6 +485,7 @@ if (typeof module !== "undefined" && module.exports) {
       active = true;
       at = 0;
       geometry = null;
+      progWidth = 0;
       panel.classList.add("isReplaying");
       bar.classList.add("isActive");
       syncHealNote();
@@ -621,6 +649,7 @@ if (typeof module !== "undefined" && module.exports) {
     if (typeof ResizeObserver === "function" && scroll) {
       new ResizeObserver(() => {
         geometry = null;
+        progWidth = 0;
         if (active) paintTimeline();
       }).observe(scroll);
     }
