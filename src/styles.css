@@ -6949,20 +6949,43 @@ html.settingsWindow .meter {
 /* WebKitGTK asks fontconfig about every missing family in a stack, again in
    each new window process; the Windows/macOS names cost ~0.5s of first layout
    on Linux, where they never resolve. Same rendering, without those names. */
+/* Linux has neither Bahnschrift nor (usually) Pretendard, and the system
+   sans-serif is static: the weight and width the HUD sets did nothing, so the
+   title and numbers came out light and wide. Saira (a narrow face with
+   width and weight axes, standing in for Bahnschrift) and Pretendard ship
+   with the meter for Linux; both under the SIL Open Font License (fonts/).
+   Files the page loads, so no fontconfig lookups either. */
+@font-face {
+  font-family: "A2 Saira";
+  src: url("./fonts/Saira.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 50% 125%;
+  font-display: block;
+}
+@font-face {
+  font-family: "A2 Pretendard";
+  src: url("./fonts/PretendardVariable.woff2") format("woff2");
+  font-weight: 45 920;
+  font-display: block;
+}
 html.linux {
   --cjk-font-stack: "Noto Sans SC", "Noto Sans TC", sans-serif;
-  --hud-tech: sans-serif;
-  --hud-ident: "Pretendard", sans-serif;
+  --hud-tech: "A2 Saira", sans-serif;
+  --hud-ident: "A2 Pretendard", sans-serif;
+}
+/* Saira's regular is lighter than Bahnschrift's: the numbers a step up. */
+html.linux .list .item .dps > p {
+  font-variation-settings: "wght" 500, "wdth" 87.5;
 }
 html.linux, html.linux body {
-  font-family: "Pretendard", Arial, sans-serif;
+  font-family: "A2 Pretendard", sans-serif;
 }
 html.linux:lang(ko), html.linux:lang(ko) body {
-  font-family: "Pretendard", sans-serif;
+  font-family: "A2 Pretendard", sans-serif;
 }
 html.linux:lang(zh-CN), html.linux:lang(zh-CN) body,
 html.linux:lang(zh-Hans), html.linux:lang(zh-Hans) body {
-  font-family: "Pretendard", sans-serif;
+  font-family: "A2 Pretendard", sans-serif;
 }
 html.linux:lang(zh-TW), html.linux:lang(zh-TW) body,
 html.linux:lang(zh-Hant), html.linux:lang(zh-Hant) body {

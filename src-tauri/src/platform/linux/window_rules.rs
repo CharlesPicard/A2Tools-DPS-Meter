@@ -5,7 +5,9 @@
 
 use std::process::Command;
 
-use crate::platform::kwin_rules::{general_entries_for, is_kde, no_focus_rule_entries, rule_entries, GROUP, NO_FOCUS_GROUP};
+use crate::platform::kwin_rules::{
+    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP,
+};
 
 fn tool(names: &[&'static str]) -> Option<&'static str> {
     names.iter().copied().find(|name| {
@@ -57,6 +59,11 @@ pub fn keep_above_fullscreen(done: bool) -> Result<bool, String> {
 /// `keep_above_fullscreen` does for its rule.
 pub fn click_without_focus(done: bool) -> Result<bool, String> {
     add_rule(NO_FOCUS_GROUP, &no_focus_rule_entries(), done, "clicking the overlay keeps the game focused")
+}
+
+/// Make sure plugins' icons never take the focus from the game.
+pub fn icons_without_focus(done: bool) -> Result<bool, String> {
+    add_rule(ICONS_GROUP, &icons_rule_entries(), done, "plugin icons keep the game focused")
 }
 
 fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Result<bool, String> {

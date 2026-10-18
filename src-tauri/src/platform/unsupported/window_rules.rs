@@ -10,3 +10,8 @@ pub fn keep_above_fullscreen(_done: bool) -> Result<bool, String> {
 pub fn click_without_focus(_done: bool) -> Result<bool, String> {
     Ok(true)
 }
+
+/// See the Linux implementation. Always done.
+pub fn icons_without_focus(_done: bool) -> Result<bool, String> {
+    Ok(true)
+}

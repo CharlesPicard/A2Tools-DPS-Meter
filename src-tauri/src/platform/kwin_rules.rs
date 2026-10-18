@@ -57,6 +57,31 @@ pub fn no_focus_rule_entries() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// The third rule's group: plugins' icons (widgets) never take focus. Each
+/// one an alert opened took it from the game until it closed, and handing it
+/// back after still left the game a moment without it (KDE Plasma 6 on
+/// Wayland, 2026-10-19). Clicks still reach them.
+pub const ICONS_GROUP: &str = "a2tools-dps-meter-icons";
+
+/// What plugins' icons are titled with: `"<plugin> · <name>"`
+/// (plugins::widgets). No other window of the meter's has it.
+pub const ICON_TITLE_MARK: &str = " · ";
+
+/// The icons' rule: the meter's windows whose title contains
+/// `ICON_TITLE_MARK` (`titlematch` 2), `acceptfocus` false, forced.
+pub fn icons_rule_entries() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("Description", "A2Tools DPS Meter plugin icons keep focus on the game (added by the meter)"),
+        ("wmclass", WINDOW_CLASS),
+        ("wmclassmatch", "1"),
+        ("wmclasscomplete", "false"),
+        ("title", ICON_TITLE_MARK),
+        ("titlematch", "2"),
+        ("acceptfocus", "false"),
+        ("acceptfocusrule", "2"),
+    ]
+}
+
 /// The `[General]` entries that list the rules, with the meter's added.
 ///
 /// KWin 6 orders rules by `Order` and still reads the legacy `rules`/`count`
@@ -153,6 +178,17 @@ mod tests {
         let e = general_entries_for(NO_FOCUS_GROUP, &listed, &listed);
         assert_eq!(get(&e, "Order"), format!("{listed},{NO_FOCUS_GROUP}"));
         assert_eq!(get(&e, "count"), "3");
+    }
+
+    /// Icons only, by the mark in their title, and never focused.
+    #[test]
+    fn the_icons_rule_matches_titles_with_the_mark() {
+        let rule = icons_rule_entries();
+        let value = |k: &str| rule.iter().find(|(key, _)| *key == k).map(|(_, v)| *v);
+        assert_eq!(value("title"), Some(" · "));
+        assert_eq!(value("titlematch"), Some("2"));
+        assert_eq!((value("acceptfocus"), value("acceptfocusrule")), (Some("false"), Some("2")));
+        assert_eq!(value("wmclass"), Some(WINDOW_CLASS));
     }
 
     #[test]

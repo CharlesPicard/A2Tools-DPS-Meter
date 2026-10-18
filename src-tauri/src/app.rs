@@ -3220,7 +3220,6 @@ pub fn run() {
             {
                 let handle = app.handle().clone();
                 std::thread::spawn(move || {
-                    let state = handle.state::<AppState>();
                     // For "Hide when AION2 isn't focused": KWin says which
                     // window is active (platform::linux::focus).
                     // On Wayland, KWin keeps the windows where they were
@@ -3234,20 +3233,21 @@ pub fn run() {
                     if let Err(e) = platform::window_detector::watch_focus(move || auto_hide_now(&focus_app)) {
                         tracing::warn!("Cannot follow the active window: {e}");
                     }
-                    if let Err(e) = platform::window_rules::keep_above_fullscreen(false) {
-                        tracing::warn!("Could not add the KWin rule: {e}");
-                    }
-                    // The overlay takes no focus, so a click on it leaves the
-                    // game focused (#71). Its own key, so installs that
-                    // already have the first rule get this one too.
-                    const NO_FOCUS_KEY: &str = "dpsMeter.kwinNoFocusRuleAdded";
-                    let done = state.settings.get(NO_FOCUS_KEY).as_deref() == Some("true");
-                    match platform::window_rules::click_without_focus(done) {
-                        Ok(true) if !done => {
-                            state.settings.set(NO_FOCUS_KEY, "true");
+                    // Each rule checked at every start and put back when
+                    // missing: KWin can drop rules it did not write itself,
+                    // and a rule added once and never again left the overlay
+                    // taking the focus (a CachyOS player, 2026-10-19). The
+                    // overlay takes no focus, so a click on it leaves the game
+                    // focused (#71); nor do plugins' icons.
+                    let rules: [(&str, fn(bool) -> Result<bool, String>); 3] = [
+                        ("above", platform::window_rules::keep_above_fullscreen),
+                        ("no-focus", platform::window_rules::click_without_focus),
+                        ("icons", platform::window_rules::icons_without_focus),
+                    ];
+                    for (name, ensure) in rules {
+                        if let Err(e) = ensure(false) {
+                            tracing::warn!("Could not add the KWin {name} rule: {e}");
                         }
-                        Ok(_) => {}
-                        Err(e) => tracing::warn!("Could not add the KWin no-focus rule: {e}"),
                     }
                 });
             }

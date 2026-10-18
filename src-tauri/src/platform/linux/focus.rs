@@ -43,11 +43,19 @@ function widget(w) {
 // because it appeared hands the focus straight back; one clicked keeps it.
 var lastOther = null;
 var fresh = [];
+// The active window and the one before it. KWin activates a new window
+// before it announces it (windowActivated, then windowAdded: seen on KDE
+// Plasma 6, 2026-10-19), so an icon is already active when follow() meets it.
+var current = null, previous = null;
 function activate(w) {
     if (workspace.windowActivated) workspace.activeWindow = w;
     else workspace.activeClient = w;
 }
 function onActivated(w) {
+    if (w !== current) {
+        previous = current;
+        current = w;
+    }
     if (w && !mine(w)) lastOther = w;
     var i = fresh.indexOf(w);
     if (i >= 0) {
@@ -71,6 +79,11 @@ function onScreen(r) {
     return r.x + 48 <= area.x + area.width && r.x + r.width >= area.x + 48
         && r.y >= area.y - 8 && r.y + 32 <= area.y + area.height;
 }
+// How long a window is held at its place: the meter sizes its windows to
+// their content just after they appear, and KWin keeps a resized window's
+// centre where it was, so the overlay, 300 px tall at first, came down
+// 120 px once it shrank to its rows (a CachyOS player, 2026-10-19).
+var HOLD_MS = 4000;
 function place(w) {
     callDBus(SERVICE, PATH, IFACE, "Placement", String(w.caption), function (answer) {
         var p = String(answer).split(",").map(Number);
@@ -78,12 +91,33 @@ function place(w) {
         var g = w.frameGeometry;
         // A width or height of 0: the window keeps its own size.
         var r = { x: p[0], y: p[1], width: p[2] > 0 ? p[2] : g.width, height: p[3] > 0 ? p[3] : g.height };
-        if (onScreen(r)) w.frameGeometry = r;
+        if (!onScreen(r)) return;
+        w.frameGeometry = r;
+        // Moved by a resize while held: back to its place, at its new size.
+        // Never against the player's own move or resize.
+        var until = Date.now() + HOLD_MS;
+        var held = false;
+        if (w.interactiveMoveResizeStarted) w.interactiveMoveResizeStarted.connect(function () { until = 0; });
+        else if (w.clientStartUserMovedResized) w.clientStartUserMovedResized.connect(function () { until = 0; });
+        w.frameGeometryChanged.connect(function () {
+            if (held || Date.now() > until || w.move || w.resize) return;
+            var now = w.frameGeometry;
+            if (Math.round(now.x) === r.x && Math.round(now.y) === r.y) return;
+            held = true;
+            w.frameGeometry = { x: r.x, y: r.y, width: now.width, height: now.height };
+            held = false;
+        });
     });
 }
 function follow(w) {
     if (!mine(w)) return;
-    if (widget(w)) {
+    // An icon already active as it is added: KWin activated it first. The
+    // focus goes back to the window active before it. (The KWin rule for
+    // icons keeps them from taking it at all; this is for when the rule is
+    // missing, as KWin can lose it.)
+    var aw = workspace.activeWindow || workspace.activeClient;
+    if (widget(w) && aw === w && previous && previous !== w && !previous.deleted) activate(previous);
+    else if (widget(w)) {
         fresh.push(w);
         if (fresh.length > 32) fresh.shift();
     }
