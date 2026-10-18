@@ -455,48 +455,29 @@ if (typeof module !== "undefined" && module.exports) {
       drawFigures();
     };
 
-    // While playing, nothing is written to move the playhead, the shade or
-    // the progress knob: each gets one CSS transition, from where it is to
-    // the fight's end at the speed chosen, and the GPU draws it. Written per
-    // frame (or even 30 times a second), every write repainted the page and
-    // a frame was asked for at every screen refresh (130 Hz on the owner's
-    // PC), lagging the whole system (2026-10-18). Time is kept by a timer
-    // that draws the figures and the clock; pause, a seek, a speed change or
-    // a resize starts a fresh glide.
+    // While playing, the playhead, the shade and the progress knob step ten
+    // times a second from the timer below, with no transition. Long CSS
+    // glides kept the GPU making a frame at every screen refresh for the
+    // whole replay (a core's worth on the owner's PC, 2026-10-18); stepping
+    // per frame made the page lay out and paint as often. A pause, a seek, a
+    // speed change or a resize just draws the moment again.
     let playTimer = 0;
     let playFrom = 0;
     let playStart = 0;
     const playedAt = () => playFrom + (performance.now() - playStart) * speed;
-    const moversAt = (share) => {
-      const width = geometry.right - geometry.left;
+    const stepMovers = () => {
+      const dur = durationMs();
+      if (dur <= 0) return;
+      paintTimeline();
+      const share = Math.min(1, at / dur);
       if (!progWidth) progWidth = scrubWrap.clientWidth;
-      return [
-        [head, `translateX(${(geometry.x0 + geometry.left + share * width).toFixed(1)}px)`],
-        [shadeFill, `translateX(${(share * width).toFixed(1)}px)`],
-        [progFill, `scaleX(${share.toFixed(4)})`],
-        [progKnob, `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`],
-      ];
+      progFill.style.transform = `scaleX(${share.toFixed(4)})`;
+      progKnob.style.transform = `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`;
     };
     const glide = () => {
-      const dur = durationMs();
-      if (!playing || dur <= 0) return;
-      at = Math.min(dur, at);
-      paintTimeline(); // places the shade and playhead, no transition
-      if (!geometry) return;
-      const now = moversAt(at / dur);
-      now.forEach(([el, transform]) => { el.style.transition = "none"; el.style.transform = transform; });
-      void head.offsetWidth; // the start position is in place before the transition
-      const ms = Math.max(0, (dur - at) / speed);
-      moversAt(1).forEach(([el, transform]) => {
-        el.style.transition = `transform ${ms.toFixed(0)}ms linear`;
-        el.style.transform = transform;
-      });
+      if (playing) stepMovers();
     };
-    const stopGlide = () => {
-      // Wherever it has got to: written plainly, with no transition.
-      [head, shadeFill, progFill, progKnob].forEach((el) => { el.style.transition = "none"; });
-      paintTimeline();
-    };
+    const stopGlide = () => paintTimeline();
     const playTick = () => {
       if (!active || !playing) return;
       const now = performance.now();
@@ -507,6 +488,7 @@ if (typeof module !== "undefined" && module.exports) {
         exit();
         return;
       }
+      stepMovers();
       requestFigures(now);
       paintClock(at, dur);
     };

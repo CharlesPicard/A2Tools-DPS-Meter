@@ -3632,7 +3632,6 @@ const createDetailsUI = ({
   // window's own state (lastDetails, the targets) stays the whole fight's, so
   // the timeline, a sort or a reload still draw that; the replay draws over
   // them again. renderFigures(null) draws the whole fight's figures.
-  let replaySkillsAt = 0;
   window.fightReplay?.attach?.({
     root: detailsPanel,
     timeline: fightTimeline,
@@ -3657,15 +3656,11 @@ const createDetailsUI = ({
         const ctx = buildPartyBarStats();
         renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
         renderStats(lastDetails, { compact: activeCompactMode });
-        // The skill table once a second while a replay plays: each redraw
-        // repaints every row in view (icon, bar, fifteen cells), the dearest
-        // thing on the page (2026-10-18). Paused or moved by hand, it is drawn
-        // every time, so it always ends exact.
-        const now = performance.now();
-        if (!cut?.playing || now - replaySkillsAt >= 1000) {
-          replaySkillsAt = now;
-          renderSkills(lastDetails, { compact: activeCompactMode });
-        }
+        // The skill table is not redrawn while a replay plays: even once a
+        // second it was three quarters of the page's work (2026-10-18), and
+        // nobody reads it mid-play. A pause, a seek or the end draws it, so
+        // it is always exact when it can be read.
+        if (!cut?.playing) renderSkills(lastDetails, { compact: activeCompactMode });
         // Damage taken has no times: it stays the whole fight's, greyed.
         const shownStats = detailsMode === "heal" ? HEAL_STATUS : STATUS;
         statSlots.forEach((slot, i) => slot.statEl.classList.toggle("isWholeFight",

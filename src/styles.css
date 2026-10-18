@@ -7962,3 +7962,10 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel.isReplaying .fightTimelineScroll {
   will-change: transform;
 }
+
+/* While a replay plays the skill table holds still (details.js
+   renderFigures): dimmed, so it reads as waiting. A pause, a seek or the
+   end draws it again, exact. */
+.detailsPanel.isReplayPlaying .detailsSkills .skills {
+  opacity: 0.55;
+}
