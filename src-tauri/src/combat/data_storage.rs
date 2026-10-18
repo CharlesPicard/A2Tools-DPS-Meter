@@ -642,6 +642,8 @@ struct Inner {
     /// reports from them carry it for a2tools.app to tell the two apart
     /// (`boss_report::with_host`).
     game_host: Option<std::net::Ipv4Addr>,
+    /// See `note_host_server`.
+    host_server: u16,
 
     /// Odyle energy, (basic, charged), as the game last sent it. See
     /// `StreamProcessor::parse_odyle_energy_packet`.
@@ -767,6 +769,7 @@ impl DataStorage {
                 has_boss_in_segment: false,
                 current_target: 0,
                 game_host: None,
+                host_server: 0,
                 odyle_energy: None,
                 odyle_owner: None,
                 odyle_awaits_self_record: false,
@@ -1222,6 +1225,36 @@ impl DataStorage {
     /// is the fallback, by majority, since in a cross-server party each member
     /// keeps their own server but all share the region.
     pub fn fight_server_id(&self) -> u16 {
+        let own = self.own_server();
+        if own != 0 {
+            return own;
+        }
+        let inner = self.inner.read();
+        let local = inner.local_character_name.as_deref().map(str::trim);
+        if let Some(member) = local.and_then(|n| inner.party_members.get(n)) {
+            if member.server_id != 0 {
+                return member.server_id;
+            }
+        }
+        // A meter started mid-game: the server this game server's address
+        // was last seen to be (`note_host_server`), before a party's
+        // majority, which can be another server's.
+        if inner.host_server != 0 {
+            return inner.host_server;
+        }
+        let mut counts: HashMap<u16, usize> = HashMap::new();
+        for member in inner.party_members.values() {
+            if member.server_id != 0 {
+                *counts.entry(member.server_id).or_default() += 1;
+            }
+        }
+        counts.into_iter().max_by_key(|&(server, n)| (n, std::cmp::Reverse(server))).map_or(0, |(s, _)| s)
+    }
+
+    /// The local player's own server as the game stated it (a self or loot
+    /// record), 0 when it hasn't yet. Unlike `fight_server_id`, never a
+    /// guess from the party or the connection.
+    pub fn own_server(&self) -> u16 {
         let inner = self.inner.read();
         let local = inner.local_character_name.as_deref().map(str::trim);
         if let Some(&server) = local.and_then(|n| inner.player_servers.get(n)) {
@@ -1232,21 +1265,16 @@ impl DataStorage {
         // the name) and the next self record, the fight just ended was saved
         // with no local name, and the roster majority filed it under a party
         // member's server (1014 for a 2014 player, 2026-08-15).
-        if inner.self_server != 0 {
-            return inner.self_server;
+        inner.self_server
+    }
+
+    /// The server the game server's address was last seen to be (see
+    /// `boss_report::report_server`); 0 when not known.
+    pub fn note_host_server(&self, server: u16) {
+        let mut inner = self.inner.write();
+        if inner.host_server != server {
+            inner.host_server = server;
         }
-        if let Some(member) = local.and_then(|n| inner.party_members.get(n)) {
-            if member.server_id != 0 {
-                return member.server_id;
-            }
-        }
-        let mut counts: HashMap<u16, usize> = HashMap::new();
-        for member in inner.party_members.values() {
-            if member.server_id != 0 {
-                *counts.entry(member.server_id).or_default() += 1;
-            }
-        }
-        counts.into_iter().max_by_key(|&(server, n)| (n, std::cmp::Reverse(server))).map_or(0, |(s, _)| s)
     }
 
     /// Whether the game itself named the local player (the self record or the
@@ -3002,6 +3030,22 @@ mod tests {
         s.inner.write().party_roster_at_ms -= 15 * 60 * 1000;
         assert!(!s.party_placeholders_wanted());
         assert_eq!(s.get_party_members().len(), 2, "the roster itself is kept, for combat power");
+    }
+
+    /// A meter started mid-game: the fights go under the server learnt for
+    /// the connection, ahead of a party's majority; the game's own word
+    /// still wins once it comes (Harvest Manager Moshav, 2026-10-18).
+    #[test]
+    fn fights_take_the_connection_server_until_the_game_says() {
+        let s = DataStorage::new();
+        let on = |server: u16| PartyMember { server_id: server, ..member(1) };
+        s.set_party_roster(vec![("A".into(), on(2304)), ("B".into(), on(2304)), ("C".into(), on(1307))], true);
+        assert_eq!(s.fight_server_id(), 2304, "the party's majority, as before");
+        s.note_host_server(1304);
+        assert_eq!(s.fight_server_id(), 1304, "the connection's server over the majority");
+        assert_eq!(s.own_server(), 0, "never taken as the player's own");
+        s.note_self_server(1305);
+        assert_eq!(s.fight_server_id(), 1305, "the game's own word wins");
     }
 
     /// Members leaving after the boss falls (Vakron, 2026-10-17) keep their

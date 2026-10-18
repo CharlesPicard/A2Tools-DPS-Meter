@@ -113,22 +113,32 @@ pub fn hp_request(server_id: u16, bosses: &[BossHp]) -> Option<serde_json::Value
 /// login or teleport, and sent nothing for a fight meanwhile (Harvest Manager
 /// Moshav, 2026-10-18). Each address's server is kept in settings
 /// (`bossTimers.serverOf.<address>`) whenever both are known.
+/// Learnt only from the game's own word (`own_server`), never from a guess.
+/// What it finds also goes to the fight records (`note_host_server`), so a
+/// fight then is saved, and its log filed, under that server too.
 fn report_server(state: &AppState) -> u16 {
-    let known = state.data_storage.local_profile().server_id;
+    let own = state.data_storage.own_server();
     let host = state.data_storage.game_host();
-    if known != 0 {
+    if own != 0 {
         if let Some(host) = host {
             let key = format!("bossTimers.serverOf.{host}");
-            let value = known.to_string();
+            let value = own.to_string();
             if state.settings.get(&key).as_deref() != Some(value.as_str()) {
                 state.settings.set(&key, &value);
             }
         }
-        return known;
+        return own;
     }
-    host.and_then(|host| state.settings.get(&format!("bossTimers.serverOf.{host}")))
+    let learnt = host
+        .and_then(|host| state.settings.get(&format!("bossTimers.serverOf.{host}")))
         .and_then(|v| v.trim().parse::<u16>().ok())
-        .unwrap_or(0)
+        .unwrap_or(0);
+    state.data_storage.note_host_server(learnt);
+    if learnt != 0 {
+        return learnt;
+    }
+    // As before: the party's server, when the party says.
+    state.data_storage.local_profile().server_id
 }
 
 /// Kills and HP milestones, sent within a second of happening.
