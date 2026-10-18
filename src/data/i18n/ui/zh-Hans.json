@@ -368,7 +368,9 @@
       "label": "条形不透明度"
     },
     "barPreview": "预览",
-    "meterSaturation": {"label": "条形颜色强度"},
+    "meterSaturation": {
+      "label": "条形颜色强度"
+    },
     "bossNameSize": {
       "label": "标题大小"
     },
@@ -494,7 +496,8 @@
       "saveRawPackets": "记录原始游戏流量以便提交错误报告。调试日志会随之开启。",
       "globalHotkeys": "下面的按键在游戏处于前台时也能使用。关闭后，这些按键会释放给其他程序。在 Linux 上由桌面注册这些按键，桌面可能会请你批准。",
       "pluginDevMode": "从这台电脑上的文件夹加载插件，用于开发和测试。这些插件未经审核，请只加载你信任的插件。",
-      "showMeter": "关闭：只显示插件。统计仍在后台记录战斗并上传。可在此处、用显示/隐藏快捷键，或插件窗口上的统计按钮重新显示。"
+      "showMeter": "关闭：只显示插件。统计仍在后台记录战斗并上传。可在此处、用显示/隐藏快捷键，或插件窗口上的统计按钮重新显示。",
+      "clearOnZone": "切换区域后，何时从统计中清除上一场战斗。所有战斗都会保留在历史记录中。"
     },
     "globalHotkeys": "使用快捷键",
     "hotkeyConsent": {
@@ -551,6 +554,14 @@
       "enabled": "启用",
       "enabledTip": "开启：随计量器启动。关闭：保持安装，但不运行。",
       "showMeter": "显示 DPS 统计"
+    },
+    "clearOnZone": {
+      "label": "清空统计",
+      "options": {
+        "instance": "进出副本时",
+        "any": "每次切换区域时",
+        "never": "从不（保留上一场战斗）"
+      }
     }
   },
   "support": {

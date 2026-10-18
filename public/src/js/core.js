@@ -6,6 +6,8 @@ const SETTING_CHOICES = {
   trainSelectionMode: { allowed: ["all", "highestDamage"], fallback: "all" },
   // The figure beside each player's name, in the meter and in Details.
   partyStat: { allowed: ["combatPower", "gearScore", "both", "off"], fallback: "combatPower" },
+  // When the last fight leaves the screen after the zone changes.
+  clearOnZone: { allowed: ["instance", "any", "never"], fallback: "instance" },
   // The number after the level in the Discord activity (presence.rs).
   discordStat: { allowed: ["combatPower", "gearScore", "off"], fallback: "off" },
   // A pattern over the meter's bars: a supporter's perk (applyBarTexture).
@@ -75,6 +77,7 @@ class DpsApp {
       updateRateMs: "dpsMeter.updateRateMs",
       trainSelectionMode: "dpsMeter.trainSelectionMode",
       partyStat: "dpsMeter.partyStat",
+      clearOnZone: "dpsMeter.clearOnZone",
       barTexture: "dpsMeter.barTexture",
       barTextureOffset: "dpsMeter.barTextureOffset",
       meterFillOpacity: "dpsMeter.meterFillOpacity",
@@ -1257,6 +1260,8 @@ class DpsApp {
       dungeonId,
       targetMobCode,
       partyGeneration,
+      zoneGeneration,
+      instanceGeneration,
     } = this.buildRowsFromPayload(raw);
     // Boss mode with no boss engaged: say what it is waiting for. The rows of
     // the last fight can still be on screen (the meter keeps them), so this
@@ -1355,6 +1360,28 @@ class DpsApp {
     }
     if (partyChanged && isOutOfCombat) {
       this.lastSnapshot = rows;
+    }
+    // The zone changed as "Clear the meter" says (entering or leaving a
+    // dungeon by default, "go again" too): the last fight leaves the screen
+    // once the backend has cleared it (its next empty update), rather than
+    // staying up until the next fight. Kept on teleports inside a dungeon,
+    // and always with "Never". Waits 20 s at most: a teleport mid-fight
+    // clears nothing.
+    const clearOn = this.safeGetSetting(this.storageKeys.clearOnZone) || SETTING_CHOICES.clearOnZone.fallback;
+    const zoneMark = clearOn === "any" ? `any:${zoneGeneration}` : clearOn === "never" ? "never" : `instance:${instanceGeneration}`;
+    if (this._zoneMark != null && zoneMark !== this._zoneMark && clearOn !== "never"
+        && zoneMark.split(":")[0] === this._zoneMark.split(":")[0]) {
+      this._zoneClearUntil = Date.now() + 20_000;
+    }
+    this._zoneMark = zoneMark;
+    if (this._zoneClearUntil > Date.now() && rows.length === 0) {
+      this._zoneClearUntil = 0;
+      this.lastSnapshot = null;
+      this._barsTargetLabel = null;
+      this._lastRenderedListSignature = "";
+      this._lastRenderedRowsSummary = null;
+      this.meterUI?.onResetMeterUi?.();
+      return;
     }
     // 빈값은 ui 안덮어씀
     let rowsToRender = rows;
@@ -1499,6 +1526,8 @@ class DpsApp {
     const targetIsBoss = payload?.targetIsBoss === true;
     const targetMobCode = Math.trunc(Number(payload?.targetMobCode)) || 0;
     const partyGeneration = Math.trunc(Number(payload?.partyGeneration)) || 0;
+    const zoneGeneration = Math.trunc(Number(payload?.zoneGeneration)) || 0;
+    const instanceGeneration = Math.trunc(Number(payload?.instanceGeneration)) || 0;
 
     return {
       rows,
@@ -1514,6 +1543,8 @@ class DpsApp {
       dungeonId,
       targetMobCode,
       partyGeneration,
+      zoneGeneration,
+      instanceGeneration,
     };
   }
 
@@ -2554,6 +2585,8 @@ class DpsApp {
     this.barTextureHint = document.querySelector(".barTextureHint");
     this.textureOffsetCheckbox = document.querySelector(".textureOffsetCheckbox");
     this.partyStatDropdownMenu = document.querySelector(".partyStatDropdownMenu");
+    this.clearOnZoneDropdownBtn = document.querySelector(".clearOnZoneDropdownBtn");
+    this.clearOnZoneDropdownMenu = document.querySelector(".clearOnZoneDropdownMenu");
     this.discordStatDropdownBtn = document.querySelector(".discordStatDropdownBtn");
     this.discordStatDropdownMenu = document.querySelector(".discordStatDropdownMenu");
     this.trainSelectionModeDropdownMenu = document.querySelector(".trainSelectionModeDropdownMenu");
@@ -2774,6 +2807,7 @@ class DpsApp {
     this.settingsSelections.partyStat = this.partyStat;
     this.syncPreviewPartyStat();
     this.settingsSelections.discordStat = pickSettingChoice("discordStat", this.safeGetSetting(this.storageKeys.discordStat));
+    this.settingsSelections.clearOnZone = pickSettingChoice("clearOnZone", this.safeGetSetting(this.storageKeys.clearOnZone));
     this.barTexture = pickSettingChoice("barTexture", this.safeGetSetting(this.storageKeys.barTexture));
     this.settingsSelections.barTexture = this.barTexture;
     this.applyBarTexture(this.barTexture);
@@ -3757,6 +3791,22 @@ class DpsApp {
         this.settingsSelections.partyStat = value;
         this.applyPartyStat(value);
         this.safeSetSetting(this.storageKeys.partyStat, value);
+      }
+    );
+
+    setupDropdown(
+      this.clearOnZoneDropdownBtn,
+      this.clearOnZoneDropdownMenu,
+      [
+        { value: "instance", label: this.i18n?.t("settings.clearOnZone.options.instance", "Entering or leaving a dungeon") },
+        { value: "any", label: this.i18n?.t("settings.clearOnZone.options.any", "Any zone change") },
+        { value: "never", label: this.i18n?.t("settings.clearOnZone.options.never", "Never (keep the last fight)") },
+      ],
+      this.settingsSelections.clearOnZone,
+      (value) => {
+        if (!value) return;
+        this.settingsSelections.clearOnZone = value;
+        this.safeSetSetting(this.storageKeys.clearOnZone, value);
       }
     );
 

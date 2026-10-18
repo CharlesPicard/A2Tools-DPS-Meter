@@ -363,7 +363,9 @@
       "label": "Balken-Deckkraft"
     },
     "barPreview": "Vorschau",
-    "meterSaturation": {"label": "Balkenfarbstärke"},
+    "meterSaturation": {
+      "label": "Balkenfarbstärke"
+    },
     "bossNameSize": {
       "label": "Titelgröße"
     },
@@ -487,7 +489,8 @@
       "saveRawPackets": "Zeichnet rohen Spielverkehr für Fehlerberichte auf. Das Debug-Protokoll wird mit eingeschaltet.",
       "globalHotkeys": "Die Tasten unten funktionieren überall, auch wenn das Spiel im Vordergrund ist. Aus: Sie werden für andere Programme freigegeben. Unter Linux registriert der Desktop sie und fragt eventuell, ob du sie erlaubst.",
       "pluginDevMode": "Lädt Plugins aus Ordnern auf diesem Computer, um sie zu entwickeln und zu testen. Sie sind nicht geprüft, lade also nur Plugins, denen du vertraust.",
-      "showMeter": "Aus: Nur deine Plugins sind zu sehen. Das Meter liest im Hintergrund weiter Kämpfe mit und lädt hoch. Zurückholen kannst du es hier, mit dem Ein-/Ausblenden-Hotkey oder mit dem Meter-Knopf an einem Plugin-Fenster."
+      "showMeter": "Aus: Nur deine Plugins sind zu sehen. Das Meter liest im Hintergrund weiter Kämpfe mit und lädt hoch. Zurückholen kannst du es hier, mit dem Ein-/Ausblenden-Hotkey oder mit dem Meter-Knopf an einem Plugin-Fenster.",
+      "clearOnZone": "Wann der letzte Kampf nach einem Zonenwechsel aus dem Meter verschwindet. Jeder Kampf bleibt so oder so im Verlauf."
     },
     "globalHotkeys": "Tastenkürzel verwenden",
     "hotkeyConsent": {
@@ -544,6 +547,14 @@
       "enabled": "Aktiviert",
       "enabledTip": "An: startet mit dem Meter. Aus: bleibt installiert, läuft aber nicht.",
       "showMeter": "DPS-Meter anzeigen"
+    },
+    "clearOnZone": {
+      "label": "Meter leeren",
+      "options": {
+        "instance": "Beim Betreten oder Verlassen eines Dungeons",
+        "any": "Bei jedem Zonenwechsel",
+        "never": "Nie (letzten Kampf behalten)"
+      }
     }
   },
   "support": {

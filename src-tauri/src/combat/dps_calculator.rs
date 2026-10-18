@@ -682,6 +682,7 @@ impl DpsCalculator {
     /// one added only on a fresh result vanished on the next cached one.
     fn finalize_rows(&self, dps_data: &mut DpsData) {
         dps_data.party_generation = self.data_storage.party_generation();
+        (dps_data.zone_generation, dps_data.instance_generation) = self.data_storage.zone_generations();
         self.add_party_rows(dps_data);
         self.mark_supporters(dps_data);
     }

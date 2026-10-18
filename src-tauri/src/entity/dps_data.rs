@@ -39,6 +39,12 @@ pub struct DpsData {
     /// `DataStorage::party_generation`: changes when the party's members do.
     #[serde(default)]
     pub party_generation: u64,
+    /// `DataStorage::zone_generations`: every map load, and those entering
+    /// or leaving an instance.
+    #[serde(default)]
+    pub zone_generation: u64,
+    #[serde(default)]
+    pub instance_generation: u64,
 }
 
 impl DpsData {
@@ -58,6 +64,8 @@ impl DpsData {
             target_mob_code: 0,
             dungeon_id: 0,
             party_generation: 0,
+            zone_generation: 0,
+            instance_generation: 0,
         }
     }
 }

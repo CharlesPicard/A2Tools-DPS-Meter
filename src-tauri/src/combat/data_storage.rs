@@ -512,6 +512,10 @@ struct Inner {
     /// Changes when the party's members change, or it ends (see
     /// `party_generation`).
     party_generation: u64,
+    /// Counted at each map load (`zone_generation`), and at each one that
+    /// enters or leaves an instance (`instance_generation`).
+    zone_generation: u64,
+    instance_generation: u64,
     /// When the party last ended (`end_party`), clock ms; `NEVER_MS` if it
     /// has not.
     party_ended_at_ms: i64,
@@ -733,6 +737,8 @@ impl DataStorage {
                 nickname_storage: HashMap::new(),
                 names_generation: 0,
                 party_generation: 0,
+                zone_generation: 0,
+                instance_generation: 0,
                 party_ended_at_ms: NEVER_MS,
                 pending_nicknames: HashMap::new(),
                 permanent_nicknames: HashMap::new(),
@@ -1896,7 +1902,11 @@ impl DataStorage {
         // A load hands out new entity ids: counts of the old ones would name
         // an entity that is gone.
         inner.loot_identity.scope_counts.clear();
-        inner.current_map_id = Some(map_id);
+        let from = inner.current_map_id.replace(map_id);
+        inner.zone_generation += 1;
+        if !(from.is_some_and(is_open_world_map) && is_open_world_map(map_id)) {
+            inner.instance_generation += 1;
+        }
         let dungeon = dungeon_of_map(inner.roster_dungeon_id, Some(map_id));
         if dungeon != inner.current_dungeon_id {
             tracing::debug!("Map {map_id}: dungeon {} -> {dungeon}", inner.current_dungeon_id);
@@ -2360,6 +2370,15 @@ impl DataStorage {
     /// party. Not with every roster; the game resends it on each map load.
     pub fn party_generation(&self) -> u64 {
         self.inner.read().party_generation
+    }
+
+    /// Counts of map loads: every one, and those entering or leaving an
+    /// instance (a dungeon, entered again with "go again" too; anything but
+    /// the open world to the open world). The meter clears the last fight
+    /// off the screen on one, as its setting says.
+    pub fn zone_generations(&self) -> (u64, u64) {
+        let inner = self.inner.read();
+        (inner.zone_generation, inner.instance_generation)
     }
 
     /// Changes whenever a name is bound, replaced or dropped, and with each
@@ -3197,6 +3216,22 @@ mod tests {
         assert_eq!(s.fight_server_id(), 1304, "what your own record says");
         s.note_player_server("C", 99);
         assert_eq!(s.fight_server_id(), 1304, "a value no server has is not taken");
+    }
+
+    #[test]
+    fn instances_entered_and_left_are_counted_apart_from_open_world_moves() {
+        let s = DataStorage::new();
+        let open = *OPEN_WORLD_MAPS.iter().next().unwrap();
+        s.note_map_load(open);
+        let (_, at_start) = s.zone_generations();
+        s.note_map_load(open);
+        assert_eq!(s.zone_generations().1, at_start, "a teleport in the open world");
+        s.note_map_load(610_001);
+        assert_eq!(s.zone_generations().1, at_start + 1, "into a dungeon");
+        s.note_map_load(610_001);
+        assert_eq!(s.zone_generations().1, at_start + 2, "go again: the same dungeon loaded again");
+        s.note_map_load(open);
+        assert_eq!(s.zone_generations(), (5, at_start + 3), "back to the open world");
     }
 
     #[test]

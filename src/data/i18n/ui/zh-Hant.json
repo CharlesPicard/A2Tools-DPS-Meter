@@ -368,7 +368,9 @@
       "label": "條形不透明度"
     },
     "barPreview": "預覽",
-    "meterSaturation": {"label": "條形顏色強度"},
+    "meterSaturation": {
+      "label": "條形顏色強度"
+    },
     "bossNameSize": {
       "label": "標題大小"
     },
@@ -494,7 +496,8 @@
       "saveRawPackets": "記錄原始遊戲流量以便回報錯誤。除錯記錄會隨之開啟。",
       "globalHotkeys": "下面的按鍵在遊戲位於前景時也能使用。關閉後，這些按鍵會釋放給其他程式。在 Linux 上由桌面註冊這些按鍵，桌面可能會請你核准。",
       "pluginDevMode": "從這台電腦上的資料夾載入外掛程式，用於開發和測試。這些外掛程式未經審核，請只載入你信任的外掛程式。",
-      "showMeter": "關閉：只顯示外掛。統計仍在背景記錄戰鬥並上傳。可在此處、用顯示/隱藏快速鍵，或外掛視窗上的統計按鈕重新顯示。"
+      "showMeter": "關閉：只顯示外掛。統計仍在背景記錄戰鬥並上傳。可在此處、用顯示/隱藏快速鍵，或外掛視窗上的統計按鈕重新顯示。",
+      "clearOnZone": "切換區域後，何時從統計中清除上一場戰鬥。所有戰鬥都會保留在歷史紀錄中。"
     },
     "globalHotkeys": "使用快捷鍵",
     "hotkeyConsent": {
@@ -551,6 +554,14 @@
       "enabled": "啟用",
       "enabledTip": "開啟：隨計量器啟動。關閉：保持安裝，但不執行。",
       "showMeter": "顯示 DPS 統計"
+    },
+    "clearOnZone": {
+      "label": "清空統計",
+      "options": {
+        "instance": "進出副本時",
+        "any": "每次切換區域時",
+        "never": "從不（保留上一場戰鬥）"
+      }
     }
   },
   "support": {
