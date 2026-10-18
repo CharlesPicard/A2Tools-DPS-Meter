@@ -379,7 +379,10 @@ if (typeof module !== "undefined" && module.exports) {
       const text = `${clock(shown)} / ${clock(dur)}`;
       // Once a second, not every frame: the clock shows whole seconds.
       if (text !== timeEl.textContent) {
-        timeEl.textContent = text;
+        // The text node's data, not textContent: setting that replaces the
+        // node, and a drag changes the second on nearly every frame.
+        if (timeEl.firstChild?.nodeType === 3 && timeEl.childNodes.length === 1) timeEl.firstChild.data = text;
+        else timeEl.textContent = text;
         scrub.setAttribute("aria-valuetext", t("details.replay.positionText", "{at} of {total}")
           .replace("{at}", clock(shown)).replace("{total}", clock(dur)));
       }
