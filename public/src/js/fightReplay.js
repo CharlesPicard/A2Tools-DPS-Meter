@@ -151,9 +151,10 @@ if (typeof module !== "undefined" && module.exports) {
   // How often the playhead and the progress step while playing: no
   // transition at all (any running one, even on a 2 px line, makes the
   // browser draw a full frame at every screen refresh; 2026-10-18). The big
-  // shade steps every FIGURE_INTERVAL_MS. window.__A2_REPLAY_STEP_MS
+  // shade steps every FIGURE_INTERVAL_MS. 50 ms (20 a second) measured within
+  // budget on an RTX 2070; 33 ms did not quite. window.__A2_REPLAY_STEP_MS
   // overrides it, for measuring.
-  const MOVER_STEP_MS = Number(window.__A2_REPLAY_STEP_MS) > 0 ? Number(window.__A2_REPLAY_STEP_MS) : 33;
+  const MOVER_STEP_MS = Number(window.__A2_REPLAY_STEP_MS) > 0 ? Number(window.__A2_REPLAY_STEP_MS) : 50;
   const FIGURE_SHARE = 6;
   // How faint the timeline is past the moment.
   const FUTURE_ALPHA = 0.16;
