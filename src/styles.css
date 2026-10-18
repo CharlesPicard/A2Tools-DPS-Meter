@@ -7272,41 +7272,73 @@ html.a2-offline .historyUploadBtn {
   min-width: 0;
   padding: 3px 8px 3px 12px;
 }
+/* Replay buttons: the secondary style (exit). Play / pause, the main
+   action, is filled below. No transition on shadow or brightness: they
+   change only on hover and press, never while a replay plays. */
 .detailsPanel .fightReplayBtn {
   appearance: none;
   flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 30px;
+  height: 30px;
   padding: 0;
-  border: none;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
+  transition: background-color 120ms ease-out;
 }
 .detailsPanel .fightReplayBtn:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.12);
   color: var(--hud-num, #fff);
+}
+.detailsPanel .fightReplayBtn:active {
+  transform: translateY(1px);
 }
 .detailsPanel .fightReplayBtn:focus-visible,
 .detailsPanel .fightReplaySpeed:focus-visible,
 .detailsPanel .fightReplayScrub:focus-visible {
-  outline: 1px solid var(--isUser-fill);
-  outline-offset: 1px;
+  outline: 2px solid var(--isUser-fill);
+  outline-offset: 2px;
 }
 .detailsPanel .fightReplayBtn:disabled {
-  opacity: 0.35;
+  opacity: 0.4;
+  box-shadow: none;
   cursor: default;
+  transform: none;
 }
 .detailsPanel .fightReplayBtn svg {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
 }
+/* Play / pause: the main action, filled in the accent. */
 .detailsPanel .fightReplayPlay {
-  color: var(--isUser-fill);
+  width: 38px;
+  border: none;
+  background: var(--isUser-fill);
+  color: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.45);
+}
+.detailsPanel .fightReplayPlay:hover {
+  background: var(--isUser-fill);
+  color: #fff;
+  filter: brightness(1.12);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+.detailsPanel .fightReplayPlay:active {
+  box-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+}
+.detailsPanel .fightReplayPlay:disabled {
+  filter: none;
+  box-shadow: none;
+}
+.detailsPanel .fightReplayPlay svg {
+  width: 16px;
+  height: 16px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
 .detailsPanel .fightReplayBar .fightReplayIconPause,
 .detailsPanel .fightReplayBar.isPlaying .fightReplayIconPlay {
