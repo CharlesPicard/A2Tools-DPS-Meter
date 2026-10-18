@@ -34,6 +34,7 @@
 
 use std::collections::{HashMap, HashSet};
 
+use aho_corasick::AhoCorasick;
 use sha2::{Digest, Sha256};
 
 use super::framing::{self, FrameKind, MAX_BUNDLE_DEPTH};
@@ -392,6 +393,11 @@ struct Blinder {
     /// Pass one: name bytes -> token bytes, longest first, for names of
     /// `MIN_NAME_BYTES` or more.
     known: Vec<(Vec<u8>, Vec<u8>)>,
+    /// Every name in `known`, found in one pass (pattern i is `known[i]`).
+    /// Looking for each name in turn cost a pass over every packet per name:
+    /// with a few hundred names seen in a session, a slice took over a
+    /// minute to cut, and a save before a zone change held the parser that long.
+    finder: Option<AhoCorasick>,
     /// Every known name, of any length -> its token: what a name field gets.
     tokens: HashMap<Vec<u8>, Vec<u8>>,
     /// Every token written, so no pass blinds one again.
@@ -423,7 +429,20 @@ impl Blinder {
                 blinder.known.push((raw.to_vec(), token.into_bytes()));
             }
         }
+        if !blinder.known.is_empty() {
+            blinder.finder = AhoCorasick::new(blinder.known.iter().map(|(name, _)| name)).ok();
+        }
         blinder
+    }
+
+    /// Which of `known` appear in `buf`, by index, in `known`'s order.
+    fn present(&self, buf: &[u8]) -> Vec<usize> {
+        // Without the finder (it could not be built), every name, as before.
+        let Some(finder) = &self.finder else { return (0..self.known.len()).collect() };
+        let mut found: Vec<usize> = finder.find_overlapping_iter(buf).map(|m| m.pattern().as_usize()).collect();
+        found.sort_unstable();
+        found.dedup();
+        found
     }
 
     /// A blinder that knows no names and leaves `tokens` alone.
@@ -432,6 +451,7 @@ impl Blinder {
             // Only counts: the tokens it would mint are never written.
             key: [0; 32],
             known: Vec::new(),
+            finder: None,
             tokens: HashMap::new(),
             known_tokens: tokens,
             discovered: HashMap::new(),
@@ -532,12 +552,20 @@ impl Blinder {
     /// byte, where the game puts a name (see `name_in`). Two bytes turn up in
     /// ordinary data by chance, and rewriting them there changed that data.
     /// A name of one byte is left to the name fields.
+    ///
+    /// Names are still replaced one at a time, longest first; only the names
+    /// in the packet are visited. A replacement writes a token, which could
+    /// spell a later name with the bytes around it, so the packet is searched
+    /// again after one.
     fn blind_known(&self, buf: &mut [u8]) -> usize {
         let mut replaced = 0;
-        for (needle, token) in &self.known {
-            if needle.len() > buf.len() {
-                continue;
-            }
+        let mut todo = self.present(buf);
+        let mut next = 0;
+        while next < todo.len() {
+            let index = todo[next];
+            next += 1;
+            let (needle, token) = &self.known[index];
+            let before = replaced;
             let short = needle.len() < SHORT_NAME_BYTES;
             let mut i = 0;
             while i + needle.len() <= buf.len() {
@@ -550,6 +578,10 @@ impl Blinder {
                 } else {
                     i += 1;
                 }
+            }
+            if replaced > before {
+                todo.truncate(next);
+                todo.extend(self.present(buf).into_iter().filter(|&later| later > index));
             }
         }
         replaced
@@ -595,11 +627,25 @@ impl Blinder {
 
     /// Does any known name overlap `buf[from..to]`?
     fn spells_known_name(&self, buf: &[u8], from: usize, to: usize) -> bool {
-        self.known.iter().any(|(name, _)| {
-            let n = name.len();
-            let start = (from + 1).saturating_sub(n);
-            let end = (to + n - 1).min(buf.len());
-            end >= start + n && buf[start..end].windows(n).any(|w| w == name.as_slice())
+        let Some(finder) = &self.finder else {
+            return self.known.iter().any(|(name, _)| {
+                let n = name.len();
+                let start = (from + 1).saturating_sub(n);
+                let end = (to + n - 1).min(buf.len());
+                end >= start + n && buf[start..end].windows(n).any(|w| w == name.as_slice())
+            });
+        };
+        let longest = self.known.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
+        let lo = (from + 1).saturating_sub(longest);
+        let hi = (to + longest).saturating_sub(1).min(buf.len());
+        if hi <= lo {
+            return false;
+        }
+        // A name of n bytes counts where it lies inside
+        // [from + 1 - n, to + n - 1): it shares a byte with buf[from..to].
+        finder.find_overlapping_iter(&buf[lo..hi]).any(|m| {
+            let (start, end, n) = (lo + m.start(), lo + m.end(), m.end() - m.start());
+            start >= (from + 1).saturating_sub(n) && end <= (to + n - 1).min(buf.len())
         })
     }
 }
@@ -814,6 +860,18 @@ const SHORT_NAME_BYTES: usize = 4;
 /// Never for a name of one byte: `01 41` is "A" after its length byte, and
 /// also the end of a frame length `8f 01` before a spawn `41 36`. A one-byte
 /// name is looked for in the name fields only (`name_field_contents`).
+/// What `name_in` looks for: the name, or under `SHORT_NAME_BYTES` the name
+/// after its length byte. None for a name too short to look for.
+fn name_needle(name: &[u8]) -> Option<Vec<u8>> {
+    if name.len() < MIN_NAME_BYTES {
+        return None;
+    }
+    if name.len() >= SHORT_NAME_BYTES {
+        return Some(name.to_vec());
+    }
+    Some(std::iter::once(name.len() as u8).chain(name.iter().copied()).collect())
+}
+
 fn name_in(buf: &[u8], name: &[u8]) -> bool {
     if name.len() < MIN_NAME_BYTES {
         return false;
@@ -1043,14 +1101,26 @@ pub fn build(
     // and searching a compressed buffer for a plaintext name finds nothing no
     // matter what is inside it. A verifier that passes vacuously is worse than
     // no verifier, because it is believed.
-    let plaintext: Vec<Vec<u8>> = records.iter().map(|(_, p)| expand(p)).collect();
-    for (name, _) in &ordered {
-        if name.is_empty() {
-            continue;
+    //
+    // Every name in one pass over each record (see `Blinder::finder`); the
+    // name reported is still the first in `ordered` that was found.
+    let needles: Vec<(usize, Vec<u8>)> = ordered.iter().enumerate()
+        .filter_map(|(i, (name, _))| name_needle(name.as_bytes()).map(|needle| (i, needle)))
+        .collect();
+    let leaked = match AhoCorasick::new(needles.iter().map(|(_, needle)| needle)) {
+        Ok(finder) => records.iter()
+            .filter_map(|(_, packet)| {
+                finder.find_overlapping_iter(&expand(packet)).map(|m| needles[m.pattern().as_usize()].0).min()
+            })
+            .min(),
+        // Never pass unchecked: one name at a time, as before.
+        Err(_) => {
+            let plaintext: Vec<Vec<u8>> = records.iter().map(|(_, p)| expand(p)).collect();
+            ordered.iter().position(|(name, _)| plaintext.iter().any(|buf| name_in(buf, name.as_bytes())))
         }
-        if plaintext.iter().any(|buf| name_in(buf, name.as_bytes())) {
-            return Err(SliceError::NameLeaked(name.len()));
-        }
+    };
+    if let Some(first) = leaked {
+        return Err(SliceError::NameLeaked(ordered[first].0.len()));
     }
     // Every name, a one-byte name too, where a record holds one.
     let fields = name_field_contents(&records);
@@ -1589,6 +1659,74 @@ mod tests {
     /// stream, were read as its tail, and every slice after came out as lifted
     /// fragments or not at all (2026-10-07: 98 % lifted from 08:05, then no
     /// slices). One stream per connection keeps the new one whole.
+    /// The names found in one pass give what looking for each in turn gave:
+    /// the same bytes blinded, and the same answer to "does a known name
+    /// overlap here?". Names that contain each other, and a small alphabet so
+    /// they turn up often and next to each other.
+    #[test]
+    fn one_pass_over_the_names_blinds_as_one_name_at_a_time_did() {
+        fn one_at_a_time(known: &[(Vec<u8>, Vec<u8>)], buf: &mut [u8]) -> usize {
+            let mut replaced = 0;
+            for (needle, token) in known {
+                let short = needle.len() < SHORT_NAME_BYTES;
+                let mut i = 0;
+                while i + needle.len() <= buf.len() {
+                    if &buf[i..i + needle.len()] == needle.as_slice()
+                        && (!short || (i > 0 && buf[i - 1] as usize == needle.len()))
+                    {
+                        buf[i..i + needle.len()].copy_from_slice(token);
+                        replaced += 1;
+                        i += needle.len();
+                    } else {
+                        i += 1;
+                    }
+                }
+            }
+            replaced
+        }
+        fn overlaps(known: &[(Vec<u8>, Vec<u8>)], buf: &[u8], from: usize, to: usize) -> bool {
+            known.iter().any(|(name, _)| {
+                let n = name.len();
+                let start = (from + 1).saturating_sub(n);
+                let end = (to + n - 1).min(buf.len());
+                end >= start + n && buf[start..end].windows(n).any(|w| w == name.as_slice())
+            })
+        }
+        let names: Vec<String> = ["Misti", "Mistifix", "ab", "abc", "bca", "cab", "abcab", "ba", "c2", "Nyx"]
+            .iter().map(|n| n.to_string()).collect();
+        let ids: Vec<u64> = (0..names.len() as u64).collect();
+        let mut ordered: Vec<(&String, &u64)> = names.iter().zip(ids.iter()).collect();
+        ordered.sort_by(|a, b| b.0.len().cmp(&a.0.len()).then_with(|| a.0.cmp(b.0)));
+        let blinder = Blinder::new(KEY, &ordered);
+        assert!(blinder.finder.is_some());
+
+        // Names, parts of names and length bytes, run together.
+        let pieces: [&[u8]; 14] = [b"Misti", b"fix", b"ab", b"c", b"a", b"b", b"Mist", b"Nyx", b"2", b"\x02", b"\x03", b"\x05", b"\x08", b"z"];
+        let mut seed = 0x2545_f491_4f6c_dd1du64;
+        let (mut blinded, mut overlapping) = (0, 0);
+        for _ in 0..3000 {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            let buf: Vec<u8> = (0..1 + seed % 10).flat_map(|i| pieces[(seed >> (i * 5)) as usize % pieces.len()].iter().copied()).collect();
+            let len = buf.len();
+
+            let mut expected = buf.clone();
+            let mut got = buf.clone();
+            let replaced = blinder.blind_known(&mut got);
+            assert_eq!(replaced, one_at_a_time(&blinder.known, &mut expected), "{buf:?}");
+            blinded += replaced;
+            assert_eq!(got, expected, "{buf:?}");
+
+            let from = (seed >> 8) as usize % len;
+            let to = (from + 1 + (seed >> 16) as usize % 6).min(len);
+            let spells = blinder.spells_known_name(&buf, from, to);
+            assert_eq!(spells, overlaps(&blinder.known, &buf, from, to), "{buf:?} {from}..{to}");
+            overlapping += spells as usize;
+        }
+        assert!(blinded > 300 && overlapping > 300, "too few names to compare: {blinded} blinded, {overlapping} overlapping");
+    }
+
     #[test]
     fn a_short_name_is_only_a_leak_where_the_game_puts_a_name() {
         // "Jo" by chance inside other data is not a leak; after its length byte it is.

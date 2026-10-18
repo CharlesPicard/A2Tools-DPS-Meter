@@ -130,7 +130,7 @@ fn ring_check(packets: &[CapturedPacket], storage: &DataStorage, w: &FightRecord
     }
     let dir = std::env::temp_dir().join(format!("a2t-ring-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&dir);
-    let result = a2tools_dps_meter_lib::share::save_slice(&dir, w, storage).and_then(|bytes| {
+    let result = a2tools_dps_meter_lib::share::save_slice(&dir, w, &a2tools_dps_meter_lib::share::SliceNames::of(storage)).and_then(|bytes| {
         let gz = std::fs::read(a2tools_dps_meter_lib::share::slices_dir(&dir).join(format!("{}.a2es.gz", w.id)))
             .map_err(|e| e.to_string())?;
         let mut slice = Vec::new();
