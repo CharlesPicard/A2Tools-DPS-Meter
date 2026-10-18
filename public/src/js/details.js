@@ -1370,9 +1370,12 @@ const createDetailsUI = ({
     // names shown change: reading the styles after the rows were rebuilt laid
     // the page out at once, and a replay redraws the table ten times a second
     // (it lagged a whole browser by the end of a long fight, 2026-10-18).
-    // A replay's first rows keep the columns of the whole table.
+    // A replay keeps the columns of the whole fight, playing or paused: at
+    // its start a player has one or two skills, and the name column was
+    // measured from those and shrank (2026-10-18). Ending it measures again.
     const nameKey = `${detailsMode}|${topDisplay.map((s) => s?.name ?? "").join("")}`;
-    if (!limited && (nameKey !== lastNameKey || !(lastMeasuredNameWidth > 0))) {
+    const holdColumns = (limited || limit > 0 || detailsPanel.classList.contains("isReplaying")) && lastMeasuredNameWidth > 0;
+    if (!holdColumns && (nameKey !== lastNameKey || !(lastMeasuredNameWidth > 0))) {
       lastNameKey = nameKey;
       const iconSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--details-skill-icon-size") || "36", 10);
       const iconMargin = 6;
