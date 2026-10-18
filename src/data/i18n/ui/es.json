@@ -401,7 +401,11 @@
       "reload": "Recargar datos",
       "toggle": "Mostrar/ocultar ventana",
       "pressKeys": "Pulsa las teclas...",
-      "needModifiers": "Se necesitan 2+ modificadores",
+      "tooManyKeys": "Máximo 3 teclas",
+      "plugins": "Recuperar ventanas de plugins",
+      "notSet": "Sin asignar",
+      "restoreDefaults": "Restaurar predeterminados",
+      "hint": "Haz clic en un atajo y pulsa de 1 a 3 teclas. Esc cancela.",
       "lock": "Bloquear/desbloquear superposición"
     },
     "defaultMeterMode": {

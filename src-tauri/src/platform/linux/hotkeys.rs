@@ -42,6 +42,18 @@ const APP_ID: &str = "com.a2tools.dps-meter";
 const RELOAD: &str = "reset";
 const TOGGLE: &str = "toggle";
 const LOCK: &str = "lock";
+const PLUGINS: &str = "plugins";
+
+/// A binding's shortcut id and the description the desktop shows.
+fn shortcut_of(name: &str) -> Option<(&'static str, &'static str)> {
+    Some(match name {
+        "reload" => (RELOAD, "Reset the meter"),
+        "toggle" => (TOGGLE, "Show or hide the meter"),
+        "lock" => (LOCK, "Turn the click-through lock on or off"),
+        "plugins" => (PLUGINS, "Bring back the open plugin windows"),
+        _ => return None,
+    })
+}
 
 /// Off until the user turns them on (Settings → Keybinds): the desktop asks
 /// to approve the shortcuts, which should not appear unasked.
@@ -62,21 +74,12 @@ impl HotkeyManager {
         }
     }
 
-    /// Start the helper with the three shortcuts and act on what it reports.
+    /// Start the helper with the shortcuts and act on what it reports.
     /// The numbers are the Win32 modifier flags and virtual-key codes settings
     /// store (`parse_hotkey_label`); a key of 0 leaves that shortcut out.
-    #[allow(clippy::too_many_arguments)]
     pub fn start(
         &self,
-        reload_mods: u32,
-        reload_vk: u32,
-        toggle_mods: u32,
-        toggle_vk: u32,
-        lock_mods: u32,
-        lock_vk: u32,
-        on_reload: impl Fn() + Send + 'static,
-        on_toggle: impl Fn() + Send + 'static,
-        on_lock: impl Fn() + Send + 'static,
+        bindings: Vec<crate::platform::hotkeys::Binding>,
         on_status: impl Fn(&'static str, bool) + Send + 'static,
     ) {
         use std::io::BufRead;
@@ -89,14 +92,11 @@ impl HotkeyManager {
             }
         }
         let mut args = Vec::new();
-        for (id, description, mods, vk) in [
-            (RELOAD, "Reset the meter", reload_mods, reload_vk),
-            (TOGGLE, "Show or hide the meter", toggle_mods, toggle_vk),
-            (LOCK, "Turn the click-through lock on or off", lock_mods, lock_vk),
-        ] {
-            if vk != 0 {
+        for binding in &bindings {
+            let Some((id, description)) = shortcut_of(binding.name) else { continue };
+            if binding.vk != 0 {
                 args.push("--shortcut".to_string());
-                args.push(format!("{id}\t{description}\t{}", trigger(mods, vk).unwrap_or_default()));
+                args.push(format!("{id}\t{description}\t{}", trigger(binding.mods, binding.vk).unwrap_or_default()));
             }
         }
         let path = std::env::current_exe()
@@ -126,12 +126,12 @@ impl HotkeyManager {
             for line in std::io::BufReader::new(stdout).lines().map_while(Result::ok) {
                 let mut parts = line.splitn(3, ' ');
                 match (parts.next(), parts.next(), parts.next()) {
-                    (Some("fire"), Some(id), _) => match id {
-                        RELOAD => on_reload(),
-                        TOGGLE => on_toggle(),
-                        LOCK => on_lock(),
-                        _ => {}
-                    },
+                    (Some("fire"), Some(id), _) => {
+                        let fired = bindings.iter().find(|b| shortcut_of(b.name).is_some_and(|(s, _)| s == id));
+                        if let Some(binding) = fired {
+                            (binding.on_fire)();
+                        }
+                    }
                     (Some("status"), Some(id), Some(state)) => {
                         if let Some(key) = status_key(id) {
                             on_status(key, state == "ok");
@@ -172,7 +172,7 @@ pub fn run_helper() -> i32 {
         let (Some(id), Some(description)) = (fields.next(), fields.next()) else { continue };
         let trigger = fields.next().filter(|t| !t.is_empty()).map(str::to_string);
         // Known ids only: they are what the portal and Hyprland are told.
-        let Some(id) = [RELOAD, TOGGLE, LOCK].into_iter().find(|known| *known == id) else { continue };
+        let Some(id) = [RELOAD, TOGGLE, LOCK, PLUGINS].into_iter().find(|known| *known == id) else { continue };
         let description: &'static str = Box::leak(description.to_string().into_boxed_str());
         wanted.push((id, description, trigger));
     }
@@ -258,6 +258,7 @@ fn status_key(id: &str) -> Option<&'static str> {
         RELOAD => Some("reload"),
         TOGGLE => Some("toggle"),
         LOCK => Some("lock"),
+        PLUGINS => Some("plugins"),
         _ => None,
     }
 }

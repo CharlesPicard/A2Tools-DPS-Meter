@@ -401,7 +401,11 @@
       "reload": "Daten neu laden",
       "toggle": "Fenster ein-/ausblenden",
       "pressKeys": "Tasten drücken...",
-      "needModifiers": "2+ Modifikatoren nötig",
+      "tooManyKeys": "Höchstens 3 Tasten",
+      "plugins": "Plugin-Fenster zurückholen",
+      "notSet": "Nicht belegt",
+      "restoreDefaults": "Standard wiederherstellen",
+      "hint": "Tastenkürzel anklicken, dann 1 bis 3 Tasten drücken. Esc bricht ab.",
       "lock": "Overlay sperren/entsperren"
     },
     "defaultMeterMode": {

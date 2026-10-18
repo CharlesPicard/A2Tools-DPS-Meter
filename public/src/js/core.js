@@ -4296,6 +4296,8 @@ class DpsApp {
     const reloadBtn = document.querySelector(".reloadKeybindBtn");
     const toggleBtn = document.querySelector(".toggleKeybindBtn");
     const lockKeyBtn = document.querySelector(".lockKeybindBtn");
+    const pluginsKeyBtn = document.querySelector(".pluginsKeybindBtn");
+    const notSet = () => this.i18n?.t?.("settings.keybind.notSet", "Not set") ?? "Not set";
 
     this.refreshKeybindLabels = () => {
       const reloadLabel = window.javaBridge?.getCurrentHotKey?.() || "";
@@ -4310,6 +4312,11 @@ class DpsApp {
         lockKeyBtn.querySelector(".keybindText").textContent =
           window.javaBridge?.getCurrentLockHotKey?.() || "Ctrl+Alt+L";
       }
+      if (pluginsKeyBtn) {
+        const label = window.javaBridge?.getCurrentPluginWindowsHotKey?.() || "";
+        pluginsKeyBtn.querySelector(".keybindText").textContent = label || notSet();
+        pluginsKeyBtn.classList.toggle("isUnset", !label);
+      }
     };
     this.refreshKeybindLabels();
 
@@ -4320,8 +4327,9 @@ class DpsApp {
     let lastHotkeyStatus = {};
     this.applyHotkeyStatus = (status) => {
       lastHotkeyStatus = status && typeof status === "object" ? status : {};
-      const rows = [[reloadBtn, "reload"], [toggleBtn, "toggle"], [lockKeyBtn, "lock"]]
-        .filter(([btn]) => btn && btn.closest?.(".settingsRowKeybind")?.style?.display !== "none");
+      const rows = [[reloadBtn, "reload"], [toggleBtn, "toggle"], [lockKeyBtn, "lock"], [pluginsKeyBtn, "plugins"]]
+        .filter(([btn]) => btn && btn.closest?.(".settingsRowKeybind")?.style?.display !== "none")
+        .filter(([btn]) => !btn.classList?.contains?.("isUnset"));
       const labelOf = (btn) => (btn.querySelector?.(".keybindText")?.textContent || "").trim().toLowerCase();
       for (const [btn, key] of rows) {
         const shared = rows.some(([other]) => other !== btn && labelOf(other) === labelOf(btn));
@@ -4393,6 +4401,12 @@ class DpsApp {
     reloadBtn?.addEventListener("click", () => handleKeybindClick(reloadBtn, "reload"));
     toggleBtn?.addEventListener("click", () => handleKeybindClick(toggleBtn, "toggle"));
     lockKeyBtn?.addEventListener("click", () => handleKeybindClick(lockKeyBtn, "lock"));
+    pluginsKeyBtn?.addEventListener("click", () => handleKeybindClick(pluginsKeyBtn, "plugins"));
+    document.querySelector(".keybindDefaultsBtn")?.addEventListener("click", () => {
+      stopRecording();
+      window.javaBridge?.restoreDefaultHotkeys?.();
+      this.refreshKeybindLabels();
+    });
 
     document.addEventListener("keydown", (event) => {
       if (!activeRecording) return;
@@ -4427,9 +4441,10 @@ class DpsApp {
         ((mods & MOD_SHIFT) ? 1 : 0) +
         ((mods & MOD_WIN) ? 1 : 0);
 
-      if (modCount < 1) {
+      // 1 to 3 keys: a key alone (F9), or with one or two modifiers.
+      if (modCount > 2) {
         activeRecording.btn.querySelector(".keybindText").textContent =
-          this.i18n?.t?.("settings.keybind.needModifiers", "Need 1+ modifier") ?? "Need 1+ modifier";
+          this.i18n?.t?.("settings.keybind.tooManyKeys", "Up to 3 keys") ?? "Up to 3 keys";
         setTimeout(() => {
           if (activeRecording) {
             activeRecording.btn.querySelector(".keybindText").textContent =
@@ -4454,7 +4469,10 @@ class DpsApp {
       } else if (type === "lock") {
         window.javaBridge?.setLockHotkey?.(mods, vk);
         if (lockKeyBtn) lockKeyBtn.querySelector(".keybindText").textContent = label;
+      } else if (type === "plugins") {
+        window.javaBridge?.setPluginWindowsHotkey?.(mods, vk);
       }
+      this.refreshKeybindLabels();
     }, true);
 
     document.addEventListener("click", (event) => {

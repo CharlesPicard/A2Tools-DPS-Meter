@@ -401,7 +401,11 @@
       "reload": "Recharger les données",
       "toggle": "Afficher/masquer la fenêtre",
       "pressKeys": "Appuyez sur des touches...",
-      "needModifiers": "2 modificateurs minimum",
+      "tooManyKeys": "3 touches au maximum",
+      "plugins": "Ramener les fenêtres des plugins",
+      "notSet": "Non défini",
+      "restoreDefaults": "Rétablir par défaut",
+      "hint": "Cliquez sur un raccourci, puis appuyez sur 1 à 3 touches. Échap annule.",
       "lock": "Verrouiller/déverrouiller l'overlay"
     },
     "defaultMeterMode": {

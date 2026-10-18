@@ -85,5 +85,10 @@ pub fn front_window() -> Option<isize> {
     None
 }
 
+/// Nothing to tell here: tool windows stay on top.
+pub fn front_is_ours_or_game() -> bool {
+    true
+}
+
 /// Windows only (see the Windows version).
 pub fn never_activate(_window: &tauri::WebviewWindow, _before: Option<isize>) {}

@@ -3,6 +3,16 @@
 
 pub use super::os::hotkeys::{run_helper, HotkeyManager, DEFAULT_ON};
 
+/// One global hotkey: its settings name (`reload`, `toggle`, `lock`,
+/// `plugins`), the key (Win32 modifier flags and virtual-key code; a key of 0
+/// leaves it out) and what it does.
+pub struct Binding {
+    pub name: &'static str,
+    pub mods: u32,
+    pub vk: u32,
+    pub on_fire: Box<dyn Fn() + Send>,
+}
+
 /// Parse a hotkey label like "Ctrl+Alt+R" or "Ctrl+Shift+F5" into (modifiers, vk_code).
 /// Returns None if the label is empty or unparseable.
 ///
@@ -59,8 +69,21 @@ pub fn parse_hotkey_label(label: &str) -> Option<(u32, u32)> {
         }
     }
 
-    match vk {
-        Some(k) if mods > 0 => Some((mods, k)),
-        _ => None,
+    // A key on its own is a binding too (F9): 1 to 3 keys.
+    vk.map(|k| (mods, k))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_binding_is_one_to_three_keys() {
+        assert_eq!(parse_hotkey_label("F9"), Some((0, 0x78)));
+        assert_eq!(parse_hotkey_label("Alt+R"), Some((0x0001, 0x52)));
+        assert_eq!(parse_hotkey_label("Ctrl+Alt+Up"), Some((0x0003, 0x26)));
+        assert_eq!(parse_hotkey_label("Win+Shift+L"), Some((0x000C, 0x4C)));
+        assert_eq!(parse_hotkey_label("Ctrl+Alt"), None);
+        assert_eq!(parse_hotkey_label(""), None);
     }
 }

@@ -1283,6 +1283,39 @@ pub fn restore_windows(app: &tauri::AppHandle) {
     }
 }
 
+/// Bring back every open plugin window and widget (the "plugin windows"
+/// hotkey): minimized, off every screen, or buried under other windows. One
+/// its plugin has hidden stays hidden: it shows itself when it has something
+/// to say. Shown on top without taking focus from the game.
+pub fn bring_back_windows(app: &tauri::AppHandle) {
+    for (label, window) in app.webview_windows() {
+        if !(label.starts_with("plugin-") || widgets::parse_label(&label).is_some()) {
+            continue;
+        }
+        if !window.is_visible().unwrap_or(false) || crate::platform::window::is_hidden_in_place(&window) {
+            continue;
+        }
+        let _ = window.unminimize();
+        let screens: Vec<_> = window
+            .available_monitors()
+            .unwrap_or_default()
+            .iter()
+            .map(|monitor| {
+                let area = monitor.work_area();
+                (area.position.x, area.position.y, area.size.width, area.size.height)
+            })
+            .collect();
+        if let (Ok(at), Ok(size)) = (window.outer_position(), window.outer_size()) {
+            if !within_reach(at.x, at.y, size.width, &screens) {
+                if let Some(&(x, y, _, _)) = screens.first() {
+                    let _ = window.set_position(tauri::PhysicalPosition::new(x + 40, y + 40));
+                }
+            }
+        }
+        crate::platform::window::show_on_top_without_focus(&window);
+    }
+}
+
 /// A plugin shows or hides its own window (`window` permission), for one that
 /// watches in the background and appears only when it has something to say.
 /// Shown on top without taking focus from the game.

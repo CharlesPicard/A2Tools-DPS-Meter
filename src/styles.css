@@ -7753,6 +7753,12 @@ html.a2-offline .historyUploadBtn {
   color: #ffb4b4;
 }
 
+/* A keybind with no keys yet (the plugin windows key has no default). */
+.settingsPanel .keybindBtn.isUnset .keybindText {
+  opacity: 0.6;
+  font-style: italic;
+}
+
 /* Plugins: hidden rows stay hidden (rows set their own display). */
 .settingsPanel .pluginDevRow[hidden],
 .settingsPanel .pluginList[hidden] {

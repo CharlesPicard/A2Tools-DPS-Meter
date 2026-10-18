@@ -361,5 +361,11 @@ pub fn front_window() -> Option<isize> {
     None
 }
 
+/// The game or the meter in front, where the desktop says (KDE); else
+/// assumed, so tool windows stay on top as before.
+pub fn front_is_ours_or_game() -> bool {
+    crate::platform::window_detector::is_aion2_foreground()
+}
+
 /// Windows only (see the Windows version).
 pub fn never_activate(_window: &tauri::WebviewWindow, _before: Option<isize>) {}

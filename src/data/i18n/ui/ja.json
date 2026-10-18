@@ -401,7 +401,11 @@
       "reload": "データを再読み込み",
       "toggle": "ウィンドウの表示/非表示",
       "pressKeys": "キーを押してください...",
-      "needModifiers": "修飾キーが2つ以上必要です",
+      "tooManyKeys": "キーは3つまで",
+      "plugins": "プラグインのウィンドウを呼び戻す",
+      "notSet": "未設定",
+      "restoreDefaults": "初期設定に戻す",
+      "hint": "キーバインドをクリックし、1〜3個のキーを押してください。Escでキャンセル。",
       "lock": "オーバーレイのロック/解除"
     },
     "defaultMeterMode": {

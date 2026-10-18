@@ -59,6 +59,19 @@ pub fn front_window() -> Option<isize> {
     (!hwnd.0.is_null()).then_some(hwnd.0 as isize)
 }
 
+/// Whether the window in front is the meter's own (any of its windows) or
+/// the game's: what a tool window stays on top for (`keep_on_top_while_ours`).
+pub fn front_is_ours_or_game() -> bool {
+    use windows::Win32::System::Threading::GetCurrentProcessId;
+    let hwnd = unsafe { GetForegroundWindow() };
+    if hwnd.0.is_null() {
+        return true;
+    }
+    let mut pid = 0u32;
+    unsafe { GetWindowThreadProcessId(hwnd, Some(&mut pid)) };
+    pid == unsafe { GetCurrentProcessId() } || crate::platform::window_detector::is_aion2_foreground()
+}
+
 /// A small window that must never take the front from the game (a plugin's
 /// alert icon): it still gets clicks and drags, but is never activated
 /// (`WS_EX_NOACTIVATE`). Built with focus off, it still took the front as

@@ -406,7 +406,11 @@
       "reload": "데이터 새로고침",
       "toggle": "창 표시/숨기기",
       "pressKeys": "키를 누르세요...",
-      "needModifiers": "수정자 2개 이상 필요",
+      "tooManyKeys": "키는 최대 3개",
+      "plugins": "플러그인 창 다시 불러오기",
+      "notSet": "설정 안 됨",
+      "restoreDefaults": "기본값으로 복원",
+      "hint": "단축키를 클릭한 뒤 키를 1~3개 누르세요. Esc로 취소합니다.",
       "lock": "오버레이 잠금/해제"
     },
     "defaultMeterMode": {

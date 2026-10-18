@@ -819,7 +819,8 @@ struct Hotkeys {
 }
 
 /// The keybind settings: changing one registers the keys again.
-const HOTKEY_KEYS: [&str; 3] = ["dpsMeter.hotkey", "dpsMeter.toggleWindowHotkey", "dpsMeter.lockHotkey"];
+const HOTKEY_KEYS: [&str; 4] =
+    ["dpsMeter.hotkey", "dpsMeter.toggleWindowHotkey", "dpsMeter.lockHotkey", "dpsMeter.pluginWindowsHotkey"];
 
 /// What each key's registration came to, for Settings to show.
 #[tauri::command]
@@ -862,76 +863,85 @@ fn restart_global_hotkeys(app: &tauri::AppHandle) {
     apply_global_hotkeys(app);
 }
 
+/// The keybind settings and their defaults, as Settings shows them: the
+/// plugin windows key has none (`""`), so it is off until one is set.
+pub const HOTKEY_DEFAULTS: [(&str, &str); 4] = [
+    ("dpsMeter.hotkey", "Ctrl+Alt+R"),
+    ("dpsMeter.toggleWindowHotkey", "Ctrl+Alt+Up"),
+    ("dpsMeter.lockHotkey", "Ctrl+Alt+L"),
+    ("dpsMeter.pluginWindowsHotkey", ""),
+];
+
+/// A keybind setting's key: what is saved, else (unset or unreadable) its
+/// default. A key of 0 is off.
+fn hotkey_of(settings: &Settings, key: &str) -> (u32, u32) {
+    let default = HOTKEY_DEFAULTS.iter().find(|(k, _)| *k == key).map(|(_, d)| *d).unwrap_or("");
+    let label = settings.get(key).unwrap_or_else(|| default.to_string());
+    platform::hotkeys::parse_hotkey_label(&label)
+        .or_else(|| platform::hotkeys::parse_hotkey_label(default))
+        .unwrap_or((0, 0))
+}
+
 /// Register the hotkeys from saved settings (or defaults).
 fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
-    let hotkey_handle = app.clone();
+    use platform::hotkeys::Binding;
     let Some(hotkeys) = app.try_state::<Hotkeys>() else { return };
     let status_handle = app.clone();
+    let binding = |name: &'static str, key: &str, on_fire: Box<dyn Fn() + Send>| {
+        let (mods, vk) = hotkey_of(settings, key);
+        Binding { name, mods, vk, on_fire }
+    };
 
-    let reload_label = settings
-        .get("dpsMeter.hotkey").unwrap_or_default();
-    let toggle_label = settings
-        .get("dpsMeter.toggleWindowHotkey").unwrap_or_default();
-    let lock_label = settings
-        .get("dpsMeter.lockHotkey").unwrap_or_default();
-
-    let (reload_mods, reload_vk) = platform::hotkeys::parse_hotkey_label(&reload_label)
-        .unwrap_or((0x0002 | 0x0001, 0x52)); // Default: Ctrl+Alt+R
-    let (toggle_mods, toggle_vk) = platform::hotkeys::parse_hotkey_label(&toggle_label)
-        .unwrap_or((0x0002 | 0x0001, 0x26)); // Default: Ctrl+Alt+Up
-    let (lock_mods, lock_vk) = platform::hotkeys::parse_hotkey_label(&lock_label)
-        .unwrap_or((0x0002 | 0x0001, 0x4C)); // Default: Ctrl+Alt+L
+    let h = app.clone();
+    let reload = binding("reload", "dpsMeter.hotkey", Box::new(move || {
+        tracing::info!("Hotkey: reload triggered");
+        save_fights_before_reset(&h);
+        if let Some(state) = h.try_state::<AppState>() {
+            state.dps_calculator.lock().restart_target_selection(true);
+            state.data_storage.forget_guessed_nicknames();
+        }
+        // Notify frontend to clear UI
+        let _ = h.emit("combat-reset", ());
+        let _ = h.emit("dps-update", &entity::dps_data::DpsData::new());
+    }));
+    let h = app.clone();
+    let toggle = binding("toggle", "dpsMeter.toggleWindowHotkey", Box::new(move || {
+        // Show or hide the meter, and remember it (as Settings →
+        // Plugins → Show the DPS meter does). Hidden by auto-hide
+        // only, it is shown, as before, and nothing changes.
+        if meter_wanted(&h)
+            && let Some(window) = h.get_webview_window("main")
+            && (!window.is_visible().unwrap_or(true) || platform::window::is_hidden_in_place(&window))
+        {
+            show_meter_again(&h, &window);
+            return;
+        }
+        let shown = !meter_wanted(&h);
+        set_meter_wanted(&h, shown);
+    }));
+    let h = app.clone();
+    let lock = binding("lock", "dpsMeter.lockHotkey", Box::new(move || {
+        // Toggle the click-through lock, and tell the page so
+        // its button and saved setting follow.
+        let locked = h
+            .try_state::<AppState>()
+            .is_some_and(|s| s.overlay_lock.locked.load(std::sync::atomic::Ordering::SeqCst));
+        if platform::window::cursor_position().is_none() && !locked {
+            return; // the lock is not offered here
+        }
+        apply_overlay_lock(&h, !locked);
+        let _ = h.emit("overlay-lock-changed", !locked);
+    }));
+    let h = app.clone();
+    let plugins = binding("plugins", "dpsMeter.pluginWindowsHotkey", Box::new(move || {
+        tracing::info!("Hotkey: bringing back the plugin windows");
+        let app = h.clone();
+        // Window calls belong on the main thread.
+        let _ = h.run_on_main_thread(move || crate::plugins::bring_back_windows(&app));
+    }));
 
     hotkeys.manager.start(
-        reload_mods, reload_vk,
-        toggle_mods, toggle_vk,
-        lock_mods, lock_vk,
-        {
-            let h = hotkey_handle.clone();
-            move || {
-                tracing::info!("Hotkey: reload triggered");
-                save_fights_before_reset(&h);
-                if let Some(state) = h.try_state::<AppState>() {
-                    state.dps_calculator.lock().restart_target_selection(true);
-                    state.data_storage.forget_guessed_nicknames();
-                }
-                // Notify frontend to clear UI
-                let _ = h.emit("combat-reset", ());
-                let _ = h.emit("dps-update", &entity::dps_data::DpsData::new());
-            }
-        },
-        {
-            let h = hotkey_handle.clone();
-            move || {
-                // Show or hide the meter, and remember it (as Settings →
-                // Plugins → Show the DPS meter does). Hidden by auto-hide
-                // only, it is shown, as before, and nothing changes.
-                if meter_wanted(&h)
-                    && let Some(window) = h.get_webview_window("main")
-                    && (!window.is_visible().unwrap_or(true) || platform::window::is_hidden_in_place(&window))
-                {
-                    show_meter_again(&h, &window);
-                    return;
-                }
-                let shown = !meter_wanted(&h);
-                set_meter_wanted(&h, shown);
-            }
-        },
-        {
-            let h = hotkey_handle;
-            move || {
-                // Toggle the click-through lock, and tell the page so
-                // its button and saved setting follow.
-                let locked = h
-                    .try_state::<AppState>()
-                    .is_some_and(|s| s.overlay_lock.locked.load(std::sync::atomic::Ordering::SeqCst));
-                if platform::window::cursor_position().is_none() && !locked {
-                    return; // the lock is not offered here
-                }
-                apply_overlay_lock(&h, !locked);
-                let _ = h.emit("overlay-lock-changed", !locked);
-            }
-        },
+        vec![reload, toggle, lock, plugins],
         move |key, ok| {
             set_hotkey_status(&status_handle, |s| {
                 s.insert(key.to_string(), if ok { "ok" } else { "taken" }.to_string());
@@ -1940,6 +1950,33 @@ const DETAILS_USER_PLACED_KEY: &str = "window.details.userPlaced";
 /// opened to be read and closed, and keying geometry by fight id would grow
 /// settings without bound.
 const TOOL_WINDOWS: [&str; 3] = ["details", "settings", "history"];
+
+/// Settings, History and Details are on top of the overlay (always on top
+/// itself), or they could not be reached over it while the game is in front.
+/// But only while the meter or the game is: on top of a browser the player
+/// switched to, Settings stayed in the way (2026-10-18). Focused, a tool
+/// window is on top; when it loses the front to another program, it goes
+/// back to an ordinary window until it is clicked again. Asked a moment
+/// after the focus moves, when the new front window is known.
+fn keep_on_top_while_ours(app: &tauri::AppHandle, label: &str, focused: bool) {
+    let Some(window) = app.get_webview_window(label) else { return };
+    if focused {
+        let _ = window.set_always_on_top(true);
+        return;
+    }
+    let app = app.clone();
+    let label = label.to_string();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        let handle = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let Some(window) = handle.get_webview_window(&label) else { return };
+            if !window.is_focused().unwrap_or(false) && !platform::window::front_is_ours_or_game() {
+                let _ = window.set_always_on_top(false);
+            }
+        });
+    });
+}
 
 /// Remember where tool window `label` is and its size. Called on every move
 /// and resize, and every 5 s as before: with only the timer, a window moved
@@ -3005,6 +3042,11 @@ pub fn run() {
                 && TOOL_WINDOWS.contains(&window.label())
             {
                 save_tool_window_geometry(window.app_handle(), window.label());
+            }
+            if let tauri::WindowEvent::Focused(focused) = event
+                && (TOOL_WINDOWS.contains(&window.label()) || window.label().starts_with("details-"))
+            {
+                keep_on_top_while_ours(window.app_handle(), window.label(), *focused);
             }
             if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_))
                 && window.label().starts_with("details-")

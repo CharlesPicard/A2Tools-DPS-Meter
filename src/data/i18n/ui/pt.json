@@ -401,7 +401,11 @@
       "reload": "Recarregar dados",
       "toggle": "Mostrar/ocultar janela",
       "pressKeys": "Pressione as teclas...",
-      "needModifiers": "São necessários 2+ modificadores",
+      "tooManyKeys": "No máximo 3 teclas",
+      "plugins": "Trazer de volta as janelas de plugins",
+      "notSet": "Não definido",
+      "restoreDefaults": "Restaurar padrões",
+      "hint": "Clique num atalho e pressione de 1 a 3 teclas. Esc cancela.",
       "lock": "Bloquear/desbloquear sobreposição"
     },
     "defaultMeterMode": {

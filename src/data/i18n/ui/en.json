@@ -411,7 +411,11 @@
       "reload": "Reload data",
       "toggle": "Show/Hide window",
       "pressKeys": "Press keys...",
-      "needModifiers": "Need 2+ modifiers",
+      "tooManyKeys": "Up to 3 keys",
+      "plugins": "Bring back plugin windows",
+      "notSet": "Not set",
+      "restoreDefaults": "Restore defaults",
+      "hint": "Click a keybind, then press 1 to 3 keys. Esc cancels.",
       "lock": "Lock/unlock overlay"
     },
     "defaultMeterMode": {
