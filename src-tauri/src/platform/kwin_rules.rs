@@ -112,6 +112,26 @@ pub fn general_entries_for(group: &str, order: &str, legacy_rules: &str) -> Vec<
     ]
 }
 
+/// Plasma 6's `Order` with the meter's rule on its end; nothing else.
+///
+/// Plasma 6 must never be given the Plasma 5 list (`rules`): when KWin 6
+/// finds one it deletes every rule *not* in it, as strays, and drops the
+/// key (rulebooksettings.cpp, the migration in `usrRead`). The meter wrote
+/// that list from what was left of it (nothing, once KWin had dropped it)
+/// plus the rule it was adding, so each rule it added wiped the others, the
+/// player's own included (KDE Plasma 6.8, 2026-10-19).
+pub fn plasma6_order(group: &str, order: &str) -> String {
+    let mut list: Vec<&str> = order.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+    if !list.contains(&group) {
+        list.push(group);
+    }
+    list.join(",")
+}
+
+/// The Plasma 5 keys a Plasma 6 `kwinrulesrc` must not keep (see
+/// `plasma6_order`).
+pub const PLASMA5_KEYS: [&str; 2] = ["rules", "count"];
+
 /// Whether the session is KDE Plasma (`XDG_CURRENT_DESKTOP` is `KDE`).
 pub fn is_kde(current_desktop: &str) -> bool {
     current_desktop.split(':').any(|name| name.eq_ignore_ascii_case("kde"))
@@ -189,6 +209,17 @@ mod tests {
         assert_eq!(value("titlematch"), Some("2"));
         assert_eq!((value("acceptfocus"), value("acceptfocusrule")), (Some("false"), Some("2")));
         assert_eq!(value("wmclass"), Some(WINDOW_CLASS));
+    }
+
+    /// Plasma 6: the meter's rule joins the end of Order, once, and the
+    /// player's own stay in front.
+    #[test]
+    fn plasma6_order_adds_the_rule_once_after_the_players() {
+        assert_eq!(plasma6_order(ICONS_GROUP, ""), ICONS_GROUP);
+        assert_eq!(plasma6_order(ICONS_GROUP, "steam, mine"), format!("steam,mine,{ICONS_GROUP}"));
+        let listed = format!("steam,{ICONS_GROUP}");
+        assert_eq!(plasma6_order(ICONS_GROUP, &listed), listed);
+        assert_eq!(PLASMA5_KEYS, ["rules", "count"]);
     }
 
     #[test]

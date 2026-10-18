@@ -6,7 +6,8 @@
 use std::process::Command;
 
 use crate::platform::kwin_rules::{
-    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP,
+    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, plasma6_order, rule_entries, GROUP, ICONS_GROUP,
+    NO_FOCUS_GROUP, PLASMA5_KEYS,
 };
 
 fn tool(names: &[&'static str]) -> Option<&'static str> {
@@ -21,6 +22,10 @@ fn read(reader: &str, group: &str, key: &str) -> String {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+fn delete(writer: &str, group: &str, key: &str) {
+    let _ = Command::new(writer).args(["--file", "kwinrulesrc", "--group", group, "--key", key, "--delete"]).status();
 }
 
 fn write(writer: &str, group: &str, key: &str, value: &str) -> Result<(), String> {
@@ -121,6 +126,16 @@ fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Re
     else {
         return Err("kwriteconfig is not installed".into());
     };
+    // Plasma 6 (kwriteconfig6): Order only, and never the Plasma 5 list,
+    // which makes KWin delete every rule not in it (see plasma6_order). One
+    // the meter wrote before is taken out first.
+    let plasma6 = writer == "kwriteconfig6";
+    if plasma6 && !read(reader, "General", "rules").is_empty() {
+        for key in PLASMA5_KEYS {
+            delete(writer, "General", key);
+        }
+        tracing::info!("KWin: Plasma 5 rule list removed from kwinrulesrc (Plasma 6 deleted the rules not in it)");
+    }
     if !read(reader, group, "wmclass").is_empty() {
         return Ok(true);
     }
@@ -128,9 +143,13 @@ fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Re
         write(writer, group, key, value)?;
     }
     let order = read(reader, "General", "Order");
-    let legacy = read(reader, "General", "rules");
-    for (key, value) in general_entries_for(group, &order, &legacy) {
-        write(writer, "General", key, &value)?;
+    if plasma6 {
+        write(writer, "General", "Order", &plasma6_order(group, &order))?;
+    } else {
+        let legacy = read(reader, "General", "rules");
+        for (key, value) in general_entries_for(group, &order, &legacy) {
+            write(writer, "General", key, &value)?;
+        }
     }
     reconfigure();
     tracing::info!("KWin rule added: {what}");
