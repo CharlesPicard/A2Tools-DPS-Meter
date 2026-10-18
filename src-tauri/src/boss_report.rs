@@ -107,6 +107,30 @@ pub fn hp_request(server_id: u16, bosses: &[BossHp]) -> Option<serde_json::Value
     (!bosses.is_empty()).then(|| json!({ "format": 1, "server": server_id, "bosses": bosses }))
 }
 
+/// The server reports go under: the one the game named (your self record),
+/// else the one this game server's address was last seen to be. A meter
+/// started mid-game knows the address at once but not the server until a
+/// login or teleport, and sent nothing for a fight meanwhile (Harvest Manager
+/// Moshav, 2026-10-18). Each address's server is kept in settings
+/// (`bossTimers.serverOf.<address>`) whenever both are known.
+fn report_server(state: &AppState) -> u16 {
+    let known = state.data_storage.local_profile().server_id;
+    let host = state.data_storage.game_host();
+    if known != 0 {
+        if let Some(host) = host {
+            let key = format!("bossTimers.serverOf.{host}");
+            let value = known.to_string();
+            if state.settings.get(&key).as_deref() != Some(value.as_str()) {
+                state.settings.set(&key, &value);
+            }
+        }
+        return known;
+    }
+    host.and_then(|host| state.settings.get(&format!("bossTimers.serverOf.{host}")))
+        .and_then(|v| v.trim().parse::<u16>().ok())
+        .unwrap_or(0)
+}
+
 /// Kills and HP milestones, sent within a second of happening.
 fn spawn_events(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
@@ -121,7 +145,7 @@ fn spawn_events(app: tauri::AppHandle) {
             if last_hp.elapsed() >= HP_EVERY {
                 last_hp = std::time::Instant::now();
                 let changed = state.data_storage.take_boss_hp(now);
-                let server = state.data_storage.local_profile().server_id;
+                let server = report_server(&state);
                 let off = state.settings.get(SETTING_KEY).as_deref() == Some("false");
                 if let (false, false, Some(body)) = (off, server == 0, hp_request(server, &changed)) {
                     let body = with_host(body, server, state.data_storage.game_host());
@@ -143,7 +167,7 @@ fn spawn_events(app: tauri::AppHandle) {
                 waiting.clear();
                 continue;
             }
-            let server = state.data_storage.local_profile().server_id;
+            let server = report_server(&state);
             if server == 0 {
                 waiting.retain(|(at, _)| now - at < EVENT_WAIT_MS);
                 continue;
@@ -181,7 +205,7 @@ pub fn spawn(app: tauri::AppHandle) {
             }
             // The server isn't known yet (the meter started mid-game): keep
             // the maps for when it is.
-            let server = state.data_storage.local_profile().server_id;
+            let server = report_server(&state);
             if server == 0 {
                 continue;
             }
