@@ -148,6 +148,12 @@ if (typeof module !== "undefined" && module.exports) {
   // big that drawing them takes long (Details' peak DPS goes through every
   // hit), so they never take more than about a sixth of the time.
   const FIGURE_INTERVAL_MS = 100;
+  // How often the playhead and the progress step while playing: no
+  // transition at all (any running one, even on a 2 px line, makes the
+  // browser draw a full frame at every screen refresh; 2026-10-18). The big
+  // shade steps every FIGURE_INTERVAL_MS. window.__A2_REPLAY_STEP_MS
+  // overrides it, for measuring.
+  const MOVER_STEP_MS = Number(window.__A2_REPLAY_STEP_MS) > 0 ? Number(window.__A2_REPLAY_STEP_MS) : 33;
   const FIGURE_SHARE = 6;
   // How faint the timeline is past the moment.
   const FUTURE_ALPHA = 0.16;
@@ -331,9 +337,8 @@ if (typeof module !== "undefined" && module.exports) {
     };
 
     // The timeline up to the moment, the rest faint, and a line at it.
-    // `smooth`: the playhead glides to its place over one timer step (while
-    // playing); anything else puts it there at once.
-    const paintTimeline = (smooth = false) => {
+    // `withShade`: false while playing between the shade's own steps.
+    const paintTimeline = (withShade = true) => {
       if (!scroll) return;
       if (!active) {
         head.hidden = true;
@@ -360,9 +365,8 @@ if (typeof module !== "undefined" && module.exports) {
       if (shade.hidden) shade.hidden = false;
       if (head.hidden) head.hidden = false;
       if (shadeFill.style.transition !== "none") shadeFill.style.transition = "none";
-      const headTransition = smooth ? `transform ${FIGURE_INTERVAL_MS}ms linear` : "none";
-      if (head.style.transition !== headTransition) head.style.transition = headTransition;
-      shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
+      if (head.style.transition !== "none") head.style.transition = "none";
+      if (withShade) shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
     };
 
@@ -458,8 +462,9 @@ if (typeof module !== "undefined" && module.exports) {
       drawFigures();
     };
 
-    // While playing, the playhead, the shade and the progress knob step ten
-    // times a second from the timer below, with no transition. Long CSS
+    // While playing, the playhead and the progress knob step every
+    // MOVER_STEP_MS from the timer below (the shade every tenth of a second),
+    // with no transition. Long CSS
     // glides kept the GPU making a frame at every screen refresh for the
     // whole replay (a core's worth on the owner's PC, 2026-10-18); stepping
     // per frame made the page lay out and paint as often. A pause, a seek, a
@@ -468,17 +473,18 @@ if (typeof module !== "undefined" && module.exports) {
     let playFrom = 0;
     let playStart = 0;
     const playedAt = () => playFrom + (performance.now() - playStart) * speed;
-    // The thin movers (playhead, progress fill and knob) glide over each
-    // step, so they move smoothly; the big shade steps, as a glide on it
-    // was most of the GPU's work.
-    const stepMovers = (smooth = false) => {
+    // The playhead and progress every step (MOVER_STEP_MS); the big shade
+    // every FIGURE_INTERVAL_MS, its moves being the costly ones.
+    let shadeAt = 0;
+    const stepMovers = (playingStep = false) => {
       const dur = durationMs();
       if (dur <= 0) return;
-      paintTimeline(smooth);
+      const now = performance.now();
+      const withShade = !playingStep || now - shadeAt >= FIGURE_INTERVAL_MS;
+      if (withShade) shadeAt = now;
+      paintTimeline(withShade);
       const share = Math.min(1, at / dur);
       if (!progWidth) progWidth = scrubWrap.clientWidth;
-      const transition = smooth ? `transform ${FIGURE_INTERVAL_MS}ms linear` : "none";
-      for (const el of [progFill, progKnob]) if (el.style.transition !== transition) el.style.transition = transition;
       progFill.style.transform = `scaleX(${share.toFixed(4)})`;
       progKnob.style.transform = `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`;
     };
@@ -565,7 +571,7 @@ if (typeof module !== "undefined" && module.exports) {
       requestFigures(playStart, true);
       glide();
       clearInterval(playTimer);
-      playTimer = setInterval(playTick, FIGURE_INTERVAL_MS);
+      playTimer = setInterval(playTick, MOVER_STEP_MS);
     };
     const pause = () => {
       if (playing) at = Math.min(durationMs(), playedAt());
