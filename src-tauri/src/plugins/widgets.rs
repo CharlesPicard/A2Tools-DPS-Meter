@@ -190,14 +190,47 @@ pub async fn plugin_widget_open(
 fn beside_left(app: &tauri::AppHandle, id: &str) -> Option<(i32, i32)> {
     let state = app.try_state::<AppState>()?;
     let prefix = format!("dpsMeter.pluginWidget.{id}.");
-    // The width of an icon left there is not kept; an Event Timers icon is
-    // about this wide.
-    const WIDTH: i32 = 96;
-    beside(state.settings.get_all().into_iter().filter_map(|(key, value)| {
+    let places: Vec<(i32, i32)> = state.settings.get_all().into_iter().filter_map(|(key, value)| {
         key.strip_prefix(&prefix)?;
         let (x, y) = value.split_once(',')?;
-        Some((x.trim().parse().ok()?, y.trim().parse().ok()?, WIDTH, 0))
-    }))
+        Some((x.trim().parse().ok()?, y.trim().parse().ok()?))
+    }).collect();
+    let screens: Vec<(i32, i32, u32, u32)> = app
+        .available_monitors()
+        .unwrap_or_default()
+        .iter()
+        .map(|m| {
+            let a = m.work_area();
+            (a.position.x, a.position.y, a.size.width, a.size.height)
+        })
+        .collect();
+    beside_cluster(&places, &screens)
+}
+
+/// The width of an icon left somewhere is not kept; an Event Timers icon is
+/// about this wide.
+const ICON_WIDTH: i32 = 96;
+
+/// Beside the busiest spot among `places`: the place with the most others
+/// near it, so one icon left far off (a test icon on another screen) does
+/// not draw the next one there (2.0.72: the anchor opened on the second
+/// monitor). On that place's screen: to its right, or its left when the
+/// right runs off the screen.
+fn beside_cluster(places: &[(i32, i32)], screens: &[(i32, i32, u32, u32)]) -> Option<(i32, i32)> {
+    const NEAR: i64 = 400;
+    let near = |a: &(i32, i32), b: &(i32, i32)| {
+        let (dx, dy) = ((a.0 - b.0) as i64, (a.1 - b.1) as i64);
+        dx * dx + dy * dy <= NEAR * NEAR
+    };
+    let &(x, y) = places.iter().max_by_key(|p| (places.iter().filter(|q| near(p, q)).count(), std::cmp::Reverse(p.0)))?;
+    let screen = screens.iter().find(|&&(sx, sy, w, h)| {
+        x >= sx && x < sx + w as i32 && y >= sy && y < sy + h as i32
+    });
+    let right = x + ICON_WIDTH + 6;
+    match screen {
+        Some(&(sx, _, w, _)) if right + ICON_WIDTH > sx + w as i32 => Some(((x - ICON_WIDTH - 6).max(sx), y)),
+        _ => Some((right, y)),
+    }
 }
 
 /// Just right of the rightmost of these places, on its row, with a gap.
@@ -414,6 +447,20 @@ mod tests {
         assert_eq!(parse_label("plugin-event-timers"), None);
         assert_eq!(parse_label("pw_Bad_name"), None);
         assert!(!valid_name("has_underscore") && !valid_name("") && valid_name("boss-101006"));
+    }
+
+    #[test]
+    fn a_new_widget_goes_beside_the_busiest_spot_on_its_screen() {
+        // This PC on 2.0.72: icons around (2000, 250) on the main screen, a
+        // test icon at (2680, 122) just over on the second one.
+        let screens = [(2560, 0, 1920, 1080), (0, 0, 2560, 1440)];
+        let places = [(2090, 250), (1956, 187), (1994, 225), (2232, 250), (2088, 370), (1971, 291),
+            (2112, 122), (2001, 315), (2075, 228), (2680, 122), (17, 394), (43, 491)];
+        let (x, y) = beside_cluster(&places, &screens).unwrap();
+        assert!(x < 2560 && (1900..2400).contains(&x) && (100..400).contains(&y), "{x},{y}");
+        // At a screen's right edge it goes to the left instead.
+        assert_eq!(beside_cluster(&[(2500, 100)], &screens), Some((2398, 100)));
+        assert_eq!(beside_cluster(&[], &screens), None);
     }
 
     #[test]
