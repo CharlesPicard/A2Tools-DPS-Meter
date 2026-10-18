@@ -24,6 +24,10 @@
 //! (`spawn_events`). a2tools.app
 //! passes a drop of a percent or more, and a reset, on to Aion 2 Timers.
 //!
+//! The Abyss's Dimensional Cores (`capture::abyss_cores`) go the same way
+//! during the Artifact Siege, to /api/boss-timers/cores: seen up, killed,
+//! and their HP, by NPC code.
+//!
 //! And who holds each Abyss artifact (the corridors' Artifact Siege), as the
 //! game tells the player with the Abyss map and on entering the Abyss
 //! (`capture::abyss_artifacts`): sent when it changes, and with the same
@@ -116,13 +120,42 @@ const HP_EVERY: Duration = Duration::from_secs(3);
 /// The request for a kill: (path, body), or None for a boss a2tools.app
 /// doesn't know.
 pub fn event_request(server_id: u16, event: &BossEvent) -> Option<(&'static str, serde_json::Value)> {
+    if crate::capture::abyss_cores::is_core(event.npc) {
+        let (state, at_ms) = match event.kind {
+            BossEventKind::Killed { at_ms } => ("dead", at_ms),
+            BossEventKind::Seen { at_ms } => ("up", at_ms),
+        };
+        let core = json!({ "npc": event.npc, "artifact": crate::capture::abyss_cores::artifact_of(event.npc),
+                           "state": state, "at": at_ms / 1000 });
+        return Some(("/api/boss-timers/cores", cores_body(server_id, vec![core], at_ms)));
+    }
     let id = crate::capture::field_bosses::world_map_id(event.npc)?;
-    Some(match event.kind {
-        BossEventKind::Killed { at_ms } => (
+    match event.kind {
+        BossEventKind::Killed { at_ms } => Some((
             "/api/boss-timers/kill",
             json!({ "format": 1, "server": server_id, "id": id, "diedAt": at_ms / 1000 }),
-        ),
-    })
+        )),
+        // A world boss's appearance comes with the maps.
+        BossEventKind::Seen { .. } => None,
+    }
+}
+
+/// The cores report /api/boss-timers/cores reads (format 1): each core by
+/// NPC code, with its artifact, and what was seen: up or dead at a time, or
+/// its HP.
+fn cores_body(server_id: u16, cores: Vec<serde_json::Value>, now_ms: i64) -> serde_json::Value {
+    json!({ "format": 1, "server": server_id, "observedAt": now_ms / 1000, "cores": cores })
+}
+
+/// The HP of the Abyss cores among `bosses`, for /api/boss-timers/cores.
+pub fn cores_hp_request(server_id: u16, bosses: &[BossHp], now_ms: i64) -> Option<serde_json::Value> {
+    let cores: Vec<_> = bosses
+        .iter()
+        .filter(|b| crate::capture::abyss_cores::is_core(b.npc))
+        .map(|b| json!({ "npc": b.npc, "artifact": crate::capture::abyss_cores::artifact_of(b.npc),
+                         "hp": b.percent, "reset": b.reset }))
+        .collect();
+    (!cores.is_empty()).then(|| cores_body(server_id, cores, now_ms))
 }
 
 /// The HP request for the bosses to report now.
@@ -193,15 +226,18 @@ fn spawn_events(app: tauri::AppHandle) {
                 let changed = state.data_storage.take_boss_hp(now);
                 let server = report_server(&state);
                 let off = state.settings.get(SETTING_KEY).as_deref() == Some("false");
-                if let (false, false, Some(body)) = (off, server == 0, hp_request(server, &changed)) {
+                let requests = [("/api/boss-timers/hp", hp_request(server, &changed)),
+                                ("/api/boss-timers/cores", cores_hp_request(server, &changed, now))];
+                for (path, body) in requests {
+                    let (false, false, Some(body)) = (off, server == 0, body) else { continue };
                     let body = with_host(body, server, state.data_storage.game_host());
-                    let url = format!("{}/api/boss-timers/hp", crate::account::base_url());
+                    let url = format!("{}{path}", crate::account::base_url());
                     let request = state.http.post(&url)
                         .header(reqwest::header::CONTENT_TYPE, "application/json")
                         .body(body.to_string())
                         .timeout(Duration::from_secs(10));
                     if let Err(e) = request.send().await {
-                        tracing::debug!("Boss timers: could not send HP: {e}");
+                        tracing::debug!("Boss timers: could not send HP ({path}): {e}");
                     }
                 }
             }
@@ -358,6 +394,23 @@ mod tests {
         assert!(with_host(body(), 1016, None).get("host").is_none());
         assert!(with_host(body(), 1301, host).get("host").is_none());
         assert!(with_host(body(), 1101, host).get("host").is_none());
+    }
+
+    #[test]
+    fn a_core_goes_by_npc_code_with_its_artifact_and_a_world_boss_as_before() {
+        let seen = BossEvent { npc: 2600080, kind: BossEventKind::Seen { at_ms: 1_792_333_380_500 } };
+        let (path, body) = event_request(2301, &seen).unwrap();
+        assert_eq!(path, "/api/boss-timers/cores");
+        assert_eq!(body, json!({ "format": 1, "server": 2301, "observedAt": 1_792_333_380,
+            "cores": [{ "npc": 2600080, "artifact": 1002, "state": "up", "at": 1_792_333_380 }] }));
+        let killed = BossEvent { npc: 2600079, kind: BossEventKind::Killed { at_ms: 1_000_000 } };
+        assert_eq!(event_request(2301, &killed).unwrap().1["cores"][0]["artifact"], serde_json::Value::Null);
+        // A world boss: its kill as before, no "seen" (the maps say that).
+        assert!(event_request(2301, &BossEvent { npc: 2100079, kind: BossEventKind::Seen { at_ms: 0 } }).is_none());
+        let hp = [BossHp { npc: 2600516, percent: 63, reset: false }, BossHp { npc: 2100079, percent: 40, reset: false }];
+        assert_eq!(cores_hp_request(2301, &hp, 2_000_000).unwrap()["cores"],
+            json!([{ "npc": 2600516, "artifact": 2001, "hp": 63, "reset": false }]));
+        assert_eq!(hp_request(2301, &hp).unwrap()["bosses"], json!([{ "id": 101006, "hp": 40 }]));
     }
 
     #[test]

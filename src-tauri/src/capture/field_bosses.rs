@@ -67,6 +67,12 @@ pub fn is_field_boss(code: i32) -> bool {
     FIELD_BOSSES.binary_search_by_key(&code, |&(npc, _)| npc).is_ok()
 }
 
+/// Whether the meter shares an NPC's kill and HP: a field boss, or one of
+/// the Abyss's Dimensional Cores (`abyss_cores`).
+pub fn is_reported(code: i32) -> bool {
+    is_field_boss(code) || super::abyss_cores::is_core(code)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

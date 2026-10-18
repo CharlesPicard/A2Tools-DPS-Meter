@@ -434,6 +434,9 @@ pub struct BossEvent {
 pub enum BossEventKind {
     /// Killed at this moment (unix ms).
     Killed { at_ms: i64 },
+    /// Seen up: its spawn came, as it spawned or came into view (unix ms).
+    /// Only for the Abyss's cores, whose maps say nothing of them.
+    Seen { at_ms: i64 },
 }
 
 /// Unsent boss events kept at most (the sender drains them every second).
@@ -1517,7 +1520,18 @@ impl DataStorage {
 
     pub fn append_mob(&self, mid: i32, code: i32) {
         let mut inner = self.inner.write();
-        inner.mob_storage.insert(mid, code);
+        let before = inner.mob_storage.insert(mid, code);
+        // An Abyss core seen up, once per entity (online builds only, as kills).
+        #[cfg(feature = "online")]
+        if before != Some(code)
+            && crate::capture::abyss_cores::is_core(code)
+            && inner.current_dungeon_id <= 0
+            && !inner.dead_entity_ids.contains(&mid)
+        {
+            push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Seen { at_ms: now_ms() } });
+        }
+        #[cfg(not(feature = "online"))]
+        let _ = before;
         // A spawn names the NPC: the table says what it is from here on.
         inner.hp_floored_ids.remove(&mid);
         inner.hp_reset_dummy_ids.remove(&mid);
@@ -1599,7 +1613,7 @@ impl DataStorage {
         #[cfg(feature = "online")]
         if inner.current_dungeon_id <= 0 && !inner.dead_entity_ids.contains(&entity_id) {
             if let Some(&code) = inner.mob_storage.get(&entity_id) {
-                if crate::capture::field_bosses::is_field_boss(code) {
+                if crate::capture::field_bosses::is_reported(code) {
                     push_boss_event(&mut inner, BossEvent { npc: code, kind: BossEventKind::Killed { at_ms: now_ms() } });
                 }
             }
@@ -2151,7 +2165,7 @@ impl DataStorage {
             && inner.spawn_hp_ids.contains(&id)
         {
             if let Some(&code) = inner.mob_storage.get(&id) {
-                if crate::capture::field_bosses::is_field_boss(code) {
+                if crate::capture::field_bosses::is_reported(code) {
                     let pct = ((hp as i64 * 100) / max as i64).clamp(0, 100) as u8;
                     let changed = match inner.boss_hp_now.get(&id) {
                         Some(&(_, before, at)) if before == pct => at,
