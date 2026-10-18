@@ -191,13 +191,11 @@ if (typeof module !== "undefined" && module.exports) {
     const playBtn = document.createElement("button");
     playBtn.type = "button";
     playBtn.className = "fightReplayBtn fightReplayPlay";
+    // A labelled pill: its icon and what it does ("Play replay", "Pause"),
+    // in place of a bare icon beside a "Replay" label.
     playBtn.innerHTML = '<i data-lucide="play" class="fightReplayIconPlay" aria-hidden="true"></i>'
-      + '<i data-lucide="pause" class="fightReplayIconPause" aria-hidden="true"></i>';
-
-    const label = document.createElement("span");
-    label.className = "fightReplayLabel";
-    label.dataset.i18n = "details.replay.title";
-    label.textContent = t("details.replay.title", "Replay");
+      + '<i data-lucide="pause" class="fightReplayIconPause" aria-hidden="true"></i>'
+      + '<span class="fightReplayPlayText"></span>';
 
     const timeEl = document.createElement("span");
     timeEl.className = "fightReplayTime";
@@ -217,7 +215,7 @@ if (typeof module !== "undefined" && module.exports) {
     }
     speedSel.value = String(speed);
 
-    controls.append(playBtn, label, timeEl, speedSel);
+    controls.append(playBtn, timeEl, speedSel);
 
     const scrubWrap = document.createElement("div");
     scrubWrap.className = "fightReplayScrubWrap";
@@ -326,6 +324,11 @@ if (typeof module !== "undefined" && module.exports) {
       playBtn.dataset.i18nAriaLabel = key;
       playBtn.title = text;
       playBtn.setAttribute("aria-label", text);
+      const words = playBtn.querySelector(".fightReplayPlayText");
+      if (words) {
+        words.dataset.i18n = key;
+        if (words.textContent !== text) words.textContent = text;
+      }
     };
 
     const readGeometry = () => {
