@@ -285,6 +285,10 @@ impl StreamProcessor {
         if let Some(map) = crate::capture::boss_map::parse(packet, crate::clock::now_ms()) {
             self.data_storage.note_boss_map(map);
         }
+        // Who holds the Abyss artifacts (with the Abyss map, and on entry).
+        if let Some(state) = crate::capture::abyss_artifacts::parse(packet) {
+            self.data_storage.note_abyss_artifacts(state);
+        }
 
         if !parsed_damage && !parsed_name && !parsed_summon && !parsed_ownership && !parsed_hp {
             self.parse_dot_packet(packet);

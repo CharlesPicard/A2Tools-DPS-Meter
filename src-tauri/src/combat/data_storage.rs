@@ -589,6 +589,12 @@ struct Inner {
     /// and a count that moves with each, for `boss_maps_since`.
     boss_maps: Vec<crate::capture::boss_map::BossMap>,
     boss_map_seq: u64,
+    /// Who holds each Abyss artifact, as last told (`capture::abyss_artifacts`):
+    /// each war and artifact replaced by its newer word. When it was told,
+    /// and a count that moves with each, for `abyss_artifacts_since`.
+    abyss_artifacts: crate::capture::abyss_artifacts::ArtifactState,
+    abyss_artifacts_seen_ms: i64,
+    abyss_artifacts_seq: u64,
     /// Entities whose max HP came from their spawn record, so a percentage of
     /// it can be trusted (a peak seen later may be below the real max).
     spawn_hp_ids: HashSet<i32>,
@@ -754,6 +760,9 @@ impl DataStorage {
                 death_log: VecDeque::new(),
                 boss_maps: Vec::new(),
                 boss_map_seq: 0,
+                abyss_artifacts: crate::capture::abyss_artifacts::ArtifactState { wars: Vec::new(), artifacts: Vec::new() },
+                abyss_artifacts_seen_ms: 0,
+                abyss_artifacts_seq: 0,
                 spawn_hp_ids: HashSet::new(),
                 boss_hp_now: HashMap::new(),
                 boss_hp_sent: HashMap::new(),
@@ -1647,6 +1656,33 @@ impl DataStorage {
     pub fn boss_maps_since(&self, seq: u64) -> Option<(u64, Vec<crate::capture::boss_map::BossMap>)> {
         let inner = self.inner.read();
         (inner.boss_map_seq != seq).then(|| (inner.boss_map_seq, inner.boss_maps.clone()))
+    }
+
+    /// Who holds the Abyss artifacts, as the game just said: each war and
+    /// artifact it names replaces what was known of it.
+    pub fn note_abyss_artifacts(&self, told: crate::capture::abyss_artifacts::ArtifactState) {
+        let mut inner = self.inner.write();
+        let known = &mut inner.abyss_artifacts;
+        for war in told.wars {
+            known.wars.retain(|w| w.event_id != war.event_id);
+            known.wars.push(war);
+        }
+        for artifact in told.artifacts {
+            known.artifacts.retain(|a| a.id != artifact.id);
+            known.artifacts.push(artifact);
+        }
+        known.wars.sort_by_key(|w| w.event_id);
+        known.artifacts.sort_by_key(|a| a.id);
+        inner.abyss_artifacts_seen_ms = now_ms();
+        inner.abyss_artifacts_seq += 1;
+    }
+
+    /// The artifact owners and when they were last told, if told since
+    /// `seq`, and the count to ask with next time.
+    pub fn abyss_artifacts_since(&self, seq: u64) -> Option<(u64, crate::capture::abyss_artifacts::ArtifactState, i64)> {
+        let inner = self.inner.read();
+        (inner.abyss_artifacts_seq != seq)
+            .then(|| (inner.abyss_artifacts_seq, inner.abyss_artifacts.clone(), inner.abyss_artifacts_seen_ms))
     }
 
     pub fn deaths_between(&self, from: i64, to: i64) -> Vec<(i32, i64, Option<i64>)> {

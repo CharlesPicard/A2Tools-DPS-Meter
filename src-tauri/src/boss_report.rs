@@ -23,6 +23,11 @@
 //! while it is fought and holds; a jump back up is marked as a reset
 //! (`spawn_events`). a2tools.app
 //! passes a drop of a percent or more, and a reset, on to Aion 2 Timers.
+//!
+//! And who holds each Abyss artifact (the corridors' Artifact Siege), as the
+//! game tells the player with the Abyss map and on entering the Abyss
+//! (`capture::abyss_artifacts`): sent when it changes, and with the same
+//! resend as a map. Under the same setting.
 
 use std::collections::HashMap;
 use std::time::Duration;
@@ -31,6 +36,7 @@ use serde_json::json;
 use tauri::Manager;
 
 use crate::app::AppState;
+use crate::capture::abyss_artifacts::ArtifactState;
 use crate::capture::boss_map::BossMap;
 use crate::combat::data_storage::{BossEvent, BossEventKind, BossHp};
 
@@ -61,6 +67,30 @@ pub fn report(server_id: u16, map: &BossMap, now_ms: i64) -> serde_json::Value {
         "map": map.map_id,
         "observedAt": now_ms / 1000,
         "bosses": bosses,
+    })
+}
+
+/// The report the site's /api/boss-timers/artifacts reads (format 1): each
+/// Artifact Siege (AbyssArtifactEvent id) with when its holding began and
+/// resets, and each artifact (AbyssArtifact id) with its holder.
+pub fn artifacts_report(server_id: u16, state: &ArtifactState, seen_ms: i64) -> serde_json::Value {
+    let secs = |ms: i64| (ms > 0).then_some(ms / 1000);
+    let wars: Vec<_> = state
+        .wars
+        .iter()
+        .map(|w| json!({ "event": w.event_id, "since": secs(w.since_ms), "until": secs(w.until_ms) }))
+        .collect();
+    let artifacts: Vec<_> = state
+        .artifacts
+        .iter()
+        .map(|a| json!({ "id": a.id, "event": a.event_id(), "owner": a.owner.name() }))
+        .collect();
+    json!({
+        "format": 1,
+        "server": server_id,
+        "observedAt": seen_ms / 1000,
+        "wars": wars,
+        "artifacts": artifacts,
     })
 }
 
@@ -211,9 +241,13 @@ pub fn spawn(app: tauri::AppHandle) {
         let mut seq = 0u64;
         // (server, map) -> when sent, and what it said.
         let mut sent: HashMap<(u16, u32), (i64, String)> = HashMap::new();
+        let mut artifacts_seq = 0u64;
+        // Server -> when the artifact owners were sent, and what they said.
+        let mut artifacts_sent: HashMap<u16, (i64, String)> = HashMap::new();
         loop {
             tokio::time::sleep(CHECK).await;
             let Some(state) = app.try_state::<AppState>() else { continue };
+            send_artifacts(&state, &mut artifacts_seq, &mut artifacts_sent).await;
             let Some((next, maps)) = state.data_storage.boss_maps_since(seq) else { continue };
             if state.settings.get(SETTING_KEY).as_deref() == Some("false") {
                 seq = next;
@@ -255,6 +289,43 @@ pub fn spawn(app: tauri::AppHandle) {
     });
 }
 
+/// The Abyss artifacts' holders, when the game has said something since
+/// `seq` that wasn't sent for this server lately.
+async fn send_artifacts(state: &AppState, seq: &mut u64, sent: &mut HashMap<u16, (i64, String)>) {
+    let Some((next, artifacts, seen_ms)) = state.data_storage.abyss_artifacts_since(*seq) else { return };
+    if state.settings.get(SETTING_KEY).as_deref() == Some("false") {
+        *seq = next;
+        return;
+    }
+    // Kept for when the server is known, as a map is.
+    let server = report_server(state);
+    if server == 0 {
+        return;
+    }
+    *seq = next;
+    let now = crate::clock::now_ms();
+    if artifacts.artifacts.is_empty() || now - seen_ms > MAX_AGE_MS {
+        return;
+    }
+    let said = serde_json::to_string(&artifacts_report(server, &artifacts, 0)).unwrap_or_default();
+    if let Some((at, before)) = sent.get(&server) {
+        if *before == said && now - at < RESEND_SAME_MS {
+            return;
+        }
+    }
+    sent.insert(server, (now, said));
+    let url = format!("{}/api/boss-timers/artifacts", crate::account::base_url());
+    let body = with_host(artifacts_report(server, &artifacts, seen_ms), server, state.data_storage.game_host());
+    let request = state.http.post(&url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(body.to_string())
+        .timeout(Duration::from_secs(15));
+    match request.send().await {
+        Ok(res) => tracing::info!("Boss timers: Abyss artifact holders for server {server} sent ({})", res.status()),
+        Err(e) => tracing::info!("Boss timers: could not send the Abyss artifact holders: {e}"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -287,6 +358,38 @@ mod tests {
         assert!(with_host(body(), 1016, None).get("host").is_none());
         assert!(with_host(body(), 1301, host).get("host").is_none());
         assert!(with_host(body(), 1101, host).get("host").is_none());
+    }
+
+    #[test]
+    fn the_artifact_report_names_each_siege_and_each_artifacts_holder() {
+        use crate::capture::abyss_artifacts::{Artifact, ArtifactWar, Owner};
+        let state = ArtifactState {
+            wars: vec![
+                ArtifactWar { event_id: 1001, since_ms: 1_792_264_375_000, until_ms: 1_792_436_400_000 },
+                ArtifactWar { event_id: 2001, since_ms: 0, until_ms: 0 },
+            ],
+            artifacts: vec![
+                Artifact { id: 1001, owner: Owner::Elyos },
+                Artifact { id: 1002, owner: Owner::Asmodian },
+                Artifact { id: 2001, owner: Owner::None },
+            ],
+        };
+        let body = artifacts_report(2015, &state, 1_792_333_380_000);
+        assert_eq!(
+            body,
+            json!({
+                "format": 1, "server": 2015, "observedAt": 1_792_333_380,
+                "wars": [
+                    { "event": 1001, "since": 1_792_264_375, "until": 1_792_436_400 },
+                    { "event": 2001, "since": null, "until": null },
+                ],
+                "artifacts": [
+                    { "id": 1001, "event": 1001, "owner": "elyos" },
+                    { "id": 1002, "event": 1001, "owner": "asmodian" },
+                    { "id": 2001, "event": 2001, "owner": "none" },
+                ],
+            })
+        );
     }
 
     #[test]
