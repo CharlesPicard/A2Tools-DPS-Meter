@@ -212,7 +212,7 @@ if (typeof module !== "undefined" && module.exports) {
     for (const s of SPEEDS) {
       const opt = document.createElement("option");
       opt.value = String(s);
-      opt.textContent = `${s}x`;
+      opt.textContent = `${s}×`;
       speedSel.appendChild(opt);
     }
     speedSel.value = String(speed);
