@@ -318,6 +318,14 @@
       "displayNamePlaceholder": "캐릭터 이름"
     },
     "version": "버전",
+    "update": {
+      "check": "업데이트 확인",
+      "checking": "확인 중…",
+      "current": "최신 버전입니다",
+      "installing": "업데이트 중…",
+      "available": "{version} 출시",
+      "failed": "확인하지 못했습니다. 나중에 다시 시도하세요."
+    },
     "theme": {
       "label": "색상 테마",
       "options": {

@@ -323,6 +323,14 @@
       "displayNamePlaceholder": "Your character name"
     },
     "version": "Version",
+    "update": {
+      "check": "Check for updates",
+      "checking": "Checking…",
+      "current": "Up to date",
+      "installing": "Updating…",
+      "available": "{version} is out",
+      "failed": "Couldn't check. Try again later."
+    },
     "theme": {
       "label": "Colour theme",
       "options": {

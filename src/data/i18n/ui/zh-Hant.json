@@ -318,6 +318,14 @@
       "displayNamePlaceholder": "你的角色名稱"
     },
     "version": "版本",
+    "update": {
+      "check": "檢查更新",
+      "checking": "正在檢查…",
+      "current": "已是最新",
+      "installing": "正在更新…",
+      "available": "{version} 已發布",
+      "failed": "無法檢查，請稍後再試。"
+    },
     "theme": {
       "label": "配色主題",
       "options": {

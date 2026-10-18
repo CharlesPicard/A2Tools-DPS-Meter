@@ -313,6 +313,14 @@
       "displayNamePlaceholder": "キャラクター名"
     },
     "version": "バージョン",
+    "update": {
+      "check": "アップデートを確認",
+      "checking": "確認中…",
+      "current": "最新です",
+      "installing": "アップデート中…",
+      "available": "{version} が出ています",
+      "failed": "確認できませんでした。後でもう一度お試しください。"
+    },
     "theme": {
       "label": "カラーテーマ",
       "options": {

@@ -3353,6 +3353,32 @@ class DpsApp {
     });
 
     // This version's release notes; the list when the version isn't known.
+    // Check for updates now: one found is offered (and installed: on Linux
+    // through the package manager, after which the meter starts again).
+    const updateBtn = document.querySelector(".settingsUpdateBtn");
+    const updateStatus = document.querySelector(".settingsUpdateStatus");
+    Promise.resolve(window.a2BuildReady).then((build) => {
+      if (updateBtn && build?.online !== false && window.ReleaseChecker?.checkNow) updateBtn.hidden = false;
+    });
+    updateBtn?.addEventListener("click", async () => {
+      if (updateBtn.classList.contains("isChecking")) return;
+      const t = (key, fallback) => this.i18n?.t?.(key, fallback) ?? fallback;
+      const say = (text) => {
+        if (!updateStatus) return;
+        updateStatus.textContent = text;
+        updateStatus.hidden = !text;
+      };
+      updateBtn.classList.add("isChecking");
+      say(t("settings.update.checking", "Checking…"));
+      const found = await window.ReleaseChecker.checkNow();
+      updateBtn.classList.remove("isChecking");
+      const latest = String(found?.latest || "").replace(/^v/i, "");
+      if (found?.state === "current") say(t("settings.update.current", "Up to date"));
+      else if (found?.state === "installing") say(t("settings.update.installing", "Updating…"));
+      else if (found?.state === "update") say(t("settings.update.available", "{version} is out").replace("{version}", latest));
+      else say(t("settings.update.failed", "Couldn't check. Try again later."));
+    });
+
     this.settingsVersionLink?.addEventListener("click", () => {
       const releases = "https://github.com/taengu/A2Tools-DPS-Meter/releases";
       const version = /^v\d+\.\d+\.\d+$/.exec(this.settingsVersionValue?.textContent?.trim() || "")?.[0];

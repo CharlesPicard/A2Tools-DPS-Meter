@@ -460,7 +460,11 @@
                 <button class="settingsNavItem" type="button" role="tab" id="settingsTab-plugins" aria-controls="settingsSection-plugins" aria-selected="false" tabindex="-1" data-section="plugins"><i data-lucide="puzzle" aria-hidden="true"></i><span data-i18n="settings.plugins.title">Plugins</span></button>
                 <button class="settingsNavItem" type="button" role="tab" id="settingsTab-advanced" aria-controls="settingsSection-advanced" aria-selected="false" tabindex="-1" data-section="advanced"><i data-lucide="sliders-horizontal" aria-hidden="true"></i><span data-i18n="settings.advanced">Advanced</span></button>
               </div>
-              <button class="settingsFooterValue settingsVersionLink" type="button" data-i18n-aria-label="settings.version" aria-label="Version"><span class="settingsVersionValue">-</span></button>
+              <div class="settingsVersionRow">
+                <button class="settingsFooterValue settingsVersionLink" type="button" data-i18n-aria-label="settings.version" aria-label="Version"><span class="settingsVersionValue">-</span></button>
+                <button class="settingsUpdateBtn" type="button" hidden data-i18n-title="settings.update.check" title="Check for updates" data-i18n-aria-label="settings.update.check" aria-label="Check for updates"><i data-lucide="refresh-cw" aria-hidden="true"></i></button>
+                <span class="settingsUpdateStatus" role="status" hidden></span>
+              </div>
             </nav>
             <div class="settingsPane">
               <section class="settingsSection isActive" id="settingsSection-connection" role="tabpanel" aria-labelledby="settingsTab-connection" data-section="connection">

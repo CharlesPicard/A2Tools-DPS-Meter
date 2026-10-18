@@ -313,6 +313,14 @@
       "displayNamePlaceholder": "Dein Charaktername"
     },
     "version": "Version",
+    "update": {
+      "check": "Nach Updates suchen",
+      "checking": "Wird geprüft…",
+      "current": "Aktuell",
+      "installing": "Wird aktualisiert…",
+      "available": "{version} ist da",
+      "failed": "Prüfen fehlgeschlagen. Versuch es später erneut."
+    },
     "theme": {
       "label": "Farbschema",
       "options": {

@@ -318,6 +318,14 @@
       "displayNamePlaceholder": "Имя вашего персонажа"
     },
     "version": "Версия",
+    "update": {
+      "check": "Проверить обновления",
+      "checking": "Проверка…",
+      "current": "Последняя версия",
+      "installing": "Обновление…",
+      "available": "Вышла {version}",
+      "failed": "Не удалось проверить. Попробуйте позже."
+    },
     "theme": {
       "label": "Цветовая тема",
       "options": {
