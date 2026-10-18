@@ -1623,6 +1623,7 @@ pub fn serve(app: &tauri::AppHandle, path: &str) -> tauri::http::Response<Vec<u8
     if !cfg!(windows) && file.extension().is_some_and(|e| e == "html") {
         if let Ok(html) = std::fs::read_to_string(&file) {
             let (page, hashes) = inline_page(&html, &root, file.parent().unwrap_or(&root));
+            let page = with_meter_fonts(&page);
             let policy = inlined_policy(id, &hashes);
             return tauri::http::Response::builder()
                 .status(200)
@@ -1760,6 +1761,41 @@ fn base64(data: &[u8]) -> String {
 
 /// The policy for an inlined page: only its own inlined scripts run (by
 /// hash), its inlined styles apply, and nothing loads from anywhere.
+/// The meter's Linux fonts, under the names plugins ask for: Linux has
+/// neither Segoe UI, Pretendard nor Bahnschrift, so plugin text fell back to
+/// the system face while the meter itself shipped Saira and Pretendard. A
+/// plugin page cannot load the meter's files (see `serve`), so they come in
+/// the page itself, as `data:` URLs its policy allows. Latin only, as each
+/// page carries them: other scripts use the system's fonts as before.
+fn meter_fonts_style() -> &'static str {
+    static STYLE: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    STYLE.get_or_init(|| {
+        let pretendard = base64(include_bytes!("fonts/PretendardLatin.woff2"));
+        let saira = base64(include_bytes!("fonts/Saira.woff2"));
+        let face = |family: &str, data: &str, extra: &str| {
+            format!("@font-face{{font-family:\"{family}\";src:url(data:font/woff2;base64,{data}) format(\"woff2\");{extra}}}")
+        };
+        let text = "font-weight:45 920;unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2190-2199,U+2212,U+2215;";
+        let narrow = "font-weight:100 900;font-stretch:50% 125%;";
+        format!(
+            "<style>{}{}{}</style>",
+            face("Pretendard", &pretendard, text),
+            face("Segoe UI", &pretendard, text),
+            face("Bahnschrift", &saira, narrow),
+        )
+    })
+}
+
+/// A plugin page with the meter's fonts at the start of its head.
+fn with_meter_fonts(page: &str) -> String {
+    let at = page
+        .to_ascii_lowercase()
+        .find("<head")
+        .and_then(|i| page[i..].find('>').map(|j| i + j + 1))
+        .unwrap_or(0);
+    format!("{}{}{}", &page[..at], meter_fonts_style(), &page[at..])
+}
+
 fn inlined_policy(id: &str, hashes: &[String]) -> String {
     let scripts: String = hashes.iter().map(|h| format!(" 'sha256-{h}'")).collect();
     let own = if valid_id(id) { format!("a2plugin://localhost/{id}/") } else { "'none'".into() };
@@ -1790,7 +1826,7 @@ fn percent_decode(s: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{base64, content_policy, inline_page, inlined_policy, prompt_texts, should_start, take_ready};
+    use super::{base64, content_policy, inline_page, inlined_policy, with_meter_fonts, prompt_texts, should_start, take_ready};
     use super::{update_prompt, updates_to_offer, within_reach, Pending, PluginAvailable, PluginInfo, LANGUAGES, SETTLE};
     use std::collections::{HashMap, HashSet};
     use std::time::{Duration, Instant};
@@ -1803,6 +1839,21 @@ mod tests {
             to: to.into(),
             new_permissions: new_permissions.iter().map(|p| p.to_string()).collect(),
         }
+    }
+
+    /// Linux plugin pages get the meter's fonts, inside their head, under
+    /// the names plugins use.
+    #[test]
+    fn plugin_pages_carry_the_meter_fonts_in_their_head() {
+        let page = with_meter_fonts("<!doctype html><html><head><title>x</title></head><body></body></html>");
+        let head = page.find("<head>").unwrap() + "<head>".len();
+        assert!(page[head..].starts_with("<style>@font-face{font-family:\"Pretendard\""), "{}", &page[..200]);
+        for family in ["Segoe UI", "Bahnschrift"] {
+            assert!(page.contains(&format!("font-family:\"{family}\"")), "{family}");
+        }
+        assert!(page.ends_with("<title>x</title></head><body></body></html>"));
+        // No head: at the start.
+        assert!(with_meter_fonts("<p>hi</p>").starts_with("<style>"));
     }
 
     #[test]

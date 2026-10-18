@@ -3249,6 +3249,8 @@ pub fn run() {
                             tracing::warn!("Could not add the KWin {name} rule: {e}");
                         }
                     }
+                    // And put back while the meter runs, if KWin drops them.
+                    platform::window_rules::keep_rules();
                 });
             }
             {

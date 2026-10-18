@@ -66,6 +66,52 @@ pub fn icons_without_focus(done: bool) -> Result<bool, String> {
     add_rule(ICONS_GROUP, &icons_rule_entries(), done, "plugin icons keep the game focused")
 }
 
+/// The meter's rules, each with its group, entries and what it does.
+fn rules() -> [(&'static str, Vec<(&'static str, &'static str)>, &'static str); 3] {
+    [
+        (GROUP, rule_entries(), "the meter stays above fullscreen games"),
+        (NO_FOCUS_GROUP, no_focus_rule_entries(), "clicking the overlay keeps the game focused"),
+        (ICONS_GROUP, icons_rule_entries(), "plugin icons keep the game focused"),
+    ]
+}
+
+/// Keep the meter's rules in `kwinrulesrc` while it runs: KWin rewrites the
+/// file from what it holds, and rules it did not write itself went missing
+/// mid-session (KDE Plasma 6, 2026-10-19), taking the focus fixes with them.
+/// When the file changes (its time, looked at every 15 s), any rule gone is
+/// put back and KWin told; each time is logged, to tell what removes them.
+pub fn keep_rules() {
+    if !is_kde(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()) {
+        return;
+    }
+    let file = std::env::var_os("XDG_CONFIG_HOME")
+        .map(std::path::PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+        .map(|dir| dir.join("kwinrulesrc"));
+    let Some(file) = file else { return };
+    let changed = |f: &std::path::Path| std::fs::metadata(f).and_then(|m| m.modified()).ok();
+    std::thread::spawn(move || {
+        let mut seen = changed(&file);
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(15));
+            let now = changed(&file);
+            if now == seen {
+                continue;
+            }
+            let text = std::fs::read_to_string(&file).unwrap_or_default();
+            for (group, entries, what) in rules() {
+                if !text.contains(&format!("[{group}]")) {
+                    tracing::info!("KWin rule gone from kwinrulesrc; putting it back: {what}");
+                    if let Err(e) = add_rule(group, &entries, false, what) {
+                        tracing::warn!("Could not put the KWin rule back: {e}");
+                    }
+                }
+            }
+            seen = changed(&file);
+        }
+    });
+}
+
 fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Result<bool, String> {
     if done || !is_kde(&std::env::var("XDG_CURRENT_DESKTOP").unwrap_or_default()) {
         return Ok(done);
