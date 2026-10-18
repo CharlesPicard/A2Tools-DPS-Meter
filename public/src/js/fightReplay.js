@@ -331,7 +331,9 @@ if (typeof module !== "undefined" && module.exports) {
     };
 
     // The timeline up to the moment, the rest faint, and a line at it.
-    const paintTimeline = () => {
+    // `smooth`: the playhead glides to its place over one timer step (while
+    // playing); anything else puts it there at once.
+    const paintTimeline = (smooth = false) => {
       if (!scroll) return;
       if (!active) {
         head.hidden = true;
@@ -358,7 +360,8 @@ if (typeof module !== "undefined" && module.exports) {
       if (shade.hidden) shade.hidden = false;
       if (head.hidden) head.hidden = false;
       if (shadeFill.style.transition !== "none") shadeFill.style.transition = "none";
-      if (head.style.transition !== "none") head.style.transition = "none";
+      const headTransition = smooth ? `transform ${FIGURE_INTERVAL_MS}ms linear` : "none";
+      if (head.style.transition !== headTransition) head.style.transition = headTransition;
       shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
     };
@@ -465,17 +468,23 @@ if (typeof module !== "undefined" && module.exports) {
     let playFrom = 0;
     let playStart = 0;
     const playedAt = () => playFrom + (performance.now() - playStart) * speed;
-    const stepMovers = () => {
+    // The thin movers (playhead, progress fill and knob) glide over each
+    // step, so they move smoothly; the big shade steps, as a glide on it
+    // was most of the GPU's work.
+    const stepMovers = (smooth = false) => {
       const dur = durationMs();
       if (dur <= 0) return;
-      paintTimeline();
+      paintTimeline(smooth);
       const share = Math.min(1, at / dur);
       if (!progWidth) progWidth = scrubWrap.clientWidth;
+      const transition = smooth ? `transform ${FIGURE_INTERVAL_MS}ms linear` : "none";
+      for (const el of [progFill, progKnob]) if (el.style.transition !== transition) el.style.transition = transition;
       progFill.style.transform = `scaleX(${share.toFixed(4)})`;
       progKnob.style.transform = `translateX(${(share * Math.max(0, progWidth - 9)).toFixed(1)}px)`;
     };
+    // Play, a speed change or a resize: the movers at the moment, at once.
     const glide = () => {
-      if (playing) stepMovers();
+      if (playing) stepMovers(false);
     };
     const stopGlide = () => paintTimeline();
     const playTick = () => {
@@ -488,7 +497,7 @@ if (typeof module !== "undefined" && module.exports) {
         exit();
         return;
       }
-      stepMovers();
+      stepMovers(true);
       requestFigures(now);
       paintClock(at, dur);
     };
