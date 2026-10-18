@@ -724,21 +724,12 @@ const createDetailsUI = ({
     const localId = Number(window._dpsApp?.localPlayerId);
     detailsPartyListEl.classList.toggle("withPeak", showPeak);
 
-    const rerender = () => {
-      const ctx = buildPartyBarStats();
-      renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
-    };
 
     // "All" bar
     const allBar = document.createElement("div");
     allBar.className = "detailsPartyBar" + (!selectedAttackerIds || selectedAttackerIds.length === 0 ? " isSelected" : "");
     allBar.innerHTML = `<div class="detailsPartyBarFill" style="transform:none;width:100%"></div><div class="detailsPartyBarContent"><span class="detailsPartyBarName">All</span></div>`;
-    allBar.addEventListener("click", async () => {
-      selectedAttackerIds = null;
-      selectedAttackerLabel = labelText("details.all", "All");
-      rerender();
-      await refreshDetailsView();
-    });
+    allBar.dataset.partyAll = "1";
     detailsPartyListEl.appendChild(allBar);
 
     actors.forEach((actor) => {
@@ -873,17 +864,9 @@ const createDetailsUI = ({
       bar.appendChild(fillEl);
       bar.appendChild(contentEl);
 
-      bar.addEventListener("click", async () => {
-        if (isSelected) {
-          selectedAttackerIds = null;
-          selectedAttackerLabel = labelText("details.all", "All");
-        } else {
-          selectedAttackerIds = [actorId];
-          selectedAttackerLabel = name;
-        }
-        rerender();
-        await refreshDetailsView();
-      });
+      // Clicks are taken by one listener on the list (below renderPartyBars).
+      bar.dataset.actorId = String(actorId);
+      bar.dataset.actorName = name;
 
       detailsPartyListEl.appendChild(bar);
     });
@@ -897,6 +880,24 @@ const createDetailsUI = ({
       countUpIn(detailsPartyListEl);
     }
   };
+  // One click listener for the party list: its bars are rebuilt with every
+  // redraw (ten a second during a replay), and a listener on each bar was
+  // added afresh each time (2026-10-18).
+  detailsPartyListEl?.addEventListener("click", async (event) => {
+    const bar = event.target instanceof Element ? event.target.closest(".detailsPartyBar") : null;
+    if (!bar || !detailsPartyListEl.contains(bar)) return;
+    const actorId = Number(bar.dataset.actorId);
+    if (bar.dataset.partyAll || !(actorId > 0) || selectedAttackerIds?.includes?.(actorId)) {
+      selectedAttackerIds = null;
+      selectedAttackerLabel = labelText("details.all", "All");
+    } else {
+      selectedAttackerIds = [actorId];
+      selectedAttackerLabel = bar.dataset.actorName || resolveActorLabel(actorId);
+    }
+    const ctx = buildPartyBarStats();
+    renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
+    await refreshDetailsView();
+  });
 
   // Hit results from the record's flags byte and hit type, after Front:
   // [column, skill field, shown as]. Misses and resists are not hits, so
