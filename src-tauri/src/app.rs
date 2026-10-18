@@ -62,6 +62,10 @@ pub struct AppState {
     /// Order fight snapshots and their writes together. Settings never take
     /// this lock; the calculator guard is released before disk work.
     pub fight_save: Mutex<()>,
+    /// Fights taken before a reset, with their names, until HISTORY saves
+    /// them (see `save_fights_before_reset`). Whoever saves next under
+    /// `fight_save` takes them: quitting does not leave them behind.
+    pub queued_fight_saves: Mutex<Vec<(Vec<FightRecord>, share::SliceNames)>>,
     pub settings: Settings,
     pub skill_lookup: Arc<SkillLookup>,
     pub npc_lookup: Arc<NpcLookup>,
@@ -523,22 +527,33 @@ fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<Fig
 /// party call this from the parser's thread, and waiting there for the disk
 /// stopped the parser: packets were lost and the meter froze for minutes.
 fn save_fights_before_reset(app: &tauri::AppHandle) {
-    let Some((records, names)) = fights_before_reset(app) else { return };
+    let Some(fights) = fights_before_reset(app) else { return };
+    let Some(state) = app.try_state::<AppState>() else { return };
+    state.queued_fight_saves.lock().push(fights);
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
         let job = handle.clone();
-        if let Err(error) = crate::blocking::HISTORY.run(move || {
-            let Some(state) = job.try_state::<AppState>() else { return };
-            let _saving = state.fight_save.lock();
-            save_fight_records(&job, &state, records, &names);
-        }).await {
+        if let Err(error) = crate::blocking::HISTORY.run(move || save_queued_fights(&job)).await {
             tracing::warn!("Saving fights before a reset failed: {error}");
         }
     });
 }
 
-/// Save every fight on the meter before quitting, and wait for it.
+/// Save the fights `save_fights_before_reset` queued, if nobody has yet.
+fn save_queued_fights(app: &tauri::AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else { return };
+    let _saving = state.fight_save.lock();
+    let queued = std::mem::take(&mut *state.queued_fight_saves.lock());
+    for (records, names) in queued {
+        save_fight_records(app, &state, records, &names);
+    }
+}
+
+/// Save every fight on the meter before quitting, and wait for it: the
+/// fights still queued from a reset first, which a save running on HISTORY
+/// could hold up past the exit.
 fn save_fights_before_quit(app: &tauri::AppHandle) {
+    save_queued_fights(app);
     let Some((records, names)) = fights_before_reset(app) else { return };
     let Some(state) = app.try_state::<AppState>() else { return };
     let _saving = state.fight_save.lock();
@@ -2961,6 +2976,7 @@ pub fn run() {
             .on_event(|app, event| {
                 // Flush before normal exit or restart, with Exit as a final safeguard.
                 if matches!(event, tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit) {
+                    save_queued_fights(app);
                     flush_settings_before_exit(app);
                 }
             })
@@ -3118,6 +3134,7 @@ pub fn run() {
                 port_detector: port_detector.clone(),
                 fight_history: FightHistoryManager::new(app_data_dir.clone()),
                 fight_save: Mutex::new(()),
+                queued_fight_saves: Mutex::new(Vec::new()),
                 settings,
                 skill_lookup: skill_lookup.clone(),
                 npc_lookup: npc_lookup.clone(),
