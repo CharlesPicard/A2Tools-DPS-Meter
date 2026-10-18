@@ -408,7 +408,8 @@
       "notSet": "Não definido",
       "restoreDefaults": "Restaurar padrões",
       "hint": "Clique num atalho e pressione de 1 a 3 teclas. Esc cancela.",
-      "lock": "Bloquear/desbloquear sobreposição"
+      "lock": "Bloquear/desbloquear sobreposição",
+      "openDesktop": "Atalhos da área de trabalho"
     },
     "defaultMeterMode": {
       "label": "Modo de alvo ao iniciar"
@@ -502,6 +503,8 @@
     },
     "keybindTaken": "Outro programa já usa essas teclas. Escolha outras.",
     "keybindShared": "Outra ação usa essas teclas. Escolha outras.",
+    "keybindUnset": "Sua área de trabalho ainda não atribuiu uma tecla a isto. Defina em Atalhos da área de trabalho.",
+    "keybindAssigned": "Sua área de trabalho usa {key}. Altere em Atalhos da área de trabalho.",
     "plugins": {
       "title": "Plugins",
       "devMode": "Modo de desenvolvedor de plugins",

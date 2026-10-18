@@ -760,13 +760,18 @@
       this.setSetting("dpsMeter.pluginWindowsHotkey", this._buildHotkeyLabel(mods, vk));
     },
     // Every keybind back to its default (app.rs, HOTKEY_DEFAULTS).
+    // Linux: the desktop's own shortcut settings (KDE, GNOME, or the portal's).
+    openDesktopShortcuts() {
+      return invoke("open_desktop_shortcuts");
+    },
     restoreDefaultHotkeys() {
       this.setSetting("dpsMeter.hotkey", "Ctrl+Alt+R");
       this.setSetting("dpsMeter.toggleWindowHotkey", "Ctrl+Alt+Up");
       this.setSetting("dpsMeter.lockHotkey", "Ctrl+Alt+L");
       this.setSetting("dpsMeter.pluginWindowsHotkey", "");
     },
-    // Each key's registration: { reload|toggle|lock: "ok" | "taken" }.
+    // Each key's registration: { <key>: "ok" | "taken" | "unset", and on
+    // Linux "<key>.assigned": the key the desktop gave it }.
     getHotkeyStatus() {
       return invoke("get_hotkey_status").catch(() => ({}));
     },

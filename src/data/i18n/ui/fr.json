@@ -408,7 +408,8 @@
       "notSet": "Non défini",
       "restoreDefaults": "Rétablir par défaut",
       "hint": "Cliquez sur un raccourci, puis appuyez sur 1 à 3 touches. Échap annule.",
-      "lock": "Verrouiller/déverrouiller l'overlay"
+      "lock": "Verrouiller/déverrouiller l'overlay",
+      "openDesktop": "Raccourcis du bureau"
     },
     "defaultMeterMode": {
       "label": "Mode de cible au démarrage"
@@ -502,6 +503,8 @@
     },
     "keybindTaken": "Un autre programme utilise déjà ces touches. Choisissez-en d'autres.",
     "keybindShared": "Une autre action utilise ces touches. Choisissez-en d'autres.",
+    "keybindUnset": "Ton bureau n'a pas encore attribué de touche à ceci. Définis-la dans Raccourcis du bureau.",
+    "keybindAssigned": "Ton bureau utilise {key}. Change-le dans Raccourcis du bureau.",
     "plugins": {
       "title": "Plugins",
       "devMode": "Mode développeur des plugins",

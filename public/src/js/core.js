@@ -4384,7 +4384,14 @@ class DpsApp {
       for (const [btn, key] of rows) {
         const shared = rows.some(([other]) => other !== btn && labelOf(other) === labelOf(btn));
         const taken = lastHotkeyStatus[key] === "taken";
+        const unset = !shared && lastHotkeyStatus[key] === "unset";
+        // The key the desktop gave it, when that differs from ours (KDE
+        // keeps the one it stored first).
+        const assigned = String(lastHotkeyStatus[`${key}.assigned`] || "").trim();
+        const squash = (s) => s.toLowerCase().replace(/\s+/g, "");
+        const otherKey = !shared && !taken && assigned && squash(assigned) !== squash(labelOf(btn));
         btn.classList?.toggle?.("isTaken", shared || taken);
+        btn.classList?.toggle?.("isUnsetByDesktop", unset);
         let reason = "";
         if (shared) {
           reason = this.i18n?.t?.("settings.keybindShared", "Another action uses these keys. Pick different keys.")
@@ -4392,6 +4399,12 @@ class DpsApp {
         } else if (taken) {
           reason = this.i18n?.t?.("settings.keybindTaken", "Another program already uses these keys. Pick different keys.")
             ?? "Another program already uses these keys. Pick different keys.";
+        } else if (unset) {
+          reason = this.i18n?.t?.("settings.keybindUnset", "Your desktop hasn't given this a key yet. Set it in Desktop shortcuts.")
+            ?? "Your desktop hasn't given this a key yet. Set it in Desktop shortcuts.";
+        } else if (otherKey) {
+          reason = (this.i18n?.t?.("settings.keybindAssigned", "Your desktop uses {key}. Change it in Desktop shortcuts.")
+            ?? "Your desktop uses {key}. Change it in Desktop shortcuts.").replace("{key}", assigned);
         }
         const info = btn.closest?.(".settingsRowKeybind")?.querySelector?.(".settingsInfo");
         let hint = info?.querySelector?.(".keybindHint");
@@ -4404,9 +4417,16 @@ class DpsApp {
         if (hint) {
           hint.textContent = reason;
           hint.hidden = !reason;
+          hint.classList?.toggle?.("isNote", unset || otherKey);
         }
         if (reason) btn.title = reason;
         else btn.removeAttribute?.("title");
+      }
+      // Where the desktop decides the keys (Linux), a way to its settings.
+      const desktopBtn = document.querySelector?.(".keybindDesktopBtn");
+      if (desktopBtn) {
+        desktopBtn.hidden = !Object.entries(lastHotkeyStatus)
+          .some(([k, v]) => v === "unset" || (k.endsWith(".assigned") && v));
       }
     };
     const refreshLabels = this.refreshKeybindLabels;
@@ -4452,6 +4472,9 @@ class DpsApp {
     toggleBtn?.addEventListener("click", () => handleKeybindClick(toggleBtn, "toggle"));
     lockKeyBtn?.addEventListener("click", () => handleKeybindClick(lockKeyBtn, "lock"));
     pluginsKeyBtn?.addEventListener("click", () => handleKeybindClick(pluginsKeyBtn, "plugins"));
+    document.querySelector(".keybindDesktopBtn")?.addEventListener("click", () => {
+      Promise.resolve(window.javaBridge?.openDesktopShortcuts?.()).catch(() => {});
+    });
     document.querySelector(".keybindDefaultsBtn")?.addEventListener("click", () => {
       stopRecording();
       window.javaBridge?.restoreDefaultHotkeys?.();

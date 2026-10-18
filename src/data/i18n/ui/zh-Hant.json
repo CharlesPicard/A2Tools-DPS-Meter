@@ -413,7 +413,8 @@
       "notSet": "未設定",
       "restoreDefaults": "恢復預設",
       "hint": "點擊一個快捷鍵，然後按下 1 到 3 個鍵。按 Esc 取消。",
-      "lock": "鎖定/解鎖懸浮視窗"
+      "lock": "鎖定/解鎖懸浮視窗",
+      "openDesktop": "桌面快捷鍵"
     },
     "defaultMeterMode": {
       "label": "啟動時的目標模式"
@@ -509,6 +510,8 @@
     },
     "keybindTaken": "其他程式已在使用這些按鍵。請換用其他按鍵。",
     "keybindShared": "另一個操作使用了這些按鍵。請換用其他按鍵。",
+    "keybindUnset": "桌面尚未為此指派按鍵。請在「桌面快捷鍵」中設定。",
+    "keybindAssigned": "桌面使用的是 {key}。可在「桌面快捷鍵」中變更。",
     "plugins": {
       "title": "外掛程式",
       "devMode": "外掛程式開發者模式",

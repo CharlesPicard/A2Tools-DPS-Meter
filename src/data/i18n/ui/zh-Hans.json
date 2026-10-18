@@ -413,7 +413,8 @@
       "notSet": "未设置",
       "restoreDefaults": "恢复默认",
       "hint": "点击一个快捷键，然后按下 1 到 3 个键。按 Esc 取消。",
-      "lock": "锁定/解锁悬浮窗"
+      "lock": "锁定/解锁悬浮窗",
+      "openDesktop": "桌面快捷键"
     },
     "defaultMeterMode": {
       "label": "启动时的目标模式"
@@ -509,6 +510,8 @@
     },
     "keybindTaken": "其他程序已在使用这些按键。请换用其他按键。",
     "keybindShared": "另一个操作使用了这些按键。请换用其他按键。",
+    "keybindUnset": "桌面尚未为此分配按键。请在“桌面快捷键”中设置。",
+    "keybindAssigned": "桌面使用的是 {key}。可在“桌面快捷键”中更改。",
     "plugins": {
       "title": "插件",
       "devMode": "插件开发者模式",

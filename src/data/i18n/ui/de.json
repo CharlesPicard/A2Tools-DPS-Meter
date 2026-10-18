@@ -408,7 +408,8 @@
       "notSet": "Nicht belegt",
       "restoreDefaults": "Standard wiederherstellen",
       "hint": "Tastenkürzel anklicken, dann 1 bis 3 Tasten drücken. Esc bricht ab.",
-      "lock": "Overlay sperren/entsperren"
+      "lock": "Overlay sperren/entsperren",
+      "openDesktop": "Desktop-Kurzbefehle"
     },
     "defaultMeterMode": {
       "label": "Zielmodus beim Start"
@@ -502,6 +503,8 @@
     },
     "keybindTaken": "Ein anderes Programm verwendet diese Tasten bereits. Wähle andere Tasten.",
     "keybindShared": "Eine andere Aktion verwendet diese Tasten. Wähle andere Tasten.",
+    "keybindUnset": "Dein Desktop hat hierfür noch keine Taste vergeben. Lege sie unter Desktop-Kurzbefehle fest.",
+    "keybindAssigned": "Dein Desktop nutzt {key}. Ändere es unter Desktop-Kurzbefehle.",
     "plugins": {
       "title": "Plugins",
       "devMode": "Plugin-Entwicklermodus",

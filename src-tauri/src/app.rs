@@ -822,6 +822,13 @@ struct Hotkeys {
 const HOTKEY_KEYS: [&str; 4] =
     ["dpsMeter.hotkey", "dpsMeter.toggleWindowHotkey", "dpsMeter.lockHotkey", "dpsMeter.pluginWindowsHotkey"];
 
+/// Open the desktop's own shortcut settings, where the keys are set on
+/// Linux (KDE keeps its own; see platform::hotkeys).
+#[tauri::command]
+fn open_desktop_shortcuts(hotkeys: tauri::State<'_, Hotkeys>) -> Result<(), String> {
+    hotkeys.manager.open_desktop_settings()
+}
+
 /// What each key's registration came to, for Settings to show.
 #[tauri::command]
 fn get_hotkey_status(hotkeys: tauri::State<'_, Hotkeys>) -> HashMap<String, String> {
@@ -942,9 +949,14 @@ fn start_hotkeys(app: &tauri::AppHandle, settings: &Settings) {
 
     hotkeys.manager.start(
         vec![reload, toggle, lock, plugins],
-        move |key, ok| {
+        move |key, state, assigned| {
             set_hotkey_status(&status_handle, |s| {
-                s.insert(key.to_string(), if ok { "ok" } else { "taken" }.to_string());
+                s.insert(key.to_string(), state.to_string());
+                // The key the desktop gave it, where the desktop decides.
+                match assigned {
+                    Some(a) => s.insert(format!("{key}.assigned"), a),
+                    None => s.remove(&format!("{key}.assigned")),
+                };
             });
         },
     );
@@ -3637,6 +3649,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_version,
             get_hotkey_status,
+            open_desktop_shortcuts,
             crate::plugins::plugin_list,
             crate::plugins::plugin_set_dev_mode,
             crate::plugins::plugin_add_folder,

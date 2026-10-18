@@ -11,8 +11,11 @@ impl HotkeyManager {
     pub fn start(
         &self,
         _: Vec<crate::platform::hotkeys::Binding>,
-        _: impl Fn(&'static str, bool) + Send + 'static,
+        _: impl Fn(&'static str, &'static str, Option<String>) + Send + 'static,
     ) {
+    }
+    pub fn open_desktop_settings(&self) -> Result<(), String> {
+        Err("no desktop shortcut settings here".into())
     }
     pub fn stop(&self) {}
 }

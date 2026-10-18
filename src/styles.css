@@ -7835,6 +7835,18 @@ html.a2-offline .historyUploadBtn {
   line-height: 1.35;
   color: #ff9a9a;
 }
+/* The desktop has no key for it yet (KDE/GNOME set it in their settings). */
+.settingsPanel .keybindBtn.isUnsetByDesktop,
+.settingsPanel .keybindBtn.isUnsetByDesktop:hover {
+  border-color: #f2b94f;
+  box-shadow: inset 0 0 0 1px #f2b94f;
+}
+.settingsPanel .keybindHint.isNote {
+  color: #f6d38f;
+}
+.settingsPanel .keybindDesktopBtn[hidden] {
+  display: none;
+}
 .settingsPanel .keybindHint[hidden] {
   display: none;
 }

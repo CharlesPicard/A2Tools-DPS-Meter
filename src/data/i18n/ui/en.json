@@ -418,7 +418,8 @@
       "notSet": "Not set",
       "restoreDefaults": "Restore defaults",
       "hint": "Click a keybind, then press 1 to 3 keys. Esc cancels.",
-      "lock": "Lock/unlock overlay"
+      "lock": "Lock/unlock overlay",
+      "openDesktop": "Desktop shortcuts"
     },
     "defaultMeterMode": {
       "label": "Starting target mode"
@@ -514,6 +515,8 @@
     },
     "keybindTaken": "Another program already uses these keys. Pick different keys.",
     "keybindShared": "Another action uses these keys. Pick different keys.",
+    "keybindUnset": "Your desktop hasn't given this a key yet. Set it in Desktop shortcuts.",
+    "keybindAssigned": "Your desktop uses {key}. Change it in Desktop shortcuts.",
     "plugins": {
       "title": "Plugins",
       "devMode": "Plugin developer mode",

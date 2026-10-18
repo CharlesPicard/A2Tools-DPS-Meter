@@ -28,7 +28,7 @@ impl HotkeyManager {
     pub fn start(
         &self,
         bindings: Vec<crate::platform::hotkeys::Binding>,
-        on_status: impl Fn(&'static str, bool) + Send + 'static,
+        on_status: impl Fn(&'static str, &'static str, Option<String>) + Send + 'static,
     ) {
         let mut listener = self.listener.lock().unwrap_or_else(|p| p.into_inner());
         if listener.as_ref().is_some_and(|(running, _)| running.load(Ordering::SeqCst)) {
@@ -59,7 +59,7 @@ impl HotkeyManager {
                             binding.name, binding.mods, binding.vk);
                     }
                     registered[n] = ok;
-                    on_status(binding.name, ok);
+                    on_status(binding.name, if ok { "ok" } else { "taken" }, None);
                 }
 
                 // Message loop
@@ -86,6 +86,11 @@ impl HotkeyManager {
             }
         });
         *listener = Some((flag, thread));
+    }
+
+    /// Windows has no desktop setting for an app's keys: Settings sets them.
+    pub fn open_desktop_settings(&self) -> Result<(), String> {
+        Err("the keys are set in the meter's Settings here".into())
     }
 
     /// Stop listening and unregister the hotkeys, waiting for the listener

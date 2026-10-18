@@ -408,7 +408,8 @@
       "notSet": "Sin asignar",
       "restoreDefaults": "Restaurar predeterminados",
       "hint": "Haz clic en un atajo y pulsa de 1 a 3 teclas. Esc cancela.",
-      "lock": "Bloquear/desbloquear superposición"
+      "lock": "Bloquear/desbloquear superposición",
+      "openDesktop": "Atajos del escritorio"
     },
     "defaultMeterMode": {
       "label": "Modo de objetivo al iniciar"
@@ -502,6 +503,8 @@
     },
     "keybindTaken": "Otro programa ya usa estas teclas. Elige otras.",
     "keybindShared": "Otra acción usa estas teclas. Elige otras.",
+    "keybindUnset": "Tu escritorio aún no ha asignado una tecla a esto. Asígnala en Atajos del escritorio.",
+    "keybindAssigned": "Tu escritorio usa {key}. Cámbialo en Atajos del escritorio.",
     "plugins": {
       "title": "Complementos",
       "devMode": "Modo de desarrollador de complementos",
