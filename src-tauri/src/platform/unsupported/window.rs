@@ -78,3 +78,12 @@ pub fn is_hidden_in_place(_window: &tauri::WebviewWindow) -> bool {
 pub fn reveal_in_place(_window: &tauri::WebviewWindow) -> bool {
     false
 }
+
+/// Windows only (see the Windows version): here the window manager decides
+/// what takes focus.
+pub fn front_window() -> Option<isize> {
+    None
+}
+
+/// Windows only (see the Windows version).
+pub fn never_activate(_window: &tauri::WebviewWindow, _before: Option<isize>) {}

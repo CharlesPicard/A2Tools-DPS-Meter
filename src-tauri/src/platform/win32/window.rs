@@ -52,6 +52,43 @@ pub fn hide_without_focus(window: &tauri::WebviewWindow) {
     }
 }
 
+/// The window in front now (the game, while playing), for `never_activate`
+/// to give the front back to.
+pub fn front_window() -> Option<isize> {
+    let hwnd = unsafe { GetForegroundWindow() };
+    (!hwnd.0.is_null()).then_some(hwnd.0 as isize)
+}
+
+/// A small window that must never take the front from the game (a plugin's
+/// alert icon): it still gets clicks and drags, but is never activated
+/// (`WS_EX_NOACTIVATE`). Built with focus off, it still took the front as
+/// its page was created (WebView2), and an alert icon appearing tabbed a
+/// player out of the game (2026-10-18). For a few seconds after it is built,
+/// if it has the front anyway, the front goes back to `before`.
+pub fn never_activate(window: &tauri::WebviewWindow, before: Option<isize>) {
+    let Some(hwnd) = hwnd_of(window) else { return };
+    unsafe {
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, ex | WS_EX_NOACTIVATE.0 as isize);
+    }
+    let Some(before) = before else { return };
+    let own = hwnd.0 as isize;
+    if before == own {
+        return;
+    }
+    std::thread::spawn(move || {
+        for _ in 0..30 {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            unsafe {
+                if GetForegroundWindow().0 as isize == own {
+                    let back = SetForegroundWindow(HWND(before as *mut _)).as_bool();
+                    tracing::info!("A widget took the front; given back to the window before it: {back}");
+                }
+            }
+        }
+    });
+}
+
 /// A window to be shown and hidden with the functions above is built visible
 /// (without focus), so tao applies its frameless style and marks it visible,
 /// then hidden with `hide_without_focus` if it should start hidden. Built
