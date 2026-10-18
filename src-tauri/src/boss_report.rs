@@ -147,6 +147,40 @@ fn cores_body(server_id: u16, cores: Vec<serde_json::Value>, now_ms: i64) -> ser
     json!({ "format": 1, "server": server_id, "observedAt": now_ms / 1000, "cores": cores })
 }
 
+/// The orb kills waiting for the faction that took their corridor
+/// (`abyss_cores::OrbKillers`), between the kill loop and the holders' one.
+fn orb_killers() -> &'static std::sync::Mutex<crate::capture::abyss_cores::OrbKillers> {
+    static KILLERS: std::sync::OnceLock<std::sync::Mutex<crate::capture::abyss_cores::OrbKillers>> =
+        std::sync::OnceLock::new();
+    KILLERS.get_or_init(Default::default)
+}
+
+/// Settled orb kills for /api/boss-timers/cores: the kill again, with the
+/// faction that dealt it (Aion 2 Timers' live board decides each corridor by
+/// it).
+pub fn orb_killers_request(server_id: u16, kills: &[crate::capture::abyss_cores::OrbKill], now_ms: i64) -> Option<serde_json::Value> {
+    let cores: Vec<_> = kills
+        .iter()
+        .map(|k| json!({ "npc": k.npc, "artifact": k.artifact, "state": "dead", "at": k.at_ms / 1000, "killer": k.killer }))
+        .collect();
+    (!cores.is_empty()).then(|| cores_body(server_id, cores, now_ms))
+}
+
+async fn send_orb_killers(state: &AppState, server: u16, kills: Vec<crate::capture::abyss_cores::OrbKill>) {
+    let Some(body) = orb_killers_request(server, &kills, crate::clock::now_ms()) else { return };
+    let body = with_host(body, server, state.data_storage.game_host());
+    let url = format!("{}/api/boss-timers/cores", crate::account::base_url());
+    let request = state.http.post(&url)
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(body.to_string())
+        .timeout(Duration::from_secs(15));
+    let what: Vec<String> = kills.iter().map(|k| format!("{} {}", k.npc, k.killer)).collect();
+    match request.send().await {
+        Ok(res) => tracing::info!("Boss timers: orb killers sent ({}): {}", res.status(), what.join(", ")),
+        Err(e) => tracing::info!("Boss timers: could not send orb killers: {e}"),
+    }
+}
+
 /// The HP of the Abyss cores among `bosses`, for /api/boss-timers/cores.
 pub fn cores_hp_request(server_id: u16, bosses: &[BossHp], now_ms: i64) -> Option<serde_json::Value> {
     let cores: Vec<_> = bosses
@@ -241,7 +275,23 @@ fn spawn_events(app: tauri::AppHandle) {
                     }
                 }
             }
-            waiting.extend(state.data_storage.take_boss_events().into_iter().map(|e| (now, e)));
+            let events = state.data_storage.take_boss_events();
+            for event in &events {
+                if let BossEventKind::Killed { at_ms } = event.kind {
+                    if crate::capture::abyss_cores::is_core(event.npc) {
+                        orb_killers().lock().unwrap_or_else(|p| p.into_inner()).killed(event.npc, at_ms);
+                    }
+                }
+            }
+            waiting.extend(events.into_iter().map(|e| (now, e)));
+            // Orb kills no holder came for in time: "unknown".
+            let expired = orb_killers().lock().unwrap_or_else(|p| p.into_inner()).expired(now);
+            if !expired.is_empty() && state.settings.get(SETTING_KEY).as_deref() != Some("false") {
+                let server = report_server(&state);
+                if server != 0 {
+                    send_orb_killers(&state, server, expired).await;
+                }
+            }
             if waiting.is_empty() {
                 continue;
             }
@@ -342,6 +392,11 @@ async fn send_artifacts(state: &AppState, seq: &mut u64, sent: &mut HashMap<u16,
     let now = crate::clock::now_ms();
     if artifacts.artifacts.is_empty() || now - seen_ms > MAX_AGE_MS {
         return;
+    }
+    // The holders settle the orb kills waiting for them.
+    let settled = orb_killers().lock().unwrap_or_else(|p| p.into_inner()).holders_seen(&artifacts, seen_ms);
+    if !settled.is_empty() {
+        send_orb_killers(state, server, settled).await;
     }
     let said = serde_json::to_string(&artifacts_report(server, &artifacts, 0)).unwrap_or_default();
     if let Some((at, before)) = sent.get(&server) {
