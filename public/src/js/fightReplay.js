@@ -613,12 +613,39 @@ if (typeof module !== "undefined" && module.exports) {
       if (playing) glide();
     });
     // Dragging holds playback and lets go where it was.
+    // While dragging, only the playhead, the shade and the clock follow, once
+    // a frame; the figures are drawn exactly when the drag stops (let go, or
+    // a moment without moving). Every drag step redrew everything, the steps
+    // queued up behind each other and the page lagged (2026-10-18).
     let resumeAfterDrag = false;
+    let dragging = false;
+    let dragFrame = 0;
+    let settleTimer = 0;
+    const dragPaint = () => {
+      dragFrame = 0;
+      const dur = durationMs();
+      paintTimeline();
+      paintClock(at, dur);
+      scrub.style.setProperty("--range-pct", `${dur > 0 ? ((at / dur) * 100).toFixed(2) : 100}%`);
+    };
+    const settle = () => {
+      clearTimeout(settleTimer);
+      settleTimer = 0;
+      if (active) requestFigures(performance.now(), true);
+    };
     scrub.addEventListener("pointerdown", () => {
+      dragging = true;
       resumeAfterDrag = playing;
       if (playing) pause();
     });
     const endDrag = () => {
+      if (!dragging) return;
+      dragging = false;
+      if (dragFrame) {
+        cancelAnimationFrame(dragFrame);
+        dragPaint();
+      }
+      settle();
       if (resumeAfterDrag) {
         resumeAfterDrag = false;
         play();
@@ -626,7 +653,19 @@ if (typeof module !== "undefined" && module.exports) {
     };
     scrub.addEventListener("pointerup", endDrag);
     scrub.addEventListener("pointercancel", endDrag);
-    scrub.addEventListener("input", () => seek(scrub.value));
+    // Let go outside the slider: the drag ends all the same.
+    window.addEventListener("pointerup", endDrag);
+    scrub.addEventListener("input", () => {
+      if (!dragging) {
+        seek(scrub.value);
+        return;
+      }
+      if (!active && !enter()) return;
+      at = Math.max(0, Math.min(durationMs(), Number(scrub.value) || 0));
+      if (!dragFrame) dragFrame = requestAnimationFrame(dragPaint);
+      clearTimeout(settleTimer);
+      settleTimer = setTimeout(settle, 160);
+    });
     // Arrows a second (Shift: ten), Page keys thirty, Home / End the ends;
     // Space plays or pauses.
     scrub.addEventListener("keydown", (event) => {
