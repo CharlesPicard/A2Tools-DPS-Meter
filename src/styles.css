@@ -7956,3 +7956,9 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel.isReplayPlaying .detailsSkills .skills .skillRow {
   pointer-events: none;
 }
+
+/* Replaying: the timeline's scroller is a steady layer of its own, so the
+   playhead and shade moving over it never repaint it. */
+.detailsPanel.isReplaying .fightTimelineScroll {
+  will-change: transform;
+}

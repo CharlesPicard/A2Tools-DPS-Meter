@@ -300,6 +300,7 @@ if (typeof module !== "undefined" && module.exports) {
     let playing = false;
     let at = 0; // ms into the fight
     let frame = 0;
+    let dragging = false; // the slider held (see the drag handling below)
     let lastFiguresTs = 0;
     let figuresPending = false;
     let cutSeq = 0;
@@ -354,10 +355,10 @@ if (typeof module !== "undefined" && module.exports) {
         head.style.top = `${geometry.top}px`;
         head.style.height = `${geometry.height}px`;
       }
-      shade.hidden = false;
-      head.hidden = false;
-      shadeFill.style.transition = "none";
-      head.style.transition = "none";
+      if (shade.hidden) shade.hidden = false;
+      if (head.hidden) head.hidden = false;
+      if (shadeFill.style.transition !== "none") shadeFill.style.transition = "none";
+      if (head.style.transition !== "none") head.style.transition = "none";
       shadeFill.style.transform = `translateX(${(x - geometry.left).toFixed(1)}px)`;
       head.style.transform = `translateX(${(geometry.x0 + x).toFixed(1)}px)`;
     };
@@ -387,8 +388,13 @@ if (typeof module !== "undefined" && module.exports) {
     // Cut the fight at the moment and draw the figures from it. Resolves in
     // microtasks (load_fight's details need no IPC), so a full redraw the
     // observer caught is replaced before it is painted.
-    const drawFigures = () => {
+    const drawFigures = (duringDrag = false) => {
       if (!active || !model) return;
+      // Nothing redraws the figures while the slider is held, but its settle.
+      if (dragging && !duringDrag) {
+        figuresPending = true;
+        return;
+      }
       const seq = ++cutSeq;
       // HEAL in a fight whose heals have no times: every figure there is
       // healing, so all of it stays the whole fight's (the note says so).
@@ -618,7 +624,6 @@ if (typeof module !== "undefined" && module.exports) {
     // a moment without moving). Every drag step redrew everything, the steps
     // queued up behind each other and the page lagged (2026-10-18).
     let resumeAfterDrag = false;
-    let dragging = false;
     let dragFrame = 0;
     let settleTimer = 0;
     const dragPaint = () => {
@@ -631,7 +636,10 @@ if (typeof module !== "undefined" && module.exports) {
     const settle = () => {
       clearTimeout(settleTimer);
       settleTimer = 0;
-      if (active) requestFigures(performance.now(), true);
+      if (!active) return;
+      figuresPending = false;
+      lastFiguresTs = performance.now();
+      drawFigures(true);
     };
     scrub.addEventListener("pointerdown", () => {
       dragging = true;
@@ -664,7 +672,8 @@ if (typeof module !== "undefined" && module.exports) {
       at = Math.max(0, Math.min(durationMs(), Number(scrub.value) || 0));
       if (!dragFrame) dragFrame = requestAnimationFrame(dragPaint);
       clearTimeout(settleTimer);
-      settleTimer = setTimeout(settle, 160);
+      // Held still for a while: the figures, exactly.
+      settleTimer = setTimeout(settle, 400);
     });
     // Arrows a second (Shift: ten), Page keys thirty, Home / End the ends;
     // Space plays or pauses.
@@ -734,7 +743,9 @@ if (typeof module !== "undefined" && module.exports) {
       if (ownRender) return;
       syncAvailability();
       syncHealNote();
-      if (active) {
+      if (active && dragging) {
+        figuresPending = true;
+      } else if (active) {
         figuresPending = false;
         lastFiguresTs = performance.now();
         drawFigures();
