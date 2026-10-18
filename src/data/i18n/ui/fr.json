@@ -183,6 +183,7 @@
       "positionText": "{at} sur {total}",
       "exit": "Terminer la relecture (afficher tout le combat)",
       "wholeFightNote": "Dégâts subis, Min / Max et buffs : tout le combat.",
+      "moreSkills": "+{n} de plus, visibles en pause",
       "noHealTiming": "Les soins de ce combat n'ont pas d'horodatage (enregistré par une ancienne version) : ils montrent tout le combat.",
       "unavailable": "Ce combat a été enregistré sans les instants des coups, il ne peut pas être relu"
     },

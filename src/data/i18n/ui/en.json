@@ -188,6 +188,7 @@
       "positionText": "{at} of {total}",
       "exit": "End replay (show the whole fight)",
       "wholeFightNote": "Damage Taken, Min / Max and buff uptimes show the whole fight.",
+      "moreSkills": "+{n} more, shown when paused",
       "noHealTiming": "Healing in this fight has no times (an older version saved it): it shows the whole fight.",
       "unavailable": "This fight was saved without hit times, so it cannot be replayed"
     },

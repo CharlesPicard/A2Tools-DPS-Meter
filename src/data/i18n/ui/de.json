@@ -183,6 +183,7 @@
       "positionText": "{at} von {total}",
       "exit": "Wiedergabe beenden (ganzen Kampf zeigen)",
       "wholeFightNote": "Erlittener Schaden, Min / Max und Buff-Laufzeiten: ganzer Kampf.",
+      "moreSkills": "+{n} weitere, bei Pause sichtbar",
       "noHealTiming": "Die Heilung in diesem Kampf hat keine Zeiten (von einer älteren Version gespeichert): Sie zeigt den ganzen Kampf.",
       "unavailable": "Dieser Kampf wurde ohne Trefferzeiten gespeichert und kann nicht wiedergegeben werden"
     },

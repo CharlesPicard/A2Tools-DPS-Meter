@@ -7963,9 +7963,14 @@ html.a2-offline .historyUploadBtn {
   will-change: transform;
 }
 
-/* While a replay plays the skill table holds still (details.js
-   renderFigures): dimmed, so it reads as waiting. A pause, a seek or the
-   end draws it again, exact. */
-.detailsPanel.isReplayPlaying .detailsSkills .skills {
-  opacity: 0.55;
+/* While a replay plays the skill table shows its first ten rows; this says
+   how many more there are (details.js showSkillsMore). */
+.detailsPanel .skillsReplayMore {
+  padding: 4px 12px;
+  font-size: 0.8em;
+  color: var(--hud-sub);
+}
+.detailsPanel .skillsReplayMore[hidden],
+.detailsPanel:not(.isReplayPlaying) .skillsReplayMore {
+  display: none;
 }

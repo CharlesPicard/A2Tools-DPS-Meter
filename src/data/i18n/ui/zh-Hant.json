@@ -183,6 +183,7 @@
       "positionText": "{at} / {total}",
       "exit": "結束重播（顯示整場戰鬥）",
       "wholeFightNote": "承受傷害、最小 / 最大值和增益持續率為整場戰鬥的數值。",
+      "moreSkills": "還有 {n} 個，暫停時顯示",
       "noHealTiming": "本場戰鬥的治療沒有時間記錄（由舊版本儲存）：顯示整場戰鬥的數值。",
       "unavailable": "這場戰鬥儲存時沒有命中時間，無法重播"
     },

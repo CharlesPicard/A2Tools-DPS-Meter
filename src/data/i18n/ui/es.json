@@ -183,6 +183,7 @@
       "positionText": "{at} de {total}",
       "exit": "Terminar repetición (mostrar el combate entero)",
       "wholeFightNote": "Daño recibido, Mín / Máx y beneficios: combate entero.",
+      "moreSkills": "+{n} más, visibles al pausar",
       "noHealTiming": "La curación de este combate no tiene tiempos (la guardó una versión anterior): muestra el combate entero.",
       "unavailable": "Este combate se guardó sin los tiempos de los golpes, así que no se puede repetir"
     },

@@ -1255,7 +1255,23 @@ const createDetailsUI = ({
   let nameFont = "";
   const nameWidths = new Map();
   const nameCanvas = document.createElement("canvas").getContext("2d");
-  const renderSkills = (details, { compact = false } = {}) => {
+  // While a replay plays, the skill table shows its first rows only, and
+  // says how many more there are (renderFigures).
+  let skillsMoreEl = null;
+  const showSkillsMore = (hidden) => {
+    if (!skillsMoreEl && hidden > 0 && skillsListEl?.parentElement) {
+      skillsMoreEl = document.createElement("div");
+      skillsMoreEl.className = "skillsReplayMore";
+      skillsListEl.after(skillsMoreEl);
+    }
+    if (!skillsMoreEl) return;
+    skillsMoreEl.hidden = !(hidden > 0);
+    if (hidden > 0) {
+      skillsMoreEl.textContent = labelText("details.replay.moreSkills", "+{n} more, shown when paused")
+        .replace("{n}", String(hidden));
+    }
+  };
+  const renderSkills = (details, { compact = false, limit = 0 } = {}) => {
     if (sectionsHeld) return;
     const skills =
       detailsMode === "heal"
@@ -1307,12 +1323,16 @@ const createDetailsUI = ({
     const displaySkills = foldDotRows([...groupedSkills.values()]);
 
     displaySkills.sort(compareSkillSort);
-    const topDisplay = compact ? displaySkills.slice(0, COMPACT_MAX_SKILLS) : displaySkills;
+    const limited = !compact && limit > 0 && displaySkills.length > limit;
+    const topDisplay = compact
+      ? displaySkills.slice(0, COMPACT_MAX_SKILLS)
+      : limited ? displaySkills.slice(0, limit) : displaySkills;
+    showSkillsMore(limited ? displaySkills.length - limit : 0);
 
     // In heal mode there's no target-total to normalise against, so percentages are
     // relative to the total healing shown (aggregatedDamage = summed heal amounts).
     const totalDamage = detailsMode === "heal" ? 0 : Number(details?.totalDmg);
-    const aggregatedDamage = topDisplay.reduce((sum, s) => sum + (s._combinedDmg || 0), 0);
+    const aggregatedDamage = (limited ? displaySkills : topDisplay).reduce((sum, s) => sum + (s._combinedDmg || 0), 0);
     const percentBaseTotal = totalDamage > 0 ? totalDamage : aggregatedDamage;
 
     ensureSkillSlots(topDisplay.length);
@@ -1321,8 +1341,9 @@ const createDetailsUI = ({
     // names shown change: reading the styles after the rows were rebuilt laid
     // the page out at once, and a replay redraws the table ten times a second
     // (it lagged a whole browser by the end of a long fight, 2026-10-18).
+    // A replay's first rows keep the columns of the whole table.
     const nameKey = `${detailsMode}|${topDisplay.map((s) => s?.name ?? "").join("")}`;
-    if (nameKey !== lastNameKey || !(lastMeasuredNameWidth > 0)) {
+    if (!limited && (nameKey !== lastNameKey || !(lastMeasuredNameWidth > 0))) {
       lastNameKey = nameKey;
       const iconSize = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--details-skill-icon-size") || "36", 10);
       const iconMargin = 6;
@@ -3632,6 +3653,7 @@ const createDetailsUI = ({
   // window's own state (lastDetails, the targets) stays the whole fight's, so
   // the timeline, a sort or a reload still draw that; the replay draws over
   // them again. renderFigures(null) draws the whole fight's figures.
+  let replaySkillsAt = 0;
   window.fightReplay?.attach?.({
     root: detailsPanel,
     timeline: fightTimeline,
@@ -3656,11 +3678,17 @@ const createDetailsUI = ({
         const ctx = buildPartyBarStats();
         renderPartyBars(ctx?.stats || lastDetails?.perActorStats, ctx?.battleTimeMs || lastDetails?.battleTimeMs);
         renderStats(lastDetails, { compact: activeCompactMode });
-        // The skill table is not redrawn while a replay plays: even once a
-        // second it was three quarters of the page's work (2026-10-18), and
-        // nobody reads it mid-play. A pause, a seek or the end draws it, so
-        // it is always exact when it can be read.
-        if (!cut?.playing) renderSkills(lastDetails, { compact: activeCompactMode });
+        // While a replay plays, the skill table's first ten rows, once a
+        // second: the whole table, even at that rate, was three quarters of
+        // the page's work (2026-10-18). A pause, a seek or the end draws all
+        // of it, exact.
+        const now = performance.now();
+        if (!cut?.playing) {
+          renderSkills(lastDetails, { compact: activeCompactMode });
+        } else if (now - replaySkillsAt >= 1000) {
+          replaySkillsAt = now;
+          renderSkills(lastDetails, { compact: activeCompactMode, limit: 10 });
+        }
         // Damage taken has no times: it stays the whole fight's, greyed.
         const shownStats = detailsMode === "heal" ? HEAL_STATUS : STATUS;
         statSlots.forEach((slot, i) => slot.statEl.classList.toggle("isWholeFight",

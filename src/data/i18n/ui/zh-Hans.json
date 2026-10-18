@@ -183,6 +183,7 @@
       "positionText": "{at} / {total}",
       "exit": "结束回放（显示整场战斗）",
       "wholeFightNote": "承受伤害、最小 / 最大值和增益持续率为整场战斗的数值。",
+      "moreSkills": "还有 {n} 个，暂停时显示",
       "noHealTiming": "本场战斗的治疗没有时间记录（由旧版本保存）：显示整场战斗的数值。",
       "unavailable": "这场战斗保存时没有命中时间，无法回放"
     },
