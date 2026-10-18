@@ -505,6 +505,7 @@ if (typeof module !== "undefined" && module.exports) {
         return;
       }
       stepMovers(true);
+      hooks.advancePartyBars?.();
       requestFigures(now);
       paintClock(at, dur);
     };

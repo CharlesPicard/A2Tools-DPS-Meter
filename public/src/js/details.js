@@ -697,6 +697,21 @@ const createDetailsUI = ({
     requestAnimationFrame(step);
   };
 
+  // While a replay plays, the party bars are drawn ten times a second; the
+  // replay's twenty-a-second step (advancePartyBars) moves each part of the
+  // way from its last length to its new one, so they do not jump. No
+  // transition: a running one makes the browser draw a frame at every
+  // screen refresh (2026-10-18).
+  const lastBarRatio = new Map();
+  let barSteps = null;
+  const advancePartyBars = () => {
+    if (!barSteps) return;
+    const p = Math.min(1, (performance.now() - barSteps.started) / 100);
+    for (const [fillEl, from, to] of barSteps.items) {
+      fillEl.style.transform = `scaleX(${(from + (to - from) * p).toFixed(4)})`;
+    }
+    if (p >= 1) barSteps = null;
+  };
   // The first time a fight's figures show, its bars slide out from empty
   // (render sets this; see `renderRest`).
   let fillBarsFromZero = false;
@@ -705,6 +720,8 @@ const createDetailsUI = ({
     const sliding = fillBarsFromZero && !reducedMotion();
     fillBarsFromZero = false;
     const slides = [];
+    const stepping = !sliding && detailsPanel.classList.contains("isReplayPlaying") && !reducedMotion();
+    const steps = [];
     detailsPartyListEl.innerHTML = "";
     const allActors = Array.isArray(stats) ? stats : [];
     if (allActors.length === 0) return;
@@ -753,8 +770,19 @@ const createDetailsUI = ({
       fillEl.className = "detailsPartyBarFill";
       // A width rather than a stretch, so a bar texture keeps its size.
       fillEl.style.transform = "none";
-      const fillWidth = `${(Math.max(0, Math.min(1, ratio)) * 100).toFixed(2)}%`;
-      fillEl.style.width = fillWidth;
+      const clamped = Math.max(0, Math.min(1, ratio));
+      const fillWidth = `${(clamped * 100).toFixed(2)}%`;
+      const was = lastBarRatio.get(actorId);
+      lastBarRatio.set(actorId, clamped);
+      if (stepping) {
+        // Stretched while stepping: a transform, not a width, so no layout.
+        fillEl.style.width = "100%";
+        fillEl.style.transformOrigin = "left center";
+        fillEl.style.transform = `scaleX(${(was ?? clamped).toFixed(4)})`;
+        if (was !== undefined && was !== clamped) steps.push([fillEl, was, clamped]);
+      } else {
+        fillEl.style.width = fillWidth;
+      }
       if (sliding) {
         // A transform, not the width: the width made every frame lay the
         // page out again, and the slide stuttered.
@@ -870,6 +898,7 @@ const createDetailsUI = ({
 
       detailsPartyListEl.appendChild(bar);
     });
+    barSteps = steps.length ? { started: performance.now(), items: steps } : null;
     if (sliding) {
       requestAnimationFrame(() => {
         slides.forEach((fillEl, i) => {
@@ -3233,7 +3262,10 @@ const createDetailsUI = ({
     selectedAttackerLabel = selectedAttackerLabel || String(row.name ?? "");
     updateHeaderText();
     // The fight's first show: bars slide out and figures count up.
-    const firstShow = stagedForSeq !== openSeq;
+    // On a2tools.app (the log page's viewer sets __A2_WEB_LOG__) the final
+    // state at once: the staged entrance suits a window opening, but on the
+    // page it only delayed the figures and flashed (2026-10-18).
+    const firstShow = stagedForSeq !== openSeq && !window.__A2_WEB_LOG__;
     fillBarsFromZero = firstShow;
     if (firstShow) pendingStarts = [];
     const partyBarCtx = buildPartyBarStats();
@@ -3274,7 +3306,8 @@ const createDetailsUI = ({
       [() => renderTimeline(details), null],
       [() => renderBuffs(), null],
     ];
-    if (stagedForSeq === openSeq) {
+    if (stagedForSeq === openSeq || window.__A2_WEB_LOG__) {
+      stagedForSeq = openSeq;
       sectionsHeld = false;
       for (const [step] of steps) step();
       chartRevealPending = false;
@@ -3655,6 +3688,7 @@ const createDetailsUI = ({
   // them again. renderFigures(null) draws the whole fight's figures.
   let replaySkillsAt = 0;
   window.fightReplay?.attach?.({
+    advancePartyBars,
     root: detailsPanel,
     timeline: fightTimeline,
     timelineScroll: fightTimelineScroll,
