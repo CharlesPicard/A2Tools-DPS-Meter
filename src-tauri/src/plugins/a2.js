@@ -119,6 +119,10 @@
       send: (name, data) => call("widgets.send", [String(name), data]),
       lock: (locked) => call("widgets.lock", [!!locked]),
       locked: () => call("widgets.locked", []),
+      // Meter 2.0.72 on: where a widget is, and moving it (physical screen
+      // pixels), for a plugin that lays its widgets out itself.
+      where: (name) => call("widgets.where", [String(name)]),
+      place: (name, at) => call("widgets.place", [String(name), { x: Number(at?.x), y: Number(at?.y) }]),
     }),
     widget: Object.freeze({
       name: new URLSearchParams(location.search).get("name") || "",

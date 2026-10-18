@@ -111,6 +111,14 @@
       if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
       return invoke("plugin_widgets_locked");
     },
+    "widgets.where": ([name]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widget_where", { name: String(name) });
+    },
+    "widgets.place": ([name, at]) => {
+      if (!allowed("widgets")) throw new Error('the plugin lacks the "widgets" permission');
+      return invoke("plugin_widget_place", { name: String(name), x: Math.round(Number(at?.x)), y: Math.round(Number(at?.y)) });
+    },
     notify: ([text]) => {
       if (!allowed("notify")) throw new Error('the plugin lacks the "notify" permission');
       showToast(String(text));
@@ -216,7 +224,7 @@
     if (payload.plugin !== undefined && payload.plugin !== id) return;
     // Sent to this plugin's widgets, not to its window.
     if (payload.event === "widget" || payload.event === "locked") return;
-    if (payload.event === "widget-message" && !allowed("widgets")) return;
+    if ((payload.event === "widget-message" || payload.event === "widget-moved") && !allowed("widgets")) return;
     if (typeof payload.seq !== "number") deliver(payload.event, payload.data);
     else if (early) early.push(payload);
     else deliverLogged(payload);

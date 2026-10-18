@@ -3662,6 +3662,8 @@ pub fn run() {
             crate::plugins::widgets::plugin_widget_drag,
             crate::plugins::boss_live::plugin_boss_follow,
             crate::plugins::widgets::plugin_widget_area,
+            crate::plugins::widgets::plugin_widget_where,
+            crate::plugins::widgets::plugin_widget_place,
             set_meter_shown,
             meter_shown,
             crate::plugins::plugin_storage_get,

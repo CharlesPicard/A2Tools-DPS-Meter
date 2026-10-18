@@ -198,6 +198,39 @@ pub fn plugin_widget_area(app: tauri::AppHandle, window: tauri::WebviewWindow, x
     Ok(())
 }
 
+/// Where widget `name` of the calling plugin is: `{ x, y, width, height }`
+/// in physical screen pixels, and the work area of the screen it is on
+/// (`screen`, the same), or null when it is not open.
+#[tauri::command]
+pub fn plugin_widget_where(app: tauri::AppHandle, window: tauri::WebviewWindow, name: String) -> Result<Value, String> {
+    let id = window_plugin(&window)?;
+    require(&app, &id, "widgets")?;
+    let Some(widget) = app.get_webview_window(&label(&id, &name)) else { return Ok(Value::Null) };
+    let at = widget.outer_position().map_err(|e| e.to_string())?;
+    let size = widget.outer_size().map_err(|e| e.to_string())?;
+    let screen = widget.current_monitor().ok().flatten().map(|m| {
+        let area = m.work_area();
+        serde_json::json!({ "x": area.position.x, "y": area.position.y,
+                            "width": area.size.width, "height": area.size.height })
+    });
+    Ok(serde_json::json!({ "x": at.x, "y": at.y, "width": size.width, "height": size.height, "screen": screen }))
+}
+
+/// Move widget `name` of the calling plugin to `x, y` (physical screen
+/// pixels, its top left), as a plugin that lays its widgets out does.
+/// Locked or not: the lock is the player's hand off them, not the plugin's.
+#[tauri::command]
+pub fn plugin_widget_place(app: tauri::AppHandle, window: tauri::WebviewWindow, name: String, x: i32, y: i32) -> Result<(), String> {
+    let id = window_plugin(&window)?;
+    require(&app, &id, "widgets")?;
+    let widget = app.get_webview_window(&label(&id, &name)).ok_or("no such widget open")?;
+    let far = 1_000_000;
+    if !(-far..far).contains(&x) || !(-far..far).contains(&y) {
+        return Err("not a place on a screen".into());
+    }
+    widget.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+}
+
 /// Close widget `name` of the calling plugin.
 #[tauri::command]
 pub fn plugin_widget_close(app: tauri::AppHandle, window: tauri::WebviewWindow, name: String) -> Result<(), String> {
@@ -298,7 +331,9 @@ pub fn close_all(app: &tauri::AppHandle, id: &str) {
     }
 }
 
-/// A widget moved: remember where, once it has stopped moving.
+/// A widget moved: remember where, once it has stopped moving, and tell its
+/// plugin ("widget-moved", `{ name, x, y }`), which may lay its widgets out
+/// around it.
 pub fn note_moved(app: &tauri::AppHandle, label: &str, at: tauri::PhysicalPosition<i32>) {
     static LATEST: std::sync::OnceLock<Mutex<HashMap<String, (i32, i32)>>> = std::sync::OnceLock::new();
     let Some((id, name)) = parse_label(label) else { return };
@@ -315,6 +350,8 @@ pub fn note_moved(app: &tauri::AppHandle, label: &str, at: tauri::PhysicalPositi
         if let Some(state) = app.try_state::<AppState>() {
             state.settings.set(&key, &format!("{x},{y}"));
         }
+        let event = serde_json::json!({ "plugin": id, "event": "widget-moved", "data": { "name": name, "x": x, "y": y } });
+        let _ = app.emit_to(format!("plugin-{id}"), "plugin-event", event);
     });
 }
 
