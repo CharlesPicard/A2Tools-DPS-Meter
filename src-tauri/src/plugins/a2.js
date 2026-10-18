@@ -107,6 +107,8 @@
     }),
     notify: (text) => call("notify", [String(text)]),
     bossTimers: (server) => call("bossTimers", [Number(server)]),
+    // Meter 2.0.72 on: the server's Abyss siege (artifact holders, cores).
+    abyssSiege: (server) => call("abyssSiege", [Number(server)]),
     followBosses: (server, bosses) => call("bossTimers.follow", [Number(server), (bosses || []).map(String)]),
     window: Object.freeze({
       show: () => call("window.show", []),

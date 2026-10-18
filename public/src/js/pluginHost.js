@@ -29,7 +29,7 @@
   const deliver = (event, data, extra = {}) => {
     if (event.startsWith("decoded:") && !allowed(`decoder:${event.slice(8)}`)) return;
     if (event === "character" && !allowed("events:character")) return;
-    if ((event === "bossMap" || event === "bossLive") && !allowed("feed:boss-timers")) return;
+    if ((event === "bossMap" || event === "bossLive" || event === "abyss") && !allowed("feed:boss-timers")) return;
     const msg = { event, data, ...extra };
     if (ready) send(msg);
     else queue.push(msg);
@@ -64,6 +64,12 @@
     bossTimers: ([server]) => {
       if (!allowed("feed:boss-timers")) throw new Error('the plugin lacks the "feed:boss-timers" permission');
       return invoke("plugin_boss_timers", { server: Number(server) });
+    },
+    // A server's Abyss siege: the artifacts' holders and the Dimensional
+    // Cores (meter 2.0.72).
+    abyssSiege: ([server]) => {
+      if (!allowed("feed:boss-timers")) throw new Error('the plugin lacks the "feed:boss-timers" permission');
+      return invoke("plugin_abyss_siege", { server: Number(server) });
     },
     // Follow some of a server's field bosses: each change comes at once as a
     // "bossLive" event (meter 2.0.68). An empty list stops following.
