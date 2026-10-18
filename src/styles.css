@@ -7373,21 +7373,43 @@ html.a2-offline .historyUploadBtn {
 .detailsPanel .fightReplayBar.isActive .fightReplayTime {
   color: var(--hud-num, #fff);
 }
+/* The speed menu: styled like the secondary replay buttons, with its own
+   chevron (the native arrow is hidden). */
 .detailsPanel .fightReplaySpeed {
   flex: none;
-  height: 25px;
-  padding: 0 2px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.3);
-  color: rgba(255, 255, 255, 0.85);
+  appearance: none;
+  -webkit-appearance: none;
+  height: 30px;
+  padding: 0 26px 0 10px;
+  border: 1px solid var(--panel-border);
+  border-radius: 8px;
+  background-color: rgba(255, 255, 255, 0.06);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='rgba(255,255,255,0.85)' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 10px 6px;
+  color: rgba(255, 255, 255, 0.92);
   font-family: var(--hud-tech);
   font-variant-numeric: tabular-nums;
+  font-weight: 650;
   font-size: 0.9em;
   cursor: pointer;
+  transition: background-color 120ms ease-out;
 }
+.detailsPanel .fightReplaySpeed:hover {
+  background-color: rgba(255, 255, 255, 0.12);
+}
+.detailsPanel .fightReplaySpeed:active {
+  transform: translateY(1px);
+}
+/* The open list: the panel's dark, the speed in use in the accent. */
 .detailsPanel .fightReplaySpeed option {
   background: rgb(var(--hud-bg));
+  color: #fff;
+  font-weight: 600;
+}
+.detailsPanel .fightReplaySpeed option:checked {
+  background: var(--isUser-fill);
   color: #fff;
 }
 .detailsPanel .fightReplayScrubWrap {
