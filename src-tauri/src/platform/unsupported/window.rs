@@ -92,3 +92,6 @@ pub fn front_is_ours_or_game() -> bool {
 
 /// Windows only (see the Windows version).
 pub fn never_activate(_window: &tauri::WebviewWindow, _before: Option<isize>) {}
+
+/// Windows only (see the Windows version).
+pub fn give_front_back(_window: &tauri::WebviewWindow, _before: Option<isize>) {}

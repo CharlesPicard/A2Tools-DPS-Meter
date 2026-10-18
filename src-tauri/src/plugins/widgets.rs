@@ -94,6 +94,12 @@ fn apply_lock(window: &tauri::WebviewWindow, locked: bool) {
     }
 }
 
+/// The window in front when each widget was made, until its page loads.
+fn fronts() -> &'static Mutex<HashMap<String, Option<isize>>> {
+    static FRONTS: std::sync::OnceLock<Mutex<HashMap<String, Option<isize>>>> = std::sync::OnceLock::new();
+    FRONTS.get_or_init(Mutex::default)
+}
+
 fn saved_place(app: &tauri::AppHandle, id: &str, name: &str) -> Option<(i32, i32)> {
     let value = app.try_state::<AppState>()?.settings.get(&place_key(id, name))?;
     let (x, y) = value.split_once(',')?;
@@ -154,6 +160,7 @@ pub async fn plugin_widget_open(
     // Never in front of the game: an alert icon appearing must not tab the
     // player out of it.
     crate::platform::window::never_activate(&widget, front);
+    fronts().lock().unwrap_or_else(|p| p.into_inner()).insert(widget.label().to_string(), front);
     // Where it was left; a widget never moved goes beside the plugin's others
     // rather than wherever the window manager puts a new window (the middle
     // of the screen).
@@ -285,6 +292,9 @@ pub fn plugin_widgets_locked(app: tauri::AppHandle, window: tauri::WebviewWindow
 #[tauri::command]
 pub fn plugin_widget_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<Value, String> {
     let (id, name) = widget_of(&window)?;
+    // Its page has loaded: if that took the front from the game, give it back.
+    let before = fronts().lock().unwrap_or_else(|p| p.into_inner()).remove(window.label()).flatten();
+    crate::platform::window::give_front_back(&window, before);
     let locked = is_locked(&app, &id);
     apply_lock(&window, locked);
     let language = app.try_state::<AppState>().and_then(|s| s.settings.get("dpsMeter.language")).unwrap_or_else(|| "en".into());
