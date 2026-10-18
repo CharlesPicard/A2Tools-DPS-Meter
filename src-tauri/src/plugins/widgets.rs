@@ -155,6 +155,12 @@ pub async fn plugin_widget_open(
         .skip_taskbar(true)
         .resizable(false)
         .focused(false)
+        // Never takes focus, from the start: clicks and drags still reach it.
+        // Focusable, tao turns a GTK window's focus back on after its first
+        // draw, and KWin gave a new icon the front at its alert (Hirai,
+        // CachyOS KDE, 2.0.71); on Windows it is WS_EX_NOACTIVATE from
+        // creation, before WebView2 can take the front.
+        .focusable(false)
         .build()
         .map_err(|e| e.to_string())?;
     // Never in front of the game: an alert icon appearing must not tab the
@@ -171,11 +177,27 @@ pub async fn plugin_widget_open(
             let size = w.outer_size().ok()?;
             Some((at.x, at.y, size.width as i32, size.height as i32))
         }))
-    });
+    }).or_else(|| beside_left(&app, &id));
     if let Some((x, y)) = place {
         let _ = widget.set_position(tauri::PhysicalPosition::new(x, y));
     }
     Ok(())
+}
+
+/// With none of the plugin's widgets open, a new one goes beside where its
+/// widgets were last left, not mid-screen (Hirai, 2026-10-19: an alert's
+/// icon in the middle of the game).
+fn beside_left(app: &tauri::AppHandle, id: &str) -> Option<(i32, i32)> {
+    let state = app.try_state::<AppState>()?;
+    let prefix = format!("dpsMeter.pluginWidget.{id}.");
+    // The width of an icon left there is not kept; an Event Timers icon is
+    // about this wide.
+    const WIDTH: i32 = 96;
+    beside(state.settings.get_all().into_iter().filter_map(|(key, value)| {
+        key.strip_prefix(&prefix)?;
+        let (x, y) = value.split_once(',')?;
+        Some((x.trim().parse().ok()?, y.trim().parse().ok()?, WIDTH, 0))
+    }))
 }
 
 /// Just right of the rightmost of these places, on its row, with a gap.
@@ -189,6 +211,7 @@ pub fn beside(places: impl Iterator<Item = (i32, i32, i32, i32)>) -> Option<(i32
 pub fn place_beside_others(app: &tauri::AppHandle, label: &str, place_of: impl Fn(&str) -> Option<(i32, i32, i32, i32)>) -> Option<(i32, i32)> {
     let (id, _) = parse_label(label)?;
     beside(open_widgets(app, &id).iter().filter(|w| w.label() != label).filter_map(|w| place_of(w.label())))
+        .or_else(|| beside_left(app, &id))
 }
 
 /// The part of the calling widget that takes the mouse while unlocked (CSS
@@ -226,16 +249,30 @@ pub fn plugin_widget_where(app: tauri::AppHandle, window: tauri::WebviewWindow, 
 /// Move widget `name` of the calling plugin to `x, y` (physical screen
 /// pixels, its top left), as a plugin that lays its widgets out does.
 /// Locked or not: the lock is the player's hand off them, not the plugin's.
+/// A widget not open yet opens there: the place is kept for it, where the
+/// window manager reads it too (KDE on Wayland places a new window itself,
+/// and lets no app move one after: an icon placed only once open stayed
+/// mid-screen there, Hirai 2026-10-19).
 #[tauri::command]
 pub fn plugin_widget_place(app: tauri::AppHandle, window: tauri::WebviewWindow, name: String, x: i32, y: i32) -> Result<(), String> {
     let id = window_plugin(&window)?;
     require(&app, &id, "widgets")?;
-    let widget = app.get_webview_window(&label(&id, &name)).ok_or("no such widget open")?;
+    if !valid_name(&name) {
+        return Err("a widget name is 1 to 32 lowercase letters, digits and '-'".into());
+    }
     let far = 1_000_000;
     if !(-far..far).contains(&x) || !(-far..far).contains(&y) {
         return Err("not a place on a screen".into());
     }
-    widget.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string())
+    let widget_label = label(&id, &name);
+    if let Some(state) = app.try_state::<AppState>() {
+        state.settings.set(&place_key(&id, &name), &format!("{x},{y}"));
+        state.settings.set(&format!("window.{widget_label}.placed"), &format!("{x},{y},0,0"));
+    }
+    match app.get_webview_window(&widget_label) {
+        Some(widget) => widget.set_position(tauri::PhysicalPosition::new(x, y)).map_err(|e| e.to_string()),
+        None => Ok(()),
+    }
 }
 
 /// Close widget `name` of the calling plugin.
