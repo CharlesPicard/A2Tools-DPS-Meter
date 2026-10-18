@@ -484,11 +484,11 @@ fn auto_upload(app: tauri::AppHandle, record: FightRecord) {
 /// and verified later (training dummies are not logs), and auto-upload the
 /// finished ones when that is on.
 #[cfg_attr(not(feature = "online"), allow(unused_variables))]
-fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<FightRecord>) {
+fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<FightRecord>, names: &share::SliceNames) {
     for record in &records {
         let _ = state.fight_history.save_fight(record);
         if !record.is_train {
-            if let Err(e) = share::save_slice(&state.app_data_dir, record, &state.data_storage) {
+            if let Err(e) = share::save_slice(&state.app_data_dir, record, names) {
                 // A fight that began before the meter did is normal; anything
                 // else is why an upload will later say no packets were saved.
                 if e.starts_with("no packets in memory") {
@@ -513,21 +513,50 @@ fn save_fight_records(app: &tauri::AppHandle, state: &AppState, records: Vec<Fig
     }
 }
 
-/// Save every fight on the meter now, before its combat data is cleared: a
-/// zone change, the end of a party, the reset button, the reload hotkey or
-/// quitting. Each cleared it unsaved, and leaving an instance right after a
-/// kill lost everything since the last 30-second save (issue #19).
+/// Save every fight on the meter, before its combat data is cleared: a zone
+/// change, the end of a party, the reset button or the reload hotkey. Each
+/// cleared it unsaved, and leaving an instance right after a kill lost
+/// everything since the last 30-second save (issue #19).
+///
+/// The records are taken now; writing them, and cutting each fight's slice,
+/// is queued behind any save already running. A zone change and the end of a
+/// party call this from the parser's thread, and waiting there for the disk
+/// stopped the parser: packets were lost and the meter froze for minutes.
 fn save_fights_before_reset(app: &tauri::AppHandle) {
+    let Some((records, names)) = fights_before_reset(app) else { return };
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let job = handle.clone();
+        if let Err(error) = crate::blocking::HISTORY.run(move || {
+            let Some(state) = job.try_state::<AppState>() else { return };
+            let _saving = state.fight_save.lock();
+            save_fight_records(&job, &state, records, &names);
+        }).await {
+            tracing::warn!("Saving fights before a reset failed: {error}");
+        }
+    });
+}
+
+/// Save every fight on the meter before quitting, and wait for it.
+fn save_fights_before_quit(app: &tauri::AppHandle) {
+    let Some((records, names)) = fights_before_reset(app) else { return };
     let Some(state) = app.try_state::<AppState>() else { return };
     let _saving = state.fight_save.lock();
+    save_fight_records(app, &state, records, &names);
+}
+
+/// The fights on the meter, as records, with the names their slices need.
+fn fights_before_reset(app: &tauri::AppHandle) -> Option<(Vec<FightRecord>, share::SliceNames)> {
+    let state = app.try_state::<AppState>()?;
     if state.data_storage.damage_generation() <= 0 {
-        return;
+        return None;
     }
     let records = state.dps_calculator.lock().snapshot_boss_fights_force();
-    if !records.is_empty() {
-        tracing::info!("Saving {} fight(s) before combat data is cleared", records.len());
+    if records.is_empty() {
+        return None;
     }
-    save_fight_records(app, &state, records);
+    tracing::info!("Saving {} fight(s) before combat data is cleared", records.len());
+    Some((records, share::SliceNames::of(&state.data_storage)))
 }
 
 #[cfg(feature = "online")]
@@ -1131,7 +1160,7 @@ fn set_manual_device(state: tauri::State<'_, AppState>, device: String) {
 
 #[tauri::command]
 fn quit_app(app: tauri::AppHandle) {
-    save_fights_before_reset(&app);
+    save_fights_before_quit(&app);
     flush_settings_before_exit(&app);
     app.exit(0);
 }
@@ -3444,7 +3473,8 @@ pub fn run() {
                                 .map(|mut calc| calc.snapshot_boss_fights());
                             if let Some(records) = records {
                                 // The calculator guard is gone before any disk I/O.
-                                save_fight_records(&handle, &state, records);
+                                let names = share::SliceNames::of(&state.data_storage);
+                                save_fight_records(&handle, &state, records, &names);
                             }
                         }
                         // Automatic uploads that failed and are due again,

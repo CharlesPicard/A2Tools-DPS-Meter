@@ -6,6 +6,7 @@ version = 4
 name = "a2tools-dps-meter"
 version = "2.0.71"
 dependencies = [
+ "aho-corasick",
  "chrono",
  "discord-rich-presence",
  "ed25519-dalek",
