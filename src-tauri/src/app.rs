@@ -1902,6 +1902,16 @@ const TOOL_WINDOWS: [&str; 3] = ["details", "settings", "history"];
 /// and closed within 5 s reopened where it had been (Battle History,
 /// 2026-10-18).
 fn save_tool_window_geometry(handle: &tauri::AppHandle, label: &str) {
+    save_window_geometry(handle, label, label);
+}
+
+/// The settings key the fight windows (`details-<fight id>`) share: one
+/// place and size for all of them, where the last one was left, rather than
+/// one per fight, which never reopened anywhere but the middle (2026-10-18).
+const FIGHT_WINDOW_KEY: &str = "fight";
+
+/// Remember window `label` as `key` (see `save_tool_window_geometry`).
+fn save_window_geometry(handle: &tauri::AppHandle, label: &str, key: &str) {
     let Some(state) = handle.try_state::<AppState>() else { return };
     // While Details is pinned to a monitor its rect comes from the setting,
     // not from the user. Saving it poisons the windowed geometry: turn the
@@ -1915,8 +1925,8 @@ fn save_tool_window_geometry(handle: &tauri::AppHandle, label: &str) {
     }
     if let Ok(pos) = w.outer_position() {
         if pos.x > -10000 && pos.y > -10000 {
-            state.settings.set(&format!("window.{}.x", label), &pos.x.to_string());
-            state.settings.set(&format!("window.{}.y", label), &pos.y.to_string());
+            state.settings.set(&format!("window.{}.x", key), &pos.x.to_string());
+            state.settings.set(&format!("window.{}.y", key), &pos.y.to_string());
         }
     }
     // Inner, not outer: restore applies it with set_size, which sets the
@@ -1924,8 +1934,8 @@ fn save_tool_window_geometry(handle: &tauri::AppHandle, label: &str) {
     // (16x9 px here) on each reopen.
     if let Ok(size) = w.inner_size() {
         if size.width > 100 && size.height > 100 {
-            state.settings.set(&format!("window.{}.w", label), &size.width.to_string());
-            state.settings.set(&format!("window.{}.h", label), &size.height.to_string());
+            state.settings.set(&format!("window.{}.w", key), &size.width.to_string());
+            state.settings.set(&format!("window.{}.h", key), &size.height.to_string());
         }
     }
     // Details is unpinned here, but the window may still be sitting on the
@@ -2379,11 +2389,12 @@ async fn request_details_view(
 /// to be read and closed, and persisting geometry per fight id would accumulate
 /// settings without bound.
 fn open_fight_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> {
+    // Where the last fight window was left, at its size; cascaded only past
+    // fight windows already open. Born there, not moved after `build()`: it
+    // showed at the default spot first (see birth_place).
     let step = app.webview_windows().keys().filter(|l| l.starts_with("details-")).count() as f64;
     let offset = (step % 6.0) * 34.0;
-    // Born centred on the overlay's screen and cascaded, not moved there
-    // after `build()`: it showed at the default spot first (see birth_place).
-    let (x, y, _, _) = birth_place(app, None, (1180.0, 760.0), false);
+    let (x, y, w, h) = birth_place(app, Some(FIGHT_WINDOW_KEY), (1180.0, 760.0), true);
 
     let window = tauri::WebviewWindowBuilder::new(
         app,
@@ -2398,12 +2409,12 @@ fn open_fight_window(app: &tauri::AppHandle, label: &str) -> Result<(), String> 
     .resizable(true)
     .skip_taskbar(false)
     .position(x + offset, y + offset)
-    .inner_size(1180.0, 760.0)
+    .inner_size(w, h)
     .min_inner_size(520.0, 360.0)
     .background_color(tauri::window::Color(10, 14, 22, 255))
     .build()
     .map_err(|e| e.to_string())?;
-    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: 1180.0, height: 760.0 }));
+    platform::window::set_size(&window, tauri::Size::Logical(tauri::LogicalSize { width: w, height: h }));
     Ok(())
 }
 
@@ -2949,6 +2960,11 @@ pub fn run() {
                 && TOOL_WINDOWS.contains(&window.label())
             {
                 save_tool_window_geometry(window.app_handle(), window.label());
+            }
+            if matches!(event, tauri::WindowEvent::Moved(_) | tauri::WindowEvent::Resized(_))
+                && window.label().starts_with("details-")
+            {
+                save_window_geometry(window.app_handle(), window.label(), FIGHT_WINDOW_KEY);
             }
             // Plugin widgets (#77) open where they were left, and close with
             // their plugin's window.
