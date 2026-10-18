@@ -118,7 +118,13 @@ pub fn hp_request(server_id: u16, bosses: &[BossHp]) -> Option<serde_json::Value
 /// fight then is saved, and its log filed, under that server too.
 fn report_server(state: &AppState) -> u16 {
     let own = state.data_storage.own_server();
-    let host = state.data_storage.game_host();
+    // Only a real game server's address names a server. Through a ping
+    // reducer (ExitLag and the like) the game talks to a tunnel on this PC
+    // (127.0.0.1) or the LAN, the same address for every server: learnt
+    // from that, a character on another server was reported as this one.
+    let host = state.data_storage.game_host().filter(|h| {
+        !(h.is_loopback() || h.is_private() || h.is_link_local() || h.is_unspecified())
+    });
     if own != 0 {
         if let Some(host) = host {
             let key = format!("bossTimers.serverOf.{host}");
