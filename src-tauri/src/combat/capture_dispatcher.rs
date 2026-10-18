@@ -380,7 +380,15 @@ impl CaptureDispatcher {
             // Real combat produces a flood of signatures too, so the rate gate covers
             // both idle and combat while staying robust. Spawns/names are still parsed
             // into the store pre-lock, so mobs seen before the first fight stay identified.
+            // Hits are timed when they were captured, not when they are parsed:
+            // a parser held up for a minute (a save waited on, a busy machine)
+            // then read the whole queue at once, and a two-minute boss fight
+            // came out two seconds long, at 700k DPS. Set and cleared around
+            // the parse, with no await between, so nothing else on this thread
+            // reads a capture time as "now".
+            processor.set_override_timestamp(cap.capture_time_ms());
             let parsed = assembler.process_chunk(&cap.data, processor);
+            processor.set_override_timestamp(None);
 
             let signature_locked =
                 unlocked && sig_hits.get(&key).map(|(c, _)| *c).unwrap_or(0) >= SIGNATURE_LOCK_THRESHOLD;
