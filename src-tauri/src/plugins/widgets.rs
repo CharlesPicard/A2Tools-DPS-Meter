@@ -125,7 +125,9 @@ pub async fn plugin_widget_open(
     let (width, height) = (size(width), size(height));
     if let Some(widget) = app.get_webview_window(&label(&id, &name)) {
         let _ = widget.set_size(tauri::LogicalSize::new(width, height));
-        if !crate::platform::window::reveal_in_place(&widget) {
+        if super::game_hides(&app, &id) {
+            super::hold_for_game(&widget);
+        } else if !crate::platform::window::reveal_in_place(&widget) {
             crate::platform::window::show_on_top_without_focus(&widget);
         }
         apply_lock(&widget, is_locked(&app, &id));
@@ -180,6 +182,10 @@ pub async fn plugin_widget_open(
     }).or_else(|| beside_left(&app, &id));
     if let Some((x, y)) = place {
         let _ = widget.set_position(tauri::PhysicalPosition::new(x, y));
+    }
+    // AION2 closed and the plugin set to hide then: shown when it opens.
+    if super::game_hides(&app, &id) {
+        super::hold_for_game(&widget);
     }
     Ok(())
 }

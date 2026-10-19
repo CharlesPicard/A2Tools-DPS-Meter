@@ -282,6 +282,7 @@
     "roundDps": "DPS 以千为单位显示 (13k)",
     "showDpsSuffix": "DPS 后显示 /s",
     "autoHideMeter": "AION2 不在前台时隐藏",
+    "hideWhenGameClosed": "AION2 关闭时隐藏",
     "showSuspendBtn": "显示暂停捕获按钮",
     "showLockBtn": "显示点击穿透锁定按钮",
     "playerLimit": {
@@ -506,7 +507,8 @@
       "globalHotkeys": "下面的按键在游戏处于前台时也能使用。关闭后，这些按键会释放给其他程序。在 Linux 上由桌面注册这些按键，桌面可能会请你批准。",
       "pluginDevMode": "从这台电脑上的文件夹加载插件，用于开发和测试。这些插件未经审核，请只加载你信任的插件。",
       "showMeter": "关闭：只显示插件。统计仍在后台记录战斗并上传。可在此处、用显示/隐藏快捷键，或插件窗口上的统计按钮重新显示。",
-      "clearOnZone": "切换区域后，何时从统计中清除上一场战斗。所有战斗都会保留在历史记录中。"
+      "clearOnZone": "切换区域后，何时从统计中清除上一场战斗。所有战斗都会保留在历史记录中。",
+      "hideWhenGameClosed": "游戏未运行时隐藏计量器，游戏启动后再次显示。"
     },
     "globalHotkeys": "使用快捷键",
     "hotkeyConsent": {
@@ -564,7 +566,8 @@
       "permNone": "除显示窗口外不做其他事",
       "enabled": "启用",
       "enabledTip": "开启：随计量器启动。关闭：保持安装，但不运行。",
-      "showMeter": "显示 DPS 统计"
+      "showMeter": "显示 DPS 统计",
+      "hideClosed": "AION2 关闭时隐藏"
     },
     "clearOnZone": {
       "label": "清空统计",

@@ -3441,6 +3441,8 @@ pub fn run() {
                 let mut tick_count: u64 = 0;
                 let mut hide_delay: u64 = 0; // ticks to wait before hiding
                 let mut last_ping: Option<u64> = None;
+                // The meter hidden because AION2 is closed (Settings).
+                let mut hidden_closed = false;
                 let mut last_odyle: Option<((u32, u32), Option<String>)> = None;
                 loop {
                     interval.tick().await;
@@ -3472,8 +3474,29 @@ pub fn run() {
                             }
                         }
 
+                        // --- Hide while AION2 is closed (every 2 s) ---
+                        // Hidden as the game closes (or the option is turned on
+                        // with it closed), shown as it opens: in between, the
+                        // keybind can still bring the meter back.
+                        if tick_count % 4 == 0 {
+                            let want = state.settings.get("dpsMeter.hideWhenGameClosed").as_deref() == Some("true")
+                                && meter_wanted(&handle)
+                                && !platform::window_detector::find_aion2_window();
+                            if want != hidden_closed {
+                                if let Some(window) = handle.get_webview_window("main") {
+                                    if want {
+                                        platform::window::minimize_off_top(&window);
+                                    } else {
+                                        show_meter_again(&handle, &window);
+                                    }
+                                }
+                                hidden_closed = want;
+                            }
+                        }
+
                         // --- Auto-hide when AION2 loses focus (every tick) ---
                         let auto_hide = tick_count > 20
+                            && !hidden_closed
                             && state.settings.get("dpsMeter.autoHideMeter")
                                 .unwrap_or_default() == "true"
                             && meter_wanted(&handle);
@@ -3666,6 +3689,7 @@ pub fn run() {
             crate::plugins::plugin_close,
             crate::plugins::plugin_open,
             crate::plugins::plugin_set_enabled,
+            crate::plugins::plugin_set_hide_closed,
             crate::plugins::plugin_hello,
             crate::plugins::widgets::plugin_widget_open,
             crate::plugins::widgets::plugin_widget_close,

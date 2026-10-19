@@ -287,6 +287,7 @@
     "roundDps": "Shorten DPS to thousands (13k)",
     "showDpsSuffix": "Add /s to DPS",
     "autoHideMeter": "Hide when AION2 isn't focused",
+    "hideWhenGameClosed": "Hide while AION2 is closed",
     "showSuspendBtn": "Show pause capture button",
     "showLockBtn": "Show click-through lock button",
     "playerLimit": {
@@ -511,7 +512,8 @@
       "globalHotkeys": "The keys below work anywhere, even while the game is in front. Off, they are released for other programs. On Linux your desktop registers them and may ask you to approve them.",
       "pluginDevMode": "Loads plugins from folders on this computer, for building and testing them. They are not reviewed, so only load plugins you trust.",
       "showMeter": "Off: only your plugins show. The meter keeps reading combat and uploading in the background. Bring it back here, with the show/hide hotkey, or with the meter button on a plugin window.",
-      "clearOnZone": "When the last fight leaves the meter after the zone changes. Every fight stays in History either way."
+      "clearOnZone": "When the last fight leaves the meter after the zone changes. Every fight stays in History either way.",
+      "hideWhenGameClosed": "The meter hides while the game isn't running, and comes back when it starts."
     },
     "globalHotkeys": "Use keybinds",
     "hotkeyConsent": {
@@ -569,7 +571,8 @@
       "permNone": "Nothing beyond showing its window",
       "enabled": "Enabled",
       "enabledTip": "On: starts with the meter. Off: stays installed but doesn't run.",
-      "showMeter": "Show the DPS meter"
+      "showMeter": "Show the DPS meter",
+      "hideClosed": "Hide while AION2 is closed"
     },
     "clearOnZone": {
       "label": "Clear the meter",

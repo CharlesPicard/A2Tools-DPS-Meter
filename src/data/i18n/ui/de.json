@@ -277,6 +277,7 @@
     "roundDps": "DPS in Tausend kürzen (13k)",
     "showDpsSuffix": "/s an DPS anhängen",
     "autoHideMeter": "Ausblenden, wenn AION2 nicht im Vordergrund ist",
+    "hideWhenGameClosed": "Ausblenden, wenn AION2 geschlossen ist",
     "showSuspendBtn": "Taste „Erfassung pausieren“ anzeigen",
     "showLockBtn": "Taste für Durchklick-Sperre anzeigen",
     "playerLimit": {
@@ -499,7 +500,8 @@
       "globalHotkeys": "Die Tasten unten funktionieren überall, auch wenn das Spiel im Vordergrund ist. Aus: Sie werden für andere Programme freigegeben. Unter Linux registriert der Desktop sie und fragt eventuell, ob du sie erlaubst.",
       "pluginDevMode": "Lädt Plugins aus Ordnern auf diesem Computer, um sie zu entwickeln und zu testen. Sie sind nicht geprüft, lade also nur Plugins, denen du vertraust.",
       "showMeter": "Aus: Nur deine Plugins sind zu sehen. Das Meter liest im Hintergrund weiter Kämpfe mit und lädt hoch. Zurückholen kannst du es hier, mit dem Ein-/Ausblenden-Hotkey oder mit dem Meter-Knopf an einem Plugin-Fenster.",
-      "clearOnZone": "Wann der letzte Kampf nach einem Zonenwechsel aus dem Meter verschwindet. Jeder Kampf bleibt so oder so im Verlauf."
+      "clearOnZone": "Wann der letzte Kampf nach einem Zonenwechsel aus dem Meter verschwindet. Jeder Kampf bleibt so oder so im Verlauf.",
+      "hideWhenGameClosed": "Das Meter wird ausgeblendet, solange das Spiel nicht läuft, und erscheint wieder, wenn es startet."
     },
     "globalHotkeys": "Tastenkürzel verwenden",
     "hotkeyConsent": {
@@ -557,7 +559,8 @@
       "permNone": "Nichts außer sein Fenster anzuzeigen",
       "enabled": "Aktiviert",
       "enabledTip": "An: startet mit dem Meter. Aus: bleibt installiert, läuft aber nicht.",
-      "showMeter": "DPS-Meter anzeigen"
+      "showMeter": "DPS-Meter anzeigen",
+      "hideClosed": "Ausblenden, wenn AION2 geschlossen ist"
     },
     "clearOnZone": {
       "label": "Meter leeren",

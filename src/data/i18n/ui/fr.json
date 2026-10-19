@@ -277,6 +277,7 @@
     "roundDps": "Abréger le DPS en milliers (13k)",
     "showDpsSuffix": "Ajouter /s au DPS",
     "autoHideMeter": "Masquer quand AION2 n'est pas au premier plan",
+    "hideWhenGameClosed": "Masquer quand AION2 est fermé",
     "showSuspendBtn": "Afficher le bouton de pause de capture",
     "showLockBtn": "Afficher le bouton de verrouillage (clic au travers)",
     "playerLimit": {
@@ -499,7 +500,8 @@
       "globalHotkeys": "Les touches ci-dessous fonctionnent partout, même quand le jeu est au premier plan. Désactivé, elles sont libérées pour d'autres programmes. Sous Linux, le bureau les enregistre et peut vous demander de les approuver.",
       "pluginDevMode": "Charge des plugins depuis des dossiers de cet ordinateur, pour les créer et les tester. Ils ne sont pas vérifiés : ne chargez que des plugins de confiance.",
       "showMeter": "Désactivé : seuls vos plugins s'affichent. Le meter continue d'enregistrer les combats et de les envoyer en arrière-plan. Réaffichez-le ici, avec le raccourci afficher/masquer, ou avec le bouton meter d'une fenêtre de plugin.",
-      "clearOnZone": "Quand le dernier combat quitte le compteur après un changement de zone. Chaque combat reste dans l'Historique dans tous les cas."
+      "clearOnZone": "Quand le dernier combat quitte le compteur après un changement de zone. Chaque combat reste dans l'Historique dans tous les cas.",
+      "hideWhenGameClosed": "Le compteur se masque quand le jeu n'est pas lancé et réapparaît à son démarrage."
     },
     "globalHotkeys": "Utiliser les raccourcis",
     "hotkeyConsent": {
@@ -557,7 +559,8 @@
       "permNone": "Rien d'autre qu'afficher sa fenêtre",
       "enabled": "Activé",
       "enabledTip": "Activé : démarre avec le compteur. Désactivé : reste installé mais ne s'exécute pas.",
-      "showMeter": "Afficher le DPS meter"
+      "showMeter": "Afficher le DPS meter",
+      "hideClosed": "Masquer quand AION2 est fermé"
     },
     "clearOnZone": {
       "label": "Vider le compteur",

@@ -277,6 +277,7 @@
     "roundDps": "Abreviar DPS en miles (13k)",
     "showDpsSuffix": "Añadir /s al DPS",
     "autoHideMeter": "Ocultar cuando AION2 no está activo",
+    "hideWhenGameClosed": "Ocultar mientras AION2 está cerrado",
     "showSuspendBtn": "Mostrar botón de pausar captura",
     "showLockBtn": "Mostrar botón de bloqueo (clic a través)",
     "playerLimit": {
@@ -499,7 +500,8 @@
       "globalHotkeys": "Las teclas de abajo funcionan en cualquier momento, incluso con el juego en primer plano. Desactivado, quedan libres para otros programas. En Linux las registra el escritorio, que puede pedirte que las apruebes.",
       "pluginDevMode": "Carga complementos desde carpetas de este equipo, para crearlos y probarlos. No están revisados, así que carga solo los que sean de confianza.",
       "showMeter": "Desactivado: solo se ven tus plugins. El medidor sigue registrando combates y subiéndolos en segundo plano. Vuelve a mostrarlo aquí, con el atajo de mostrar/ocultar o con el botón del medidor en una ventana de plugin.",
-      "clearOnZone": "Cuándo desaparece el último combate del medidor tras un cambio de zona. Todos los combates quedan en el Historial igualmente."
+      "clearOnZone": "Cuándo desaparece el último combate del medidor tras un cambio de zona. Todos los combates quedan en el Historial igualmente.",
+      "hideWhenGameClosed": "El medidor se oculta mientras el juego no está abierto y vuelve cuando se inicia."
     },
     "globalHotkeys": "Usar atajos de teclado",
     "hotkeyConsent": {
@@ -557,7 +559,8 @@
       "permNone": "Nada más que mostrar su ventana",
       "enabled": "Activado",
       "enabledTip": "Activado: se inicia con el medidor. Desactivado: sigue instalado, pero no se ejecuta.",
-      "showMeter": "Mostrar el medidor de DPS"
+      "showMeter": "Mostrar el medidor de DPS",
+      "hideClosed": "Ocultar mientras AION2 está cerrado"
     },
     "clearOnZone": {
       "label": "Vaciar el medidor",
