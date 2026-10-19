@@ -108,6 +108,34 @@ pub fn general_entries_for(group: &str, order: &str, legacy_rules: &str) -> Vec<
     vec![("Order", list.clone()), ("rules", list), ("count", count)]
 }
 
+/// KWin 6.8 (from its 6.7.90 betas) lists rules in `Order` alone. A
+/// `rules` list is an old file to it: it deletes every rule group not named
+/// there, takes `rules` as the order, and drops the key when it saves
+/// (rulebooksettings.cpp, `usrRead`). Earlier KWin reads `rules`/`count`
+/// only (KDE Plasma 6.7.5, PR #88). So which list the meter keeps depends on
+/// the KWin that reads it: writing `rules` for 6.8 had KWin drop it and the
+/// meter write it back, over and over.
+pub fn reads_order_only(version: (u32, u32, u32)) -> bool {
+    version >= (6, 7, 90)
+}
+
+/// "kwin_wayland 6.7.5" (any word before it) -> (6, 7, 5).
+pub fn parse_version(text: &str) -> Option<(u32, u32, u32)> {
+    let word = text.split_whitespace().find(|w| w.chars().next().is_some_and(|c| c.is_ascii_digit()))?;
+    let mut parts = word.split('.').map(|p| p.trim_matches(|c: char| !c.is_ascii_digit()).parse::<u32>().ok());
+    Some((parts.next()??, parts.next().flatten().unwrap_or(0), parts.next().flatten().unwrap_or(0)))
+}
+
+/// For KWin 6.8: `Order` with every rule it names and the meter's on the
+/// end, and no `rules`/`count` (see `reads_order_only`).
+pub fn order_only_entries(group: &str, order: &str) -> String {
+    let mut list: Vec<&str> = order.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
+    if !list.contains(&group) {
+        list.push(group);
+    }
+    list.join(",")
+}
+
 /// Whether the session is KDE Plasma (`XDG_CURRENT_DESKTOP` is `KDE`).
 pub fn is_kde(current_desktop: &str) -> bool {
     current_desktop.split(':').any(|name| name.eq_ignore_ascii_case("kde"))
@@ -198,6 +226,22 @@ mod tests {
         assert_eq!(get(&e, "count"), "3");
         let e = general_entries_for(GROUP, "steam", "mine,steam");
         assert_eq!(get(&e, "rules"), format!("steam,mine,{GROUP}"));
+    }
+
+    /// 6.8 and its betas list rules in Order alone; 6.7 and before read rules.
+    #[test]
+    fn the_kwin_version_picks_the_list() {
+        assert_eq!(parse_version("kwin_wayland 6.7.5"), Some((6, 7, 5)));
+        assert_eq!(parse_version("kwin_wayland 6.7.91\n"), Some((6, 7, 91)));
+        assert_eq!(parse_version("kwin 6.8"), Some((6, 8, 0)));
+        assert_eq!(parse_version("no version here"), None);
+        assert!(!reads_order_only((6, 7, 5)));
+        assert!(reads_order_only((6, 7, 91)));
+        assert!(reads_order_only((6, 8, 0)));
+        assert!(!reads_order_only((5, 27, 11)));
+        assert_eq!(order_only_entries(ICONS_GROUP, "steam, mine"), format!("steam,mine,{ICONS_GROUP}"));
+        let listed = format!("steam,{ICONS_GROUP}");
+        assert_eq!(order_only_entries(ICONS_GROUP, &listed), listed);
     }
 
     #[test]

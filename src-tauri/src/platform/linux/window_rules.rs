@@ -6,7 +6,8 @@
 use std::process::Command;
 
 use crate::platform::kwin_rules::{
-    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP,
+    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, order_only_entries, parse_version,
+    reads_order_only, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP,
 };
 
 fn tool(names: &[&'static str]) -> Option<&'static str> {
@@ -21,6 +22,26 @@ fn read(reader: &str, group: &str, key: &str) -> String {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
+}
+
+fn delete(writer: &str, group: &str, key: &str) {
+    let _ = Command::new(writer).args(["--file", "kwinrulesrc", "--group", group, "--key", key, "--delete"]).status();
+}
+
+/// Whether the running KWin lists rules in `Order` alone (KWin 6.8 and its
+/// betas; see `kwin_rules::reads_order_only`). Asked once, of the KWin
+/// binary; not known, the lists are kept both ways, which every KWin reads.
+fn kwin_reads_order_only() -> bool {
+    static ANSWER: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ANSWER.get_or_init(|| {
+        let version = ["kwin_wayland", "kwin_x11", "plasmashell"].iter().find_map(|program| {
+            let out = Command::new(program).arg("--version").output().ok()?;
+            parse_version(&String::from_utf8_lossy(&out.stdout))
+        });
+        tracing::info!("KWin {:?}: rules listed in {}", version,
+            if version.is_some_and(reads_order_only) { "Order" } else { "rules and Order" });
+        version.is_some_and(reads_order_only)
+    })
 }
 
 fn write(writer: &str, group: &str, key: &str, value: &str) -> Result<(), String> {
@@ -125,9 +146,27 @@ fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Re
             write(writer, group, key, value)?;
         }
     }
-    // The rule must be named in `rules` too, or KWin neither loads it nor
-    // keeps it (see general_entries); 2.0.73 took that list out, so a rule
-    // already there is checked as well and its list mended.
+    // KWin 6.8: Order alone; a rules list makes it delete the rules not in
+    // it, and it drops the list when it saves (see reads_order_only).
+    if kwin_reads_order_only() {
+        let order = read(reader, "General", "Order");
+        let want = order_only_entries(group, &order);
+        let old_list = !read(reader, "General", "rules").is_empty();
+        if !added && want == order && !old_list {
+            return Ok(true);
+        }
+        if old_list {
+            delete(writer, "General", "rules");
+            delete(writer, "General", "count");
+        }
+        write(writer, "General", "Order", &want)?;
+        reconfigure();
+        tracing::info!("KWin rule {}: {what}", if added { "added" } else { "list mended" });
+        return Ok(true);
+    }
+    // Earlier KWin: the rule must be named in `rules` too, or KWin neither
+    // loads it nor keeps it (see general_entries); 2.0.73 took that list
+    // out, so a rule already there is checked as well and its list mended.
     let now = [read(reader, "General", "Order"), read(reader, "General", "rules"), read(reader, "General", "count")];
     let general = general_entries_for(group, &now[0], &now[1]);
     if !added && general.iter().zip(&now).all(|((_, want), have)| want == have) {
