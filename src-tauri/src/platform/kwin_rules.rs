@@ -84,53 +84,29 @@ pub fn icons_rule_entries() -> Vec<(&'static str, &'static str)> {
 
 /// The `[General]` entries that list the rules, with the meter's added.
 ///
-/// KWin 6 orders rules by `Order` and still reads the legacy `rules`/`count`
-/// when `Order` is empty. So `Order` is only written when it already exists,
-/// or as the legacy list plus ours: writing ours alone would hide every rule
-/// the player made before. The legacy pair is kept in step for older KWin.
+/// KWin loads the rules named in `rules` (with `count`), and deletes every
+/// rule group not named there as a stray (rulebooksettings.cpp, KDE Plasma
+/// 6.7.5 included). `Order` is not read: with `rules` gone, KWin loaded no
+/// rule at all, the player's own included, and the meter went behind the
+/// game (2026-10-18). So both lists are written as one: every rule either
+/// names, in their order, and the meter's on the end. Nothing is ever taken
+/// out of them.
 pub fn general_entries(order: &str, legacy_rules: &str) -> Vec<(&'static str, String)> {
     general_entries_for(GROUP, order, legacy_rules)
 }
 
 /// `general_entries` for any of the meter's rules.
 pub fn general_entries_for(group: &str, order: &str, legacy_rules: &str) -> Vec<(&'static str, String)> {
-    let split = |list: &str| -> Vec<String> {
-        list.split(',').map(str::trim).filter(|s| !s.is_empty()).map(str::to_string).collect()
-    };
-    let add = |mut list: Vec<String>| {
-        if !list.iter().any(|g| g == group) {
-            list.push(group.to_string());
+    let mut list: Vec<&str> = Vec::new();
+    for name in order.split(',').chain(legacy_rules.split(',')).chain([group]).map(str::trim) {
+        if !name.is_empty() && !list.contains(&name) {
+            list.push(name);
         }
-        list
-    };
-    let legacy = add(split(legacy_rules));
-    let ordered = if split(order).is_empty() { legacy.clone() } else { add(split(order)) };
-    vec![
-        ("Order", ordered.join(",")),
-        ("rules", legacy.join(",")),
-        ("count", legacy.len().to_string()),
-    ]
-}
-
-/// Plasma 6's `Order` with the meter's rule on its end; nothing else.
-///
-/// Plasma 6 must never be given the Plasma 5 list (`rules`): when KWin 6
-/// finds one it deletes every rule *not* in it, as strays, and drops the
-/// key (rulebooksettings.cpp, the migration in `usrRead`). The meter wrote
-/// that list from what was left of it (nothing, once KWin had dropped it)
-/// plus the rule it was adding, so each rule it added wiped the others, the
-/// player's own included (KDE Plasma 6.8, 2026-10-19).
-pub fn plasma6_order(group: &str, order: &str) -> String {
-    let mut list: Vec<&str> = order.split(',').map(str::trim).filter(|s| !s.is_empty()).collect();
-    if !list.contains(&group) {
-        list.push(group);
     }
-    list.join(",")
+    let list = list.join(",");
+    let count = list.split(',').count().to_string();
+    vec![("Order", list.clone()), ("rules", list), ("count", count)]
 }
-
-/// The Plasma 5 keys a Plasma 6 `kwinrulesrc` must not keep (see
-/// `plasma6_order`).
-pub const PLASMA5_KEYS: [&str; 2] = ["rules", "count"];
 
 /// Whether the session is KDE Plasma (`XDG_CURRENT_DESKTOP` is `KDE`).
 pub fn is_kde(current_desktop: &str) -> bool {
@@ -160,10 +136,10 @@ mod tests {
         let e = general_entries("", "abc-1,def-2");
         assert_eq!(get(&e, "Order"), format!("abc-1,def-2,{GROUP}"));
         assert_eq!(get(&e, "count"), "3");
-        // Order already kept: ours goes on its end.
+        // Both kept: every rule either names, ours on the end.
         let e = general_entries("x,y", "abc-1");
-        assert_eq!(get(&e, "Order"), format!("x,y,{GROUP}"));
-        assert_eq!(get(&e, "rules"), format!("abc-1,{GROUP}"));
+        assert_eq!(get(&e, "Order"), format!("x,y,abc-1,{GROUP}"));
+        assert_eq!(get(&e, "rules"), format!("x,y,abc-1,{GROUP}"));
     }
 
     #[test]
@@ -211,15 +187,17 @@ mod tests {
         assert_eq!(value("wmclass"), Some(WINDOW_CLASS));
     }
 
-    /// Plasma 6: the meter's rule joins the end of Order, once, and the
-    /// player's own stay in front.
+    /// KWin reads `rules`: a list left only in `Order` (as 2.0.73 left it)
+    /// is put back there, and no rule either list names is lost.
     #[test]
-    fn plasma6_order_adds_the_rule_once_after_the_players() {
-        assert_eq!(plasma6_order(ICONS_GROUP, ""), ICONS_GROUP);
-        assert_eq!(plasma6_order(ICONS_GROUP, "steam, mine"), format!("steam,mine,{ICONS_GROUP}"));
-        let listed = format!("steam,{ICONS_GROUP}");
-        assert_eq!(plasma6_order(ICONS_GROUP, &listed), listed);
-        assert_eq!(PLASMA5_KEYS, ["rules", "count"]);
+    fn a_rule_named_in_either_list_stays_in_both() {
+        let e = general_entries_for(ICONS_GROUP, &format!("steam,{GROUP}"), "");
+        let both = format!("steam,{GROUP},{ICONS_GROUP}");
+        assert_eq!(get(&e, "rules"), both);
+        assert_eq!(get(&e, "Order"), both);
+        assert_eq!(get(&e, "count"), "3");
+        let e = general_entries_for(GROUP, "steam", "mine,steam");
+        assert_eq!(get(&e, "rules"), format!("steam,mine,{GROUP}"));
     }
 
     #[test]

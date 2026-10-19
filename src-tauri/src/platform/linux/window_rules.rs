@@ -6,8 +6,7 @@
 use std::process::Command;
 
 use crate::platform::kwin_rules::{
-    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, plasma6_order, rule_entries, GROUP, ICONS_GROUP,
-    NO_FOCUS_GROUP, PLASMA5_KEYS,
+    general_entries_for, icons_rule_entries, is_kde, no_focus_rule_entries, rule_entries, GROUP, ICONS_GROUP, NO_FOCUS_GROUP,
 };
 
 fn tool(names: &[&'static str]) -> Option<&'static str> {
@@ -22,10 +21,6 @@ fn read(reader: &str, group: &str, key: &str) -> String {
         .output()
         .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
         .unwrap_or_default()
-}
-
-fn delete(writer: &str, group: &str, key: &str) {
-    let _ = Command::new(writer).args(["--file", "kwinrulesrc", "--group", group, "--key", key, "--delete"]).status();
 }
 
 fn write(writer: &str, group: &str, key: &str, value: &str) -> Result<(), String> {
@@ -103,13 +98,11 @@ pub fn keep_rules() {
             if now == seen {
                 continue;
             }
-            let text = std::fs::read_to_string(&file).unwrap_or_default();
+            // A rule gone is put back, and one dropped from the list listed
+            // again; add_rule logs either.
             for (group, entries, what) in rules() {
-                if !text.contains(&format!("[{group}]")) {
-                    tracing::info!("KWin rule gone from kwinrulesrc; putting it back: {what}");
-                    if let Err(e) = add_rule(group, &entries, false, what) {
-                        tracing::warn!("Could not put the KWin rule back: {e}");
-                    }
+                if let Err(e) = add_rule(group, &entries, false, what) {
+                    tracing::warn!("Could not put the KWin rule back: {e}");
                 }
             }
             seen = changed(&file);
@@ -126,30 +119,27 @@ fn add_rule(group: &str, entries: &[(&str, &str)], done: bool, what: &str) -> Re
     else {
         return Err("kwriteconfig is not installed".into());
     };
-    // Plasma 6 (kwriteconfig6): Order only, and never the Plasma 5 list,
-    // which makes KWin delete every rule not in it (see plasma6_order). One
-    // the meter wrote before is taken out first.
-    let plasma6 = writer == "kwriteconfig6";
-    if plasma6 && !read(reader, "General", "rules").is_empty() {
-        for key in PLASMA5_KEYS {
-            delete(writer, "General", key);
+    let added = read(reader, group, "wmclass").is_empty();
+    if added {
+        for (key, value) in entries {
+            write(writer, group, key, value)?;
         }
-        tracing::info!("KWin: Plasma 5 rule list removed from kwinrulesrc (Plasma 6 deleted the rules not in it)");
     }
-    if !read(reader, group, "wmclass").is_empty() {
+    // The rule must be named in `rules` too, or KWin neither loads it nor
+    // keeps it (see general_entries); 2.0.73 took that list out, so a rule
+    // already there is checked as well and its list mended.
+    let now = [read(reader, "General", "Order"), read(reader, "General", "rules"), read(reader, "General", "count")];
+    let general = general_entries_for(group, &now[0], &now[1]);
+    if !added && general.iter().zip(&now).all(|((_, want), have)| want == have) {
         return Ok(true);
     }
-    for (key, value) in entries {
-        write(writer, group, key, value)?;
+    for (key, value) in general {
+        write(writer, "General", key, &value)?;
     }
-    let order = read(reader, "General", "Order");
-    if plasma6 {
-        write(writer, "General", "Order", &plasma6_order(group, &order))?;
-    } else {
-        let legacy = read(reader, "General", "rules");
-        for (key, value) in general_entries_for(group, &order, &legacy) {
-            write(writer, "General", key, &value)?;
-        }
+    if !added {
+        reconfigure();
+        tracing::info!("KWin rule list mended: {what}");
+        return Ok(true);
     }
     reconfigure();
     tracing::info!("KWin rule added: {what}");
