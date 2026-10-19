@@ -327,7 +327,10 @@ fn filter_port(detector: &CombatPortDetector, now: i64) -> Option<u16> {
     let port = detector.locked_port_now()?;
     let last = detector.last_parsed_at_ms();
     let stale = last > 0 && now - last > crate::combat::capture_dispatcher::STALE_CONNECTION_MS;
-    (!stale).then_some(port)
+    // The locked port gone quiet: the game may be on a new connection (a
+    // server switch), which the dispatcher can only follow if it sees it.
+    let quiet = detector.port_quiet_ms(now).is_some_and(|q| q >= crate::combat::capture_dispatcher::PORT_MOVE_QUIET_MS);
+    (!stale && !quiet).then_some(port)
 }
 
 /// The capture filter, as libpcap filter text: the game's port once it is

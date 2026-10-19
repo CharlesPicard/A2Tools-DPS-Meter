@@ -26,6 +26,10 @@ pub struct CombatPortDetector {
     /// The locked port (0: none), readable without the lock: every capture
     /// thread checks it for every packet, to filter for it (`pcap_capturer`).
     locked_port_now: AtomicU32,
+    /// When the locked port last sent anything (unix ms; 0: not since the
+    /// lock). Quiet for `PORT_MOVE_QUIET_MS`, the game may have moved to
+    /// another connection (`capture_dispatcher`).
+    last_from_port_ms: AtomicI64,
 }
 
 struct Inner {
@@ -52,6 +56,7 @@ impl CombatPortDetector {
             }),
             last_parsed_at_ms: AtomicI64::new(0),
             locked_port_now: AtomicU32::new(0),
+            last_from_port_ms: AtomicI64::new(0),
         }
     }
 
@@ -141,6 +146,7 @@ impl CombatPortDetector {
         if is_loopback_opt(&device_for_lock) {
             Self::lock_inner(&mut inner, port, device_for_lock);
             self.locked_port_now.store(port as u32, Ordering::Relaxed);
+            self.last_from_port_ms.store(now_ms(), Ordering::Relaxed);
             return;
         }
 
@@ -156,6 +162,31 @@ impl CombatPortDetector {
 
         Self::lock_inner(&mut inner, port, device_for_lock);
         self.locked_port_now.store(port as u32, Ordering::Relaxed);
+        self.last_from_port_ms.store(now_ms(), Ordering::Relaxed);
+    }
+
+    /// The locked port sent something.
+    pub fn mark_from_port(&self) {
+        self.last_from_port_ms.store(now_ms(), Ordering::Relaxed);
+    }
+
+    /// How long the locked port has been quiet, if a port is locked.
+    pub fn port_quiet_ms(&self, now: i64) -> Option<i64> {
+        self.locked_port_now()?;
+        let last = self.last_from_port_ms.load(Ordering::Relaxed);
+        Some(if last > 0 { now - last } else { 0 })
+    }
+
+    /// The game moved to another connection on another port (a server
+    /// switch): keep the device, follow the port.
+    pub fn move_port(&self, port: u16) {
+        let mut inner = self.inner.lock();
+        if inner.locked_port.is_some() && inner.locked_port != Some(port) {
+            info!("Combat port moved: {:?} -> {}", inner.locked_port, port);
+            inner.locked_port = Some(port);
+            self.locked_port_now.store(port as u32, Ordering::Relaxed);
+            self.last_from_port_ms.store(now_ms(), Ordering::Relaxed);
+        }
     }
 
     fn lock_inner(inner: &mut Inner, port: u16, device: Option<String>) {
@@ -193,6 +224,7 @@ impl CombatPortDetector {
         inner.first_candidate_ms = 0;
         self.last_parsed_at_ms.store(0, Ordering::Relaxed);
         self.locked_port_now.store(0, Ordering::Relaxed);
+        self.last_from_port_ms.store(0, Ordering::Relaxed);
         if was_locked {
             info!("Combat port lock cleared");
         }
