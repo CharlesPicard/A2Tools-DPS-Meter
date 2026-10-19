@@ -41,6 +41,12 @@ pub fn is_aion2_foreground() -> bool {
 /// Start learning which window is active, where the desktop can say (KDE).
 /// `on_change` runs each time the game or the meter gains or loses the
 /// front.
+/// Be told when a screenshot tool (Spectacle) is in front, or no longer:
+/// the meter's windows let clicks through meanwhile (KDE).
+pub fn watch_screenshot_tool(on_change: impl Fn(bool) + Send + Sync + 'static) {
+    super::focus::watch_screenshot_tool(on_change);
+}
+
 pub fn watch_focus(on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String> {
     super::focus::watch(on_change)
 }

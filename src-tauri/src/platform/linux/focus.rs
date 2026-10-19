@@ -174,6 +174,25 @@ static CONNECTION: OnceLock<zbus::blocking::Connection> = OnceLock::new();
 /// Told when the game or the meter gains or loses the front.
 static ON_CHANGE: OnceLock<Box<dyn Fn() + Send + Sync>> = OnceLock::new();
 
+/// Whether a screenshot tool (Spectacle) is the active window, and who is
+/// told when that changes (`watch_screenshot_tool`).
+static SCREENSHOT: AtomicBool = AtomicBool::new(false);
+static ON_SCREENSHOT: OnceLock<Box<dyn Fn(bool) + Send + Sync>> = OnceLock::new();
+
+/// Be told when a screenshot tool becomes, or stops being, the active window.
+pub fn watch_screenshot_tool(on_change: impl Fn(bool) + Send + Sync + 'static) {
+    let _ = ON_SCREENSHOT.set(Box::new(on_change));
+}
+
+/// KDE's Spectacle, by its window class (Plasma 6: `org.kde.spectacle`,
+/// Plasma 5: `spectacle`). Its area selection is drawn under the meter's
+/// windows (the overlay layer, see `kwin_rules`), so they took the drag
+/// (Zoe, CachyOS, 2026-10-20).
+fn is_screenshot_tool(class: &str) -> bool {
+    let class = class.trim().to_ascii_lowercase();
+    class == "org.kde.spectacle" || class == "spectacle"
+}
+
 /// Whether the game (or the meter) is the active window, if KWin has said
 /// and the game has been recognised.
 pub fn game_or_meter_active() -> Option<bool> {
@@ -192,6 +211,13 @@ struct Focus;
 #[zbus::interface(name = "app.a2tools.DpsMeter.Focus")]
 impl Focus {
     fn active(&self, pid: String, class: String, caption: String) {
+        let shot = is_screenshot_tool(&class);
+        if SCREENSHOT.swap(shot, Ordering::Relaxed) != shot {
+            tracing::info!("KWin: screenshot tool {}", if shot { "in front: the meter lets clicks through" } else { "gone" });
+            if let Some(on_screenshot) = ON_SCREENSHOT.get() {
+                on_screenshot(shot);
+            }
+        }
         let who = classify(pid.parse().unwrap_or(0), &class, &caption);
         if who == Who::Game && !SEEN_GAME.swap(true, Ordering::Relaxed) {
             tracing::info!("KWin: the game's window is active (class {class:?})");
@@ -288,6 +314,14 @@ pub fn watch(on_change: impl Fn() + Send + Sync + 'static) -> Result<(), String>
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spectacle_is_known_by_its_class() {
+        assert!(is_screenshot_tool("org.kde.spectacle"));
+        assert!(is_screenshot_tool("spectacle"));
+        assert!(!is_screenshot_tool("org.kde.konsole"));
+        assert!(!is_screenshot_tool(""));
+    }
 
     #[test]
     fn the_game_is_known_by_title_or_class_and_the_meter_by_itself() {

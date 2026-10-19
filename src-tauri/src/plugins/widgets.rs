@@ -83,6 +83,8 @@ fn areas() -> &'static Mutex<HashMap<String, Area>> {
 /// `platform::window::hide_in_place`), so a widget is locked again once its
 /// page has loaded (`plugin_widget_hello`) and each time it is shown again.
 fn apply_lock(window: &tauri::WebviewWindow, locked: bool) {
+    // A screenshot tool in front: clicks go through, whatever the lock.
+    let locked = locked || crate::app::screenshot_tool_in_front();
     let area = areas().lock().unwrap_or_else(|p| p.into_inner()).get(window.label()).copied();
     let applied = match (locked, area) {
         (true, _) => crate::platform::window::click_through_except(window, true, None),
@@ -91,6 +93,16 @@ fn apply_lock(window: &tauri::WebviewWindow, locked: bool) {
     };
     if !applied && !cfg!(target_os = "linux") {
         let _ = window.set_ignore_cursor_events(locked);
+    }
+}
+
+/// Every widget's click-through as its lock and area say (after a
+/// screenshot tool, see `app::screenshot_tool_in_front`).
+pub fn reapply_locks(app: &tauri::AppHandle) {
+    for (label, window) in app.webview_windows() {
+        if let Some((id, _)) = parse_label(&label) {
+            apply_lock(&window, is_locked(app, &id));
+        }
     }
 }
 

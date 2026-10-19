@@ -299,10 +299,40 @@ fn auto_hide_now(app: &tauri::AppHandle) {
 
 /// Tell the main window whether to ignore the mouse: when locked, unless the
 /// pointer is over the lock button or a card is open.
+/// A screenshot tool (KDE's Spectacle) is the active window: every meter
+/// window lets clicks through, so its area selection can be dragged across
+/// them, which still show in the shot (KDE draws the selection under them).
+static SCREENSHOT_TOOL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn screenshot_tool_in_front() -> bool {
+    SCREENSHOT_TOOL.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// A screenshot tool came to the front (`true`) or left it.
+fn screenshot_tool(app: &tauri::AppHandle, in_front: bool) {
+    SCREENSHOT_TOOL.store(in_front, std::sync::atomic::Ordering::Relaxed);
+    // The overlay, by its lock (which reads the flag).
+    if let Some(state) = app.try_state::<AppState>() {
+        let lock = state.overlay_lock.clone();
+        *lock.applied.lock() = None;
+        sync_click_through(app, &lock, false);
+    }
+    // Plugins' icons, by their lock and area.
+    crate::plugins::widgets::reapply_locks(app);
+    // Settings, History, Details, and plugins' windows: all or nothing.
+    for (label, window) in app.webview_windows() {
+        let tool = TOOL_WINDOWS.contains(&label.as_str()) || label.starts_with("details-") || label.starts_with("plugin-");
+        if tool && !platform::window::click_through_except(&window, in_front, None) && !cfg!(target_os = "linux") {
+            let _ = window.set_ignore_cursor_events(in_front);
+        }
+    }
+}
+
 fn sync_click_through(app: &tauri::AppHandle, lock: &OverlayLock, over_button: bool) {
     use std::sync::atomic::Ordering;
     let mut applied = lock.applied.lock();
-    let ignore = click_through(lock.locked.load(Ordering::SeqCst), over_button, lock.card_open.load(Ordering::SeqCst));
+    let ignore = screenshot_tool_in_front()
+        || click_through(lock.locked.load(Ordering::SeqCst), over_button, lock.card_open.load(Ordering::SeqCst));
     // The region follows the button, so it is set again even unchanged.
     if let Some(main) = app.get_webview_window("main") {
         if platform::window::click_through_except(&main, ignore, *lock.button.lock()) {
@@ -3261,6 +3291,8 @@ pub fn run() {
                         move |title, rect| save_window_place(&save_app, title, rect),
                         move |title| load_window_place(&load_app, title),
                     );
+                    let shot_app = handle.clone();
+                    platform::window_detector::watch_screenshot_tool(move |in_front| screenshot_tool(&shot_app, in_front));
                     let focus_app = handle.clone();
                     if let Err(e) = platform::window_detector::watch_focus(move || auto_hide_now(&focus_app)) {
                         tracing::warn!("Cannot follow the active window: {e}");
