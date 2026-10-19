@@ -16,6 +16,8 @@
 //                                              "feed:boss-timers", meter 2.0.65 on)
 //   a2.on("game", ({ running }) => ...)        whether AION2 is open, at start and on change
 //                                              (meter 2.0.65 on)
+//   a2.on("ping", ({ ms }) => ...)             the ping to the game server in ms (null while not known),
+//                                              at start and on change, about every 10 s (meter 2.0.73 on)
 //   a2.on("language", (code) => ...)           the meter's language ("en", "ko", "zh-Hans", ...), at start and on change
 //   a2.on("compact", (on) => ...)              the window's fold button: show only the essentials
 //

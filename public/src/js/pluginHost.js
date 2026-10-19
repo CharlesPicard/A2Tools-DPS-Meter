@@ -244,6 +244,8 @@
     deliver("compact", panel.compact);
     if (hello.character) deliver("character", hello.character);
     if (typeof hello.game === "boolean") deliver("game", { running: hello.game });
+    // The ping to the game server (meter 2.0.73 on); null until it is known.
+    if ("ping" in hello) deliver("ping", { ms: typeof hello.ping === "number" ? hello.ping : null });
     run = hello.run;
     try {
       const cursor = JSON.parse(localStorage.getItem(CURSOR_KEY) || "null");

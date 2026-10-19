@@ -395,6 +395,7 @@ impl PluginHost {
                 let mut told = character(&app);
                 let mut game = crate::platform::window_detector::find_aion2_window();
                 let mut game_checked = Instant::now();
+                let mut ping: Option<i32> = None;
                 let mut map_seq = 0u64;
                 let mut abyss_seq = 0u64;
                 loop {
@@ -437,6 +438,13 @@ impl PluginHost {
                                 host.tell_permitted(&app, "feed:boss-timers", "abyss", abyss_event(&artifacts, seen_ms));
                             }
                         }
+                    }
+                    // The ping to the game server, when it changes (about every
+                    // 10 s), to every plugin: a ping widget needs no permission.
+                    let now_ping = app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms());
+                    if now_ping != ping {
+                        ping = now_ping;
+                        host.tell_all(&app, "ping", serde_json::json!({ "ms": now_ping }));
                     }
                     // Whether AION2 is open, looked at every few seconds.
                     if game_checked.elapsed() >= GAME_CHECK {
@@ -1433,6 +1441,7 @@ pub fn plugin_hello(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Resu
         "language": language,
         "reviewed": reviewed,
         "game": crate::platform::window_detector::find_aion2_window(),
+        "ping": app.try_state::<AppState>().and_then(|s| s.ping_tracker.current_ping_ms()),
     }))
 }
 
