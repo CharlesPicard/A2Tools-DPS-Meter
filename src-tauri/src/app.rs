@@ -197,6 +197,38 @@ fn show_meter_again(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
     let _ = window.emit("force-resize", ());
 }
 
+/// The windows that hide with the meter when AION2 isn't in front ("Hide
+/// when AION2 isn't focused"): Settings, Battle History and Details, and the
+/// windows and icons of plugins set to (Settings → Plugins; an alert's icon
+/// is often wanted most then). Only the meter hid, and the rest stayed over
+/// the browser (Hirai, 2026-10-19).
+fn hides_with_meter(app: &tauri::AppHandle, label: &str) -> bool {
+    TOOL_WINDOWS.contains(&label) || label.starts_with("details-") || crate::plugins::hides_unfocused(app, label)
+}
+
+/// Hide those of `hides_with_meter` that are up, noting each.
+fn hide_with_meter(app: &tauri::AppHandle, hidden: &mut std::collections::HashSet<String>) {
+    for (label, window) in app.webview_windows() {
+        if !hides_with_meter(app, &label) || hidden.contains(&label) {
+            continue;
+        }
+        if window.is_visible().unwrap_or(false) && !platform::window::is_hidden_in_place(&window) {
+            platform::window::hide_in_place(&window);
+            hidden.insert(label);
+        }
+    }
+}
+
+/// Show again those `hide_with_meter` hid.
+fn show_with_meter(app: &tauri::AppHandle, hidden: &mut std::collections::HashSet<String>) {
+    for label in hidden.drain() {
+        let Some(window) = app.get_webview_window(&label) else { continue };
+        if !platform::window::reveal_in_place(&window) {
+            platform::window::show_on_top_without_focus(&window);
+        }
+    }
+}
+
 /// The label of the meter window titled `title`.
 fn window_titled(app: &tauri::AppHandle, title: &str) -> Option<String> {
     app.webview_windows()
@@ -3443,6 +3475,10 @@ pub fn run() {
                 let mut last_ping: Option<u64> = None;
                 // The meter hidden because AION2 is closed (Settings).
                 let mut hidden_closed = false;
+                // The other windows hidden with the meter (auto-hide), and how
+                // many ticks nothing of ours or the game has been in front.
+                let mut hidden_with_meter: std::collections::HashSet<String> = Default::default();
+                let mut others_delay: u32 = 0;
                 let mut last_odyle: Option<((u32, u32), Option<String>)> = None;
                 loop {
                     interval.tick().await;
@@ -3527,6 +3563,24 @@ pub fn run() {
                                     }
                                 }
                             }
+                            // The rest go and come back with it: gone while
+                            // another program is in front, back with the game
+                            // or any of the meter's windows (Settings in use
+                            // stays).
+                            if platform::window::front_is_ours_or_game() {
+                                others_delay = 0;
+                                if !hidden_with_meter.is_empty() {
+                                    show_with_meter(&handle, &mut hidden_with_meter);
+                                }
+                            } else {
+                                others_delay += 1;
+                                if others_delay >= 3 {
+                                    hide_with_meter(&handle, &mut hidden_with_meter);
+                                }
+                            }
+                        } else if !hidden_with_meter.is_empty() {
+                            // Auto-hide turned off meanwhile: back.
+                            show_with_meter(&handle, &mut hidden_with_meter);
                         }
 
                         // --- Save window position every ~5 seconds (every 10 ticks) ---
@@ -3689,7 +3743,7 @@ pub fn run() {
             crate::plugins::plugin_close,
             crate::plugins::plugin_open,
             crate::plugins::plugin_set_enabled,
-            crate::plugins::plugin_set_hide_closed,
+            crate::plugins::plugin_set_hide,
             crate::plugins::plugin_hello,
             crate::plugins::widgets::plugin_widget_open,
             crate::plugins::widgets::plugin_widget_close,

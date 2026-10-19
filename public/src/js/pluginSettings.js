@@ -258,16 +258,25 @@
           else run(invoke("plugin_remove_folder", { path: p.path }));
         }));
         const item = pluginRow(title, p.error || p.description || p.path, !!p.error, buttons);
-        // Its windows and widgets hidden while AION2 is closed.
+        // Its windows and widgets hidden while AION2 is closed, or with the
+        // meter while AION2 isn't in front (off: an alert's icon stays up).
         if (!p.error && on) {
-          const hide = document.createElement("label");
-          hide.className = "pluginHideClosed";
-          const box = document.createElement("input");
-          box.type = "checkbox";
-          box.checked = (view.hideClosed || []).includes(p.id);
-          box.addEventListener("change", () => run(invoke("plugin_set_hide_closed", { id: p.id, hide: box.checked })));
-          hide.append(box, " ", t("settings.plugins.hideClosed", "Hide while AION2 is closed"));
-          item.querySelector(".settingsInfo")?.append(hide);
+          const options = document.createElement("div");
+          options.className = "pluginHideOptions";
+          for (const [when, list, key, text] of [
+            ["closed", view.hideClosed, "settings.plugins.hideClosed", "Hide while AION2 is closed"],
+            ["unfocused", view.hideUnfocused, "settings.plugins.hideUnfocused", "Hide when AION2 isn't focused"],
+          ]) {
+            const hide = document.createElement("label");
+            hide.className = "pluginHideClosed";
+            const box = document.createElement("input");
+            box.type = "checkbox";
+            box.checked = (list || []).includes(p.id);
+            box.addEventListener("change", () => run(invoke("plugin_set_hide", { id: p.id, when, hide: box.checked })));
+            hide.append(box, " ", t(key, text));
+            options.append(hide);
+          }
+          item.querySelector(".settingsInfo")?.append(options);
         }
         if (wasUpdated) item.classList.add("pluginUpdated");
         if (!p.error && !on) item.classList.add("pluginOff");

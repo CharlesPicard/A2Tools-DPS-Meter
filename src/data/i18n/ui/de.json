@@ -560,7 +560,8 @@
       "enabled": "Aktiviert",
       "enabledTip": "An: startet mit dem Meter. Aus: bleibt installiert, läuft aber nicht.",
       "showMeter": "DPS-Meter anzeigen",
-      "hideClosed": "Ausblenden, wenn AION2 geschlossen ist"
+      "hideClosed": "Ausblenden, wenn AION2 geschlossen ist",
+      "hideUnfocused": "Ausblenden, wenn AION2 nicht im Vordergrund ist"
     },
     "clearOnZone": {
       "label": "Meter leeren",

@@ -66,6 +66,11 @@ pub const DISABLED_KEY: &str = "dpsMeter.pluginsDisabled";
 /// Plugins whose windows and widgets hide while AION2 is closed, a JSON
 /// array of ids (Settings → Plugins).
 pub const HIDE_CLOSED_KEY: &str = "dpsMeter.pluginsHideClosed";
+/// Plugins whose windows and widgets hide with the meter when AION2 isn't
+/// in front (the meter's "Hide when AION2 isn't focused"), a JSON array of
+/// ids. Off by default: an alert's icon is most use while the game isn't in
+/// front.
+pub const HIDE_UNFOCUSED_KEY: &str = "dpsMeter.pluginsHideUnfocused";
 /// Whether AION2 is open, as the plugin event loop last looked.
 static GAME_OPEN: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
 
@@ -76,12 +81,23 @@ fn hidden_for_game() -> &'static Mutex<std::collections::HashSet<String>> {
     HIDDEN.get_or_init(Default::default)
 }
 
-/// The plugins that hide while AION2 is closed.
-fn hide_closed(app: &tauri::AppHandle) -> Vec<String> {
+/// The plugins listed under a setting (`HIDE_CLOSED_KEY`, `HIDE_UNFOCUSED_KEY`).
+fn listed(app: &tauri::AppHandle, key: &str) -> Vec<String> {
     app.try_state::<AppState>()
-        .and_then(|s| s.settings.get(HIDE_CLOSED_KEY))
+        .and_then(|s| s.settings.get(key))
         .and_then(|s| serde_json::from_str(&s).ok())
         .unwrap_or_default()
+}
+
+/// The plugins that hide while AION2 is closed.
+fn hide_closed(app: &tauri::AppHandle) -> Vec<String> {
+    listed(app, HIDE_CLOSED_KEY)
+}
+
+/// Whether the window `label` (a plugin's, or one of its widgets) hides with
+/// the meter when AION2 isn't in front.
+pub fn hides_unfocused(app: &tauri::AppHandle, label: &str) -> bool {
+    plugin_of_window(label).is_some_and(|id| listed(app, HIDE_UNFOCUSED_KEY).contains(&id))
 }
 
 /// The plugin a window belongs to: its main window or one of its widgets.
@@ -188,6 +204,8 @@ pub struct PluginsView {
     pub disabled: Vec<String>,
     /// Ids of the plugins that hide while AION2 is closed.
     pub hide_closed: Vec<String>,
+    /// Ids of the plugins that hide with the meter when AION2 isn't in front.
+    pub hide_unfocused: Vec<String>,
 }
 
 fn view(app: &tauri::AppHandle, host: &PluginHost) -> PluginsView {
@@ -200,6 +218,7 @@ fn view(app: &tauri::AppHandle, host: &PluginHost) -> PluginsView {
         plugins: host.list(),
         disabled: disabled(app),
         hide_closed: hide_closed(app),
+        hide_unfocused: listed(app, HIDE_UNFOCUSED_KEY),
     }
 }
 
@@ -242,19 +261,26 @@ pub async fn plugin_set_enabled(app: tauri::AppHandle, id: String, enabled: bool
     Ok(view(&app, &host))
 }
 
-/// Hide a plugin's windows and widgets while AION2 is closed, or not.
+/// Hide a plugin's windows and widgets while AION2 is closed (`when`
+/// "closed"), or with the meter while AION2 isn't in front ("unfocused"), or
+/// not.
 #[tauri::command]
-pub fn plugin_set_hide_closed(app: tauri::AppHandle, id: String, hide: bool) -> Result<PluginsView, String> {
+pub fn plugin_set_hide(app: tauri::AppHandle, id: String, when: String, hide: bool) -> Result<PluginsView, String> {
     if !valid_id(&id) {
         return Err("not a plugin id".into());
     }
+    let key = match when.as_str() {
+        "closed" => HIDE_CLOSED_KEY,
+        "unfocused" => HIDE_UNFOCUSED_KEY,
+        _ => return Err("closed or unfocused".into()),
+    };
     let state = app.try_state::<AppState>().ok_or("no app state")?;
-    let mut ids = hide_closed(&app);
+    let mut ids = listed(&app, key);
     ids.retain(|x| x != &id);
     if hide {
         ids.push(id.clone());
     }
-    state.settings.set(HIDE_CLOSED_KEY, &serde_json::to_string(&ids).unwrap_or_default());
+    state.settings.set(key, &serde_json::to_string(&ids).unwrap_or_default());
     sync_game_hiding(&app);
     let host = host(&app)?;
     Ok(view(&app, &host))

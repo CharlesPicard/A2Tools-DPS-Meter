@@ -560,7 +560,8 @@
       "enabled": "Ativado",
       "enabledTip": "Ligado: inicia com o medidor. Desligado: continua instalado, mas não é executado.",
       "showMeter": "Mostrar o medidor de DPS",
-      "hideClosed": "Ocultar enquanto o AION2 estiver fechado"
+      "hideClosed": "Ocultar enquanto o AION2 estiver fechado",
+      "hideUnfocused": "Ocultar quando o AION2 não estiver em foco"
     },
     "clearOnZone": {
       "label": "Limpar o medidor",
