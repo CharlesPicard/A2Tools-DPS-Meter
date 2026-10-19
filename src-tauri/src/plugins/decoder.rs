@@ -250,6 +250,20 @@ mod tests {
         assert_eq!(d.decode(&body).unwrap(), serde_json::json!({"pet": 1016, "amount": 1}));
     }
 
+    /// A soul pickup lists every pet it gave souls to (a capture from a
+    /// player, 2026-10-19: pets 1015 and 1120 from one kill), read as a list.
+    #[test]
+    fn reads_a_soul_pickup_for_two_pets() {
+        let d = spec(r#"{"name":"soul-gained","opcode":"0D 90","fields":[
+            {"name":"souls","type":"list","count":"u8","fields":[
+                {"name":"pet","type":"u32"},{"name":"amount","type":"u32"}]}]}"#);
+        let body = [0x02, 0xF7, 0x03, 0, 0, 1, 0, 0, 0, 0x60, 0x04, 0, 0, 1, 0, 0, 0];
+        assert_eq!(
+            d.decode(&body).unwrap(),
+            serde_json::json!({"souls": [{"pet": 1015, "amount": 1}, {"pet": 1120, "amount": 1}]})
+        );
+    }
+
     #[test]
     fn reads_the_pet_list_with_its_two_lists() {
         let d = spec(r#"{"name":"pet-list","opcode":"00 90","fields":[
