@@ -1646,7 +1646,12 @@ async fn feed_file(app: &tauri::AppHandle, feed: &'static str, server: u32) -> R
         }
     }
     let state = app.try_state::<AppState>().ok_or("no app state")?;
-    let url = format!("https://cdn.a2tools.app/feeds/{feed}/{server}.json");
+    // A self-hosted site serves the feeds its meters report to itself.
+    let url = if crate::account::is_self_hosted() {
+        format!("{}/feeds/{feed}/{server}.json", crate::account::base_url())
+    } else {
+        format!("https://cdn.a2tools.app/feeds/{feed}/{server}.json")
+    };
     let res = state.http.get(&url).timeout(Duration::from_secs(15)).send().await.map_err(|e| e.to_string())?;
     let value = match res.status() {
         s if s == reqwest::StatusCode::NOT_FOUND => None,

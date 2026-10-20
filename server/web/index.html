@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{SITE_NAME}}</title>
+    <link rel="icon" href="/static/logo.png" />
+    <link rel="stylesheet" href="/static/app.css" />
+  </head>
+  <body>
+    <header class="top">
+      <a class="brand" href="/" data-link>
+        <img src="/static/logo.png" alt="" />
+        <span class="brandName">{{SITE_NAME}}</span>
+      </a>
+      <button class="navToggle" type="button" aria-label="Menu" aria-expanded="false">☰</button>
+      <nav class="nav">
+        <a href="/logs" data-link>Logs</a>
+        <a href="/leaderboards" data-link>Leaderboards</a>
+        <a href="/classes" data-link>Class stats</a>
+        <a href="/timers" data-link>Boss timers</a>
+        <a href="/download" data-link>Download</a>
+        <span class="navSpacer"></span>
+        <span class="navUser"></span>
+      </nav>
+    </header>
+    <main id="app" class="page"><p class="muted">Loading…</p></main>
+    <footer class="foot">
+      <span>Self-hosted A2 Tools for the <a href="https://github.com/taengu/A2Tools-DPS-Meter" rel="noopener">A2Tools DPS Meter</a> (GPL-3.0).</span>
+      <span class="parserVersion"></span>
+    </footer>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

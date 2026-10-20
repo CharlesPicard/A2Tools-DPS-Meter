@@ -124,7 +124,11 @@ fn tell(app: &tauri::AppHandle, data: Value) {
 
 fn live_url(server: u32) -> String {
     let base = crate::account::base_url();
-    let ws = base.strip_prefix("https://").map(|rest| format!("wss://{rest}")).unwrap_or(base);
+    let ws = match (base.strip_prefix("https://"), base.strip_prefix("http://")) {
+        (Some(rest), _) => format!("wss://{rest}"),
+        (_, Some(rest)) => format!("ws://{rest}"),
+        _ => base,
+    };
     format!("{ws}/api/boss-timers/live?server={server}")
 }
 

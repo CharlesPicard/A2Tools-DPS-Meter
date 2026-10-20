@@ -68,3 +68,4 @@ settings.properties
 
 # Never commit a signing key.
 *.pem
+/server/target/

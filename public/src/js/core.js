@@ -2623,6 +2623,7 @@ class DpsApp {
     this.accountSignOutBtn = document.querySelector(".accountSignOutBtn");
     this.accountCodeBox = document.querySelector(".accountCodeBox");
     this.accountCodeEl = document.querySelector(".accountCode");
+    this.accountServerInput = document.querySelector(".accountServerInput");
     this.playerDpsBoldCheckbox = document.querySelector(".playerDpsBoldCheckbox");
     this.meterOpacityInput = document.querySelector(".meterOpacityInput");
     this.meterOpacityValue = document.querySelector(".meterOpacityValue");
@@ -3039,6 +3040,46 @@ class DpsApp {
       this.pinMeToTopCheckbox.addEventListener("change", (event) => {
         const isChecked = !!event.target?.checked;
         this.setPinMeToTop(isChecked, { persist: true });
+      });
+    }
+    // The server the account lives on: a2tools.app when empty, or a
+    // self-hosted A2 Tools site. The backend drops a sign-in made with another
+    // server when this changes (`apply_server_change`).
+    if (this.accountServerInput) {
+      const input = this.accountServerInput;
+      const key = "dpsMeter.serverUrl";
+      input.value = this.safeGetSetting(key) || "";
+      const valid = (value) => {
+        if (!value) return true;
+        try {
+          const url = new URL(value);
+          if (url.username || url.password) return false;
+          if (url.protocol === "https:") return true;
+          if (url.protocol !== "http:") return false;
+          const host = url.hostname.replace(/^\[|\]$/g, "").toLowerCase();
+          return host === "localhost" || !host.includes(".") || /\.(local|lan|home\.arpa)$/.test(host)
+            || /^(127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host) || host === "::1" || /^f[cd]/.test(host);
+        } catch {
+          return false;
+        }
+      };
+      const save = () => {
+        const value = input.value.trim().replace(/\/+$/, "");
+        const ok = valid(value);
+        input.classList.toggle("isInvalid", !ok);
+        input.title = ok ? "" : window.i18n?.t?.("settings.account.serverInvalid", "Enter an https:// address, or http:// on this computer or your local network.");
+        if (!ok || value === (this.safeGetSetting(key) || "")) return;
+        input.value = value;
+        this.safeSetSetting(key, value);
+        // The backend applies it and may sign out; show what it then reports.
+        setTimeout(() => this.refreshAccountPanel(), 300);
+      };
+      input.addEventListener("change", save);
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          input.blur();
+        }
       });
     }
     if (this.accountConnectBtn) {

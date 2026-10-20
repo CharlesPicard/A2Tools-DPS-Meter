@@ -1875,7 +1875,8 @@ body.mainPlayerDpsBold :is(.meter, .barPreviewPanel) .item .content .dps > p {
 
 .settingsPanel .streamOverlayPortInput,
 .settingsPanel .streamOverlayNameInput,
-.settingsPanel .streamOverlayUrlInput {
+.settingsPanel .streamOverlayUrlInput,
+.settingsPanel .accountServerInput {
   height: var(--set-field-h);
   box-sizing: border-box;
   padding: 0 8px;
@@ -1893,9 +1894,16 @@ body.mainPlayerDpsBold :is(.meter, .barPreviewPanel) .item .content .dps > p {
 .settingsPanel .streamOverlayNameInput {
   width: 160px;
 }
+.settingsPanel .accountServerInput {
+  width: 200px;
+}
+.settingsPanel .accountServerInput.isInvalid {
+  border-color: var(--error-fill);
+}
 .settingsPanel .streamOverlayPortInput:focus,
 .settingsPanel .streamOverlayNameInput:focus,
-.settingsPanel .streamOverlayUrlInput:focus {
+.settingsPanel .streamOverlayUrlInput:focus,
+.settingsPanel .accountServerInput:focus {
   outline: none;
   border-color: var(--isUser-fill);
 }

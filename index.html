@@ -533,6 +533,22 @@
               <section class="settingsSection" id="settingsSection-account" role="tabpanel" aria-labelledby="settingsTab-account" data-section="account" hidden>
                 <h2 class="settingsSectionTitle" data-i18n="settings.account.title">A2 Tools Account</h2>
                 <div class="settingsGroupBody">
+                  <div class="settingsRow accountServerRow">
+                    <div class="settingsInfo">
+                      <label class="settingsLabel" for="accountServerInput" data-i18n="settings.account.server">Server</label>
+                      <div class="settingsHint" data-i18n="settings.account.serverHint">Leave empty for a2tools.app, or enter your own A2 Tools server. Changing it signs you out.</div>
+                    </div>
+                    <div class="settingsRowEnd">
+                      <input
+                        id="accountServerInput"
+                        class="accountServerInput"
+                        type="text"
+                        maxlength="200"
+                        spellcheck="false"
+                        autocomplete="off"
+                        placeholder="https://a2tools.app" />
+                    </div>
+                  </div>
                   <div class="settingsRow accountRow">
                     <div class="settingsInfo">
                       <div class="settingsLabel accountState" data-i18n="settings.account.signedOut">Not signed in</div>

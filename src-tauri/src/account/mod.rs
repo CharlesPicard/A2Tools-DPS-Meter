@@ -41,36 +41,100 @@ const PRODUCTION_URL: &str = "https://a2tools.app";
 /// will not.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
-/// Where the account lives. `A2TOOLS_API` points the meter at another server
-/// without a rebuild.
-pub fn base_url() -> String {
-    api_base(std::env::var("A2TOOLS_API").ok().as_deref())
+/// The setting that points the meter at a self-hosted site instead of
+/// a2tools.app (Settings → A2 Tools Account → Server). Empty: a2tools.app.
+pub const SERVER_SETTING_KEY: &str = "dpsMeter.serverUrl";
+
+/// The server that issued the stored token, so a token is never sent to
+/// another server after the setting changes.
+pub const TOKEN_SERVER_KEY: &str = "dpsMeter.serverUrl.tokenServer";
+
+/// The server chosen in settings, applied at startup and on each change
+/// (`set_server`). Takes precedence over `A2TOOLS_API`.
+static SERVER_OVERRIDE: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+/// Use `url` (the setting's value) as the server from now on. Returns the
+/// base it resolved to.
+pub fn set_server(url: Option<&str>) -> String {
+    let value = url.map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+    *SERVER_OVERRIDE.write().unwrap_or_else(|p| p.into_inner()) = value;
+    base_url()
 }
 
-/// The token goes to this server in a header, so an override must be https.
-/// Anything else falls back to production.
+/// Where the account lives: the server set in settings, else `A2TOOLS_API`,
+/// else a2tools.app.
+pub fn base_url() -> String {
+    let chosen = SERVER_OVERRIDE.read().unwrap_or_else(|p| p.into_inner()).clone();
+    api_base(chosen.or_else(|| std::env::var("A2TOOLS_API").ok()).as_deref())
+}
+
+/// The server's name for messages: "a2tools.app", or a self-hosted site's
+/// host (and port).
+pub fn site_name() -> String {
+    let base = base_url();
+    reqwest::Url::parse(&base)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| match u.port() { Some(p) => format!("{h}:{p}"), None => h.to_string() }))
+        .unwrap_or(base)
+}
+
+/// Whether the meter talks to a server other than a2tools.app.
+pub fn is_self_hosted() -> bool {
+    base_url() != PRODUCTION_URL
+}
+
+/// Whether a host may be reached over plain http: this computer or the local
+/// network, where a self-hosted site may well have no certificate. Anywhere
+/// else the token would cross the internet in the clear.
+fn local_host(url: &reqwest::Url) -> bool {
+    let Some(host) = url.host_str() else { return false };
+    let host = host.trim_start_matches('[').trim_end_matches(']').to_ascii_lowercase();
+    match host.parse::<std::net::IpAddr>() {
+        Ok(std::net::IpAddr::V4(ip)) => ip.is_loopback() || ip.is_private() || ip.is_link_local(),
+        Ok(std::net::IpAddr::V6(ip)) => ip.is_loopback() || (ip.segments()[0] & 0xfe00) == 0xfc00,
+        Err(_) => {
+            host == "localhost" || host.ends_with(".local") || host.ends_with(".lan") || host.ends_with(".home.arpa") || !host.contains('.')
+        }
+    }
+}
+
+/// The token goes to this server in a header, so an override must be https,
+/// or http to this computer or the local network. Anything else falls back to
+/// production.
 fn api_base(override_url: Option<&str>) -> String {
     let Some(value) = override_url.map(str::trim).filter(|v| !v.is_empty()) else {
         return PRODUCTION_URL.to_string();
     };
     match reqwest::Url::parse(value) {
-        Ok(url) if url.scheme() == "https" && url.host_str().is_some() => {
+        Ok(url)
+            if url.host_str().is_some()
+                && url.username().is_empty()
+                && url.password().is_none()
+                && (url.scheme() == "https" || (url.scheme() == "http" && local_host(&url))) =>
+        {
             value.trim_end_matches('/').to_string()
         }
         _ => {
-            tracing::warn!("A2TOOLS_API is not an https URL; using {PRODUCTION_URL}");
+            tracing::warn!("The server address is not an https URL (or http on the local network); using {PRODUCTION_URL}");
             PRODUCTION_URL.to_string()
         }
     }
 }
 
 /// Whether a link the server sent may be opened in the browser: https on
-/// a2tools.app or a subdomain, default port, no user info.
+/// a2tools.app or a subdomain, default port, no user info; or, with a
+/// self-hosted server, a link on that same server.
 pub fn is_site_url(url: &str) -> bool {
     let Ok(url) = reqwest::Url::parse(url) else { return false };
+    if !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+    if let Ok(base) = reqwest::Url::parse(&base_url()) {
+        if base.as_str().trim_end_matches('/') != PRODUCTION_URL && url.origin() == base.origin() {
+            return true;
+        }
+    }
     url.scheme() == "https"
-        && url.username().is_empty()
-        && url.password().is_none()
         && url.port().is_none()
         && url
             .host_str()
@@ -163,15 +227,15 @@ pub async fn start(client: &reqwest::Client, device_label: &str) -> Result<Devic
         .body(body.to_string())
         .send()
         .await
-        .map_err(|e| format!("could not reach a2tools.app: {e}"))?;
+        .map_err(|e| format!("could not reach {}: {e}", site_name()))?;
 
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     if !status.is_success() {
-        return Err(format!("a2tools.app refused the request ({status})"));
+        return Err(format!("{} refused the request ({status})", site_name()));
     }
     serde_json::from_str::<DeviceGrant>(&text)
-        .map_err(|e| format!("could not read the response from a2tools.app: {e}"))
+        .map_err(|e| format!("could not read the response from {}: {e}", site_name()))
 }
 
 /// Poll once.
@@ -285,7 +349,7 @@ pub async fn whoami(client: &reqwest::Client, app_data_dir: &Path) -> AccountSta
         .await
     {
         Ok(response) => response,
-        Err(_) => return AccountState::Unavailable("Could not reach a2tools.app to check the account.".into()),
+        Err(_) => return AccountState::Unavailable(format!("Could not reach {} to check the account.", site_name())),
     };
 
     if response.status() == reqwest::StatusCode::UNAUTHORIZED {
@@ -298,13 +362,14 @@ pub async fn whoami(client: &reqwest::Client, app_data_dir: &Path) -> AccountSta
     if !response.status().is_success() {
         // A server hiccup is not a reason to sign someone out.
         return AccountState::Unavailable(format!(
-            "a2tools.app could not check the account ({}).",
+            "{} could not check the account ({}).",
+            site_name(),
             response.status()
         ));
     }
     match response.text().await.ok().and_then(|t| serde_json::from_str(&t).ok()) {
         Some(summary) => AccountState::SignedIn(summary),
-        None => AccountState::Unavailable("Unexpected reply from a2tools.app.".into()),
+        None => AccountState::Unavailable(format!("Unexpected reply from {}.", site_name())),
     }
 }
 
@@ -383,11 +448,19 @@ mod tests {
     }
 
     #[test]
-    fn the_api_base_accepts_only_an_https_override() {
+    fn the_api_base_accepts_https_or_local_http() {
         assert_eq!(api_base(None), "https://a2tools.app");
         assert_eq!(api_base(Some("")), "https://a2tools.app");
         assert_eq!(api_base(Some("https://staging.example.org/")), "https://staging.example.org");
-        assert_eq!(api_base(Some("http://localhost:8787")), "https://a2tools.app");
+        assert_eq!(api_base(Some("https://logs.example.org:8443")), "https://logs.example.org:8443");
+        // A self-hosted site on this computer or the LAN may have no certificate.
+        assert_eq!(api_base(Some("http://localhost:8787")), "http://localhost:8787");
+        assert_eq!(api_base(Some("http://192.168.1.20:8080/")), "http://192.168.1.20:8080");
+        assert_eq!(api_base(Some("http://nas.local:8080")), "http://nas.local:8080");
+        // Plain http across the internet would send the token in the clear.
+        assert_eq!(api_base(Some("http://example.org")), "https://a2tools.app");
+        assert_eq!(api_base(Some("http://8.8.8.8")), "https://a2tools.app");
+        assert_eq!(api_base(Some("https://user:pw@example.org")), "https://a2tools.app");
         assert_eq!(api_base(Some("ftp://a2tools.app")), "https://a2tools.app");
         assert_eq!(api_base(Some("a2tools.app")), "https://a2tools.app");
     }

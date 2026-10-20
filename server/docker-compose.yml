@@ -1,0 +1,33 @@
+# docker compose up -d
+#
+# Then open http://<server>:8080, create the first account (it becomes the
+# admin), and put the address in the meter under Settings → A2 Tools Account →
+# Server. Put it behind HTTPS (Caddy, nginx, Traefik) before players outside
+# your network use it: see README.md.
+services:
+  a2tools:
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+    image: a2tools-server
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      - a2tools-data:/data
+    environment:
+      # The address players reach the site at. Links the meter opens and
+      # copies (sign-in, log links) are built from it.
+      A2_PUBLIC_URL: "http://localhost:8080"
+      A2_SITE_NAME: "A2 Tools"
+      # Anyone may make an account. Set to "false" once your people have one;
+      # the admin page can still set passwords.
+      A2_OPEN_REGISTRATION: "true"
+      # Set to "true" when a reverse proxy in front sets X-Forwarded-For.
+      A2_TRUST_PROXY: "false"
+      # Optional: make the admin account at first start instead of registering.
+      # A2_ADMIN_USER: "admin"
+      # A2_ADMIN_PASSWORD: "change-me-please"
+
+volumes:
+  a2tools-data:
