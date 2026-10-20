@@ -1,173 +1,241 @@
-# A2Tools DPS Meter: Self-Hosted Edition
+# A2Tools DPS Meter: Self-Hosted Edition for CachyOS
 
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](LICENSE)
 
-A real-time DPS meter for AION 2, with a self-hosted web service for fight logs, leaderboards, class statistics and field boss timers.
+A real-time DPS meter for AION 2 on CachyOS, with a self-hosted web service for fight logs, leaderboards, class statistics and field boss timers.
 
-This repository is a fork of [taengu/A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter). It adds a server you run yourself (`server/`) and a setting that points the meter at it. Without that setting, the meter works exactly as the original and uses [a2tools.app](https://a2tools.app).
+This repository is a fork of [taengu/A2Tools-DPS-Meter](https://github.com/taengu/A2Tools-DPS-Meter). It adds a server you run yourself (`server/`) and a setting that points the meter at it. Without that setting, the meter behaves like the original and uses [a2tools.app](https://a2tools.app).
+
+These instructions are written for **CachyOS**. They also apply to Arch Linux and other Arch-based distributions.
 
 ## Contents
 
 - [Overview](#overview)
-- [Meter features](#meter-features)
-- [Self-hosted server](#self-hosted-server)
 - [Requirements](#requirements)
-- [Installation](#installation)
-- [Connecting the meter to a server](#connecting-the-meter-to-a-server)
+- [Install the meter](#install-the-meter)
+- [Run the meter](#run-the-meter)
+- [Run the server](#run-the-server)
+- [Connect the meter to the server](#connect-the-meter-to-the-server)
+- [Update](#update)
+- [Uninstall](#uninstall)
 - [Streaming to OBS on another PC](#streaming-to-obs-on-another-pc)
-- [Building from source](#building-from-source)
+- [Development](#development)
 - [Troubleshooting](#troubleshooting)
 - [License and credits](#license-and-credits)
 
 ## Overview
 
-The meter reads AION 2's network traffic on the player's PC and shows damage, skills and combat statistics in an always-on-top overlay. It does not modify the game or its memory.
+The meter reads AION 2's network traffic, with the game running through Proton, and shows damage, skills and combat statistics in an always-on-top overlay. It does not modify the game or its memory.
 
-Fights can be uploaded to a web service, which re-calculates every number from the fight's recorded packets with the meter's own parser. Published figures therefore reflect what the game sent, not values supplied by a client.
+Fights can be uploaded to the server, which re-calculates every number from the fight's recorded packets with the meter's own parser. Published figures therefore reflect what the game sent, not values supplied by a client.
 
-| Component | Location | Purpose |
-| --- | --- | --- |
-| Desktop meter | `src-tauri/`, `public/`, `src/` | Packet capture, live overlay, fight history, uploads |
-| Self-hosted server | `server/` | Accounts, fight logs, leaderboards, class statistics, boss timers |
-| Log service | `log-service/` | The original project's Cloudflare Worker for a2tools.app (not needed for self-hosting) |
-
-## Meter features
+**Meter**
 
 - Real-time DPS per player, with a per-skill breakdown: critical, back attack, parry, double and perfect rates, plus optional block, perfect block, endurance, regeneration, miss and resist columns
 - Damage-over-time tracking, and summon damage merged with its owner
 - Target modes: Boss, Last Hit, All Targets and Train
-- DPS chart and fight timeline
-- Fight history, with automatic saving of boss fights
-- Ping monitoring
-- Stream overlay for OBS running on another PC
+- DPS chart, fight timeline and fight history, with automatic saving of boss fights
+- Ping monitoring and a stream overlay for OBS
 - Fight uploads with a shareable link, manual or automatic
-- Ten languages: English, Korean, Chinese (Traditional and Simplified), Japanese, German, French, Spanish, Portuguese and Russian
-- Windows and Linux ([Linux guide](docs/linux.md))
+- Ten languages
 
-## Self-hosted server
-
-The server provides the same services to the meter as a2tools.app, on infrastructure you control. It is a single binary with an SQLite database, and ships with a Dockerfile and a Compose file.
+**Server**
 
 | Feature | Description |
 | --- | --- |
-| Accounts | Site accounts, and meter sign-in with the device-code flow (RFC 8628). Each signed-in meter can be revoked from the account page. |
+| Accounts | Site accounts, and meter sign-in with a device code. Each signed-in meter can be revoked from the account page. |
 | Fight logs | Uploads are re-derived on the server from their recording. Logs can be public, unlisted or private, and each has a shareable link. |
-| Log pages | Damage and DPS per player and per skill, DPS over time, healing and deaths. The original recording can be downloaded so anyone can verify a log. |
+| Log pages | Damage and DPS per player and per skill, DPS over time, healing and deaths, and a download of the original recording. |
 | Leaderboards | Top DPS per boss, filterable by class and period, and fastest kills. |
 | Class statistics | DPS distribution per class: median, mean, interquartile range, 95th percentile and best. |
-| Field boss timers | Aggregated from players' reports, with confirmation when two reporters agree. Also served as a feed and a live WebSocket for meter plugins. |
+| Field boss timers | Aggregated from players' reports, confirmed when two reporters agree, and served live to meter plugins. |
 | Administration | User management, re-derivation of all logs after a parser update, and diagnostic logs submitted from meters. |
 
 The plugin catalog, the supporter list and update checks remain on the original project's services, because they are signed with keys held by the original developer.
 
-Quick start:
+## Requirements
+
+- CachyOS (x86_64) with a desktop session (KDE Plasma, GNOME or another)
+- AION 2 running through Steam with Proton
+- About 5 GB of free disk space for the first build
+- For the server: any CachyOS or Linux machine that stays on. Players outside your local network also need a domain name and HTTPS.
+
+## Install the meter
+
+The meter is built from this repository into a regular pacman package. The package installs the meter to `/usr/bin`, adds it to the application menu and grants it the packet-capture permission, so it never needs to run as root.
+
+### 1. Install the build tools
+
+```bash
+sudo pacman -S --needed base-devel git rust nodejs npm pkgconf webkit2gtk-4.1 gtk3 libpcap libcap gst-plugins-base gst-plugins-good
+```
+
+### 2. Download the source
 
 ```bash
 git clone https://github.com/CharlesPicard/A2Tools-DPS-Meter.git
-cd A2Tools-DPS-Meter/server
-docker compose up -d --build
+cd A2Tools-DPS-Meter
 ```
 
-Then open `http://<server>:8080` and create the first account, which becomes the administrator.
+Use a full clone: the package version is computed from the Git history.
 
-Documentation:
+### 3. Build and install the package
 
-- [server/README.md](server/README.md): configuration reference, HTTPS, reverse proxies, data and API
-- [readme_charles.md](readme_charles.md): step-by-step deployment guide, from a new server to a working site
+```bash
+cd packaging/arch
+makepkg -si
+```
 
-## Requirements
+The first build takes 10 to 15 minutes. `makepkg` asks for your password to install the package. The output should end with:
 
-**Windows**
+```
+==> A2Tools DPS Meter may now capture packets.
+```
 
-- Windows 10 or 11 (x86_64)
-- [Npcap](https://npcap.com), installed with **WinPcap API-compatible Mode** enabled
-- Administrator privileges, required for packet capture
+## Run the meter
 
-**Linux** (playing through Proton)
+1. Start AION 2 from Steam.
+2. Start **A2Tools DPS Meter** from the application menu, or run `a2tools-dps-meter` in a terminal.
 
-- x86_64 with WebKitGTK 4.1: Ubuntu 22.04 or later, Debian 12, Fedora 39 or later, openSUSE, Arch-based distributions, Bazzite, or Steam Deck through distrobox
-- Packages and setup for each distribution are in the [Linux guide](docs/linux.md)
+Start it as your normal user. Do not run it with `sudo`: it would run as root, keep its settings in root's home folder, and often fail to open its window.
 
-**Server**
+The meter detects the game's connection by itself. Its window stays above the game; use the lock button to let clicks pass through it.
 
-- Any Linux host with Docker, or a Rust toolchain to build the binary
-- A domain name and HTTPS for players outside your local network
+## Run the server
 
-## Installation
+The server is a single program with a data folder. Docker is the simplest way to run it.
 
-1. Install [Npcap](https://npcap.com) with WinPcap API-compatible Mode enabled.
-2. Build the installer as described in [Building from source](#building-from-source), or use one provided by your server's administrator.
-3. Run the installer.
-4. Start A2Tools DPS Meter as Administrator.
+### With Docker
 
-The official builds from the [original project's releases](https://github.com/taengu/A2Tools-DPS-Meter/releases) work with a2tools.app but do not include the server setting.
+```bash
+sudo pacman -S --needed docker docker-compose
+sudo systemctl enable --now docker
+cd A2Tools-DPS-Meter/server
+sudo docker compose up -d --build
+```
 
-## Connecting the meter to a server
+### Without Docker
 
-1. Open **Settings → A2 Tools Account**.
-2. Enter the server's address under **Server**, for example `https://logs.example.org`, and press Enter.
-3. Select **Sign in**. The browser opens the server's sign-in page with a code; approve it while signed in to the site.
+```bash
+cd A2Tools-DPS-Meter
+cargo build --release --manifest-path server/Cargo.toml
+A2_PUBLIC_URL=http://<this machine's IP>:8080 ./server/target/release/a2tools-server
+```
+
+### First start
+
+1. Open `http://<server IP>:8080` in a browser.
+2. Select **Create account**. The first account becomes the administrator.
+
+Set `A2_PUBLIC_URL` (in `server/docker-compose.yml` when using Docker) to the address players use to reach the site; the links the meter opens and shares are built from it.
+
+For players outside your local network, put the server behind HTTPS. With [Caddy](https://caddyserver.com):
+
+```bash
+sudo pacman -S caddy
+```
+
+Write `/etc/caddy/Caddyfile`:
+
+```
+logs.example.org {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+```bash
+sudo systemctl enable --now caddy
+```
+
+Then set `A2_PUBLIC_URL=https://logs.example.org` and `A2_TRUST_PROXY=true`.
+
+Full reference: [server/README.md](server/README.md). Step-by-step guide: [readme_charles.md](readme_charles.md).
+
+## Connect the meter to the server
+
+1. In the meter, open **Settings → A2 Tools Account**.
+2. Under **Server**, enter the server's address, for example `https://logs.example.org` or `http://192.168.1.20:8080`, and press Enter.
+3. Select **Sign in**. The browser opens the server's sign-in page with the code filled in; select **Allow** while signed in to the site.
+4. Kill a boss, open **History**, select the fight and upload it. The link to the log is copied to the clipboard. To upload every boss fight, enable **Upload boss fights automatically**.
 
 Notes:
 
-- Addresses must use `https://`. Plain `http://` is accepted only for the local computer or the local network.
-- Leave the field empty to use a2tools.app.
+- Addresses must use `https://`. Plain `http://` is accepted only for the local computer or the local network (`localhost`, `192.168.x.x`, `10.x.x.x`, `*.local`).
+- Leave **Server** empty to use a2tools.app.
 - Changing the server signs the meter out, so a token issued by one server is never sent to another.
-- The `A2TOOLS_API` environment variable sets the server as well; the setting takes precedence.
+
+## Update
+
+### The meter
+
+The meter's update prompt installs the **original** project's package, which does not include the server setting. Decline it, and update from this repository instead:
+
+```bash
+cd A2Tools-DPS-Meter
+git pull
+cd packaging/arch
+makepkg -sif
+```
+
+Settings and fight history are kept. Check the installed version with `pacman -Q a2tools-dps-meter`.
+
+To bring in new versions from the original project first:
+
+```bash
+git remote add upstream https://github.com/taengu/A2Tools-DPS-Meter.git   # once
+git fetch upstream
+git merge upstream/main
+git push
+```
+
+### The server
+
+```bash
+cd A2Tools-DPS-Meter
+git pull
+cd server
+sudo docker compose up -d --build
+```
+
+Then open **Admin → Re-derive logs** on the site so existing logs are recalculated with the new parser.
+
+## Uninstall
+
+```bash
+sudo pacman -R a2tools-dps-meter
+```
+
+Settings and fight history remain in `~/.local/share/com.a2tools.dps-meter/` and can be deleted by hand.
 
 ## Streaming to OBS on another PC
 
 When OBS runs on a second PC, the meter can serve its display over the local network:
 
-1. On the game PC, open **Settings → Streaming** and enable **Stream overlay (OBS on another PC)**. The default port is 18731.
-2. When Windows Defender Firewall asks, allow the meter on **Private networks**. The meter never adds a firewall rule itself.
-3. Copy the URL shown (`http://<game PC's LAN IP>:18731/overlay?key=<key>`).
+1. Open **Settings → Streaming** and enable **Stream overlay (OBS on another PC)**. The default port is 18731.
+2. If a firewall is active, allow that port from the local network, for example `sudo ufw allow from 192.168.0.0/16 to any port 18731 proto tcp`.
+3. Copy the URL shown (`http://<this PC's LAN IP>:18731/overlay?key=<key>`).
 4. In OBS on the streaming PC, add a **Browser Source** with that URL.
 
-The overlay is read-only and reachable only with its key; **New key** invalidates all previous links. Optional URL parameters:
+The overlay is read-only and reachable only with its key; **New key** invalidates all previous links. Add `&lang=ko` (or `en`, `de`, `ja`, …) to change the language of its labels, and `&rows=5` to limit the number of rows.
 
-| Parameter | Effect |
-| --- | --- |
-| `&lang=ko` (or `en`, `de`, `ja`, …) | Language of the overlay's labels |
-| `&rows=5` | Maximum number of rows shown |
+## Development
 
-**Your name on stream** sets the name shown for you; leave it empty to show your character name.
-
-## Building from source
-
-### Prerequisites
-
-- [Rust](https://rustup.rs/), latest stable
-- [Node.js](https://nodejs.org/) 18 or later
-- [Npcap](https://npcap.com) (Windows)
-
-### Meter
+Run the meter from the source tree without installing it:
 
 ```bash
+mkdir -p public/i18n public/data public/src/data
+cp -r src/data/i18n/* public/i18n/
+cp src/data/skill_icons.json src/data/dot_skill_ids.json public/data/
+cp src/data/skill_icons.json src/data/dot_skill_ids.json public/src/data/
 npm install
-npm run tauri build
+npx tauri build --no-bundle
+sudo setcap cap_net_raw=ep src-tauri/target/release/a2tools-dps-meter
+./src-tauri/target/release/a2tools-dps-meter
 ```
 
-The Windows installer is written to `src-tauri/target/release/bundle/msi/`. For development, use `npm run tauri dev`.
+`setcap` must be run again after every build, and does not work on NTFS or exFAT drives.
 
-### Offline build
-
-A build without any online features (account, uploads, update checks, diagnostic log submission, Discord activity and the OBS stream overlay):
-
-```bash
-npm install
-npm run build:offline
-```
-
-This omits the `online` Cargo feature, so the network client is not linked at all. Only skill and buff icons, loaded from the game's own CDN, and links you open yourself leave the computer.
-
-### Server
-
-```bash
-cargo build --release --manifest-path server/Cargo.toml
-```
-
-### Tests
+Tests:
 
 ```bash
 cd src-tauri && cargo test --lib     # meter
@@ -175,17 +243,21 @@ cd server && cargo test              # server
 node --test tests/*.test.mjs         # frontend
 ```
 
+For an offline build, without the account, uploads, update checks, diagnostic log submission, Discord activity and the stream overlay, use `npm run build:offline`.
+
 ## Troubleshooting
 
 | Symptom | Resolution |
 | --- | --- |
-| The meter shows "Connecting..." | Make sure AION 2 is running and the meter has administrator privileges. VPNs and ping reducers are detected automatically through the loopback adapter. |
-| Your name does not appear | Enter your character name and actor ID in Settings. The name is otherwise detected from the AION 2 window title. |
-| Npcap is installed but capture fails | Reinstall Npcap with WinPcap API-compatible Mode enabled. |
+| The meter shows "Connecting..." | Make sure AION 2 is running. `getcap /usr/bin/a2tools-dps-meter` should print `cap_net_raw=ep`; if it does not, run `sudo setcap cap_net_raw=ep /usr/bin/a2tools-dps-meter`. |
+| The meter goes behind the game | On KDE Plasma, the meter adds a KWin window rule by itself; restart the meter once. On GNOME, see the [Linux guide](docs/linux.md#gnome-keep-the-meter-above-other-windows). |
+| Your name does not appear | Enter your character name and actor ID in Settings. |
+| `makepkg` fails to compile | Update the system with `sudo pacman -Syu`, then run `makepkg -sif` again. |
 | The Server field turns red | The address must start with `https://`, or `http://` for a local address. |
-| Sign-in page reports an unknown code | The code expired after 15 minutes. Select **Sign in** again in the meter. |
+| The sign-in page reports an unknown code | The code expired after 15 minutes. Select **Sign in** again in the meter. |
+| An upload fails | The meter shows the reason. On the server, `sudo docker compose logs` shows what it received. |
 
-Server issues are covered in [server/README.md](server/README.md) and [readme_charles.md](readme_charles.md).
+Hotkeys, window behaviour and sending diagnostic logs are covered in the [Linux guide](docs/linux.md).
 
 ## License and credits
 
