@@ -159,37 +159,41 @@ Now open **https://logs.example.org** in your browser. You should see the site.
 
 ---
 
-## Step 9: Build the meter on your Windows PC
+## Step 9: Build the meter on your Linux PC
 
 The official meter downloads don't have the Server setting, so build the meter from your fork.
 
 ### Install the tools (once)
 
-1. [Rust](https://rustup.rs/): run the installer and accept the defaults.
-2. [Node.js](https://nodejs.org/) (the LTS version).
-3. [Npcap](https://npcap.com), with **"Install Npcap in WinPcap API-compatible Mode"** checked.
-4. [Git for Windows](https://git-scm.com/download/win).
+1. [Rust](https://rustup.rs/): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`, accept the defaults, then open a new terminal.
+2. [Node.js](https://nodejs.org/) 18 or later.
+3. The system libraries. On Ubuntu, Debian, Mint or Pop!_OS:
+   ```bash
+   sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libpcap-dev git
+   ```
+   Fedora and Arch commands are in [`docs/linux.md`](docs/linux.md#build-from-source-other-distributions).
 
 ### Build it
 
-Open **PowerShell** and run:
-
-```powershell
+```bash
 git clone https://github.com/CharlesPicard/A2Tools-DPS-Meter.git
 cd A2Tools-DPS-Meter
+mkdir -p public/i18n public/data public/src/data
+cp -r src/data/i18n/* public/i18n/
+cp src/data/skill_icons.json src/data/dot_skill_ids.json public/data/
+cp src/data/skill_icons.json src/data/dot_skill_ids.json public/src/data/
 npm install
 npm run tauri build
 ```
 
-The first build takes a while. The installer ends up in `src-tauri\target\release\bundle\msi\`. Run it to install the meter.
+The first build takes 10 to 15 minutes. The `.deb` and `.rpm` packages end up in `src-tauri/target/release/bundle/`. Install the one for your system:
 
-Linux builds work the same way; see [`docs/linux.md`](docs/linux.md).
-
----
+- Ubuntu, Debian, Mint, Pop!_OS: `sudo apt install ./src-tauri/target/release/bundle/deb/*.deb`. The package gives the meter its packet-capture permission.
+- Fedora, openSUSE: install the `.rpm` from `bundle/rpm/`, then give the meter its packet-capture permission: `sudo setcap cap_net_raw=ep /usr/bin/a2tools-dps-meter`.
 
 ## Step 10: Point the meter at your site and sign in
 
-1. Start the meter **as Administrator**.
+1. Start the meter (as your normal user, not with `sudo`).
 2. Open **Settings → A2 Tools Account**.
 3. In **Server**, type `https://logs.example.org` and press **Enter**.
    - The box turns red if the address isn't accepted. It must start with `https://`; plain `http://` only works for this PC or your home network.
@@ -225,7 +229,7 @@ If the upload fails, the meter shows why. Also look at `docker compose logs` on 
 
 Each friend:
 
-1. Installs the meter **you built** (send them the `.msi` from step 9).
+1. Installs the meter **you built** (send them the `.deb` or `.rpm` from step 9).
 2. Creates an account on your site.
 3. Does step 10 on their PC.
 

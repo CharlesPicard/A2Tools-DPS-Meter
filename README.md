@@ -42,7 +42,7 @@ Fights can be uploaded to a web service, which re-calculates every number from t
 - Stream overlay for OBS running on another PC
 - Fight uploads with a shareable link, manual or automatic
 - Ten languages: English, Korean, Chinese (Traditional and Simplified), Japanese, German, French, Spanish, Portuguese and Russian
-- Windows and Linux ([Linux guide](docs/linux.md))
+- Linux, for AION 2 played through Proton ([Linux guide](docs/linux.md))
 
 ## Self-hosted server
 
@@ -77,13 +77,7 @@ Documentation:
 
 ## Requirements
 
-**Windows**
-
-- Windows 10 or 11 (x86_64)
-- [Npcap](https://npcap.com), installed with **WinPcap API-compatible Mode** enabled
-- Administrator privileges, required for packet capture
-
-**Linux** (playing through Proton)
+**Meter** (AION 2 played through Proton)
 
 - x86_64 with WebKitGTK 4.1: Ubuntu 22.04 or later, Debian 12, Fedora 39 or later, openSUSE, Arch-based distributions, Bazzite, or Steam Deck through distrobox
 - Packages and setup for each distribution are in the [Linux guide](docs/linux.md)
@@ -95,12 +89,15 @@ Documentation:
 
 ## Installation
 
-1. Install [Npcap](https://npcap.com) with WinPcap API-compatible Mode enabled.
-2. Build the installer as described in [Building from source](#building-from-source), or use one provided by your server's administrator.
-3. Run the installer.
-4. Start A2Tools DPS Meter as Administrator.
+1. Build the meter as described in [Building from source](#building-from-source), or install a `.deb` or `.rpm` package provided by your server's administrator.
+2. If you built it yourself, allow it to capture packets:
+   ```bash
+   sudo setcap cap_net_raw=ep src-tauri/target/release/a2tools-dps-meter
+   ```
+   The `.deb` package grants this permission on installation. For an `.rpm` built with `npm run tauri build`, run the same command on `/usr/bin/a2tools-dps-meter` after installing.
+3. Start the meter as your normal user. Do not run it with `sudo`.
 
-The official builds from the [original project's releases](https://github.com/taengu/A2Tools-DPS-Meter/releases) work with a2tools.app but do not include the server setting.
+The official packages from the [original project](https://github.com/taengu/A2Tools-DPS-Meter/releases) work with a2tools.app but do not include the server setting.
 
 ## Connecting the meter to a server
 
@@ -120,7 +117,7 @@ Notes:
 When OBS runs on a second PC, the meter can serve its display over the local network:
 
 1. On the game PC, open **Settings → Streaming** and enable **Stream overlay (OBS on another PC)**. The default port is 18731.
-2. When Windows Defender Firewall asks, allow the meter on **Private networks**. The meter never adds a firewall rule itself.
+2. If the game PC runs a firewall, allow incoming connections on that port from the local network. The meter never changes firewall rules itself.
 3. Copy the URL shown (`http://<game PC's LAN IP>:18731/overlay?key=<key>`).
 4. In OBS on the streaming PC, add a **Browser Source** with that URL.
 
@@ -139,7 +136,10 @@ The overlay is read-only and reachable only with its key; **New key** invalidate
 
 - [Rust](https://rustup.rs/), latest stable
 - [Node.js](https://nodejs.org/) 18 or later
-- [Npcap](https://npcap.com) (Windows)
+- The system libraries listed in the [Linux guide](docs/linux.md#build-from-source-other-distributions), for example on Ubuntu or Debian:
+  ```bash
+  sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libpcap-dev git
+  ```
 
 ### Meter
 
@@ -148,7 +148,7 @@ npm install
 npm run tauri build
 ```
 
-The Windows installer is written to `src-tauri/target/release/bundle/msi/`. For development, use `npm run tauri dev`.
+The `.deb` and `.rpm` packages are written to `src-tauri/target/release/bundle/`, and the binary to `src-tauri/target/release/a2tools-dps-meter`. To build only the binary, use `npx tauri build --no-bundle`. For development, use `npm run tauri dev`.
 
 ### Offline build
 
@@ -179,9 +179,9 @@ node --test tests/*.test.mjs         # frontend
 
 | Symptom | Resolution |
 | --- | --- |
-| The meter shows "Connecting..." | Make sure AION 2 is running and the meter has administrator privileges. VPNs and ping reducers are detected automatically through the loopback adapter. |
-| Your name does not appear | Enter your character name and actor ID in Settings. The name is otherwise detected from the AION 2 window title. |
-| Npcap is installed but capture fails | Reinstall Npcap with WinPcap API-compatible Mode enabled. |
+| The meter shows "Connecting..." | Make sure AION 2 is running and the meter has the packet-capture permission (`setcap`, see [Installation](#installation)). VPNs and ping reducers are detected automatically through the loopback adapter. |
+| Your name does not appear | Enter your character name and actor ID in Settings. |
+| `setcap` fails | It does not work on some drives (NTFS, exFAT). Build the meter on a Linux-formatted drive. |
 | The Server field turns red | The address must start with `https://`, or `http://` for a local address. |
 | Sign-in page reports an unknown code | The code expired after 15 minutes. Select **Sign in** again in the meter. |
 
