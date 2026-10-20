@@ -453,6 +453,9 @@
     "showSupporterColorsHint": "Supporters' names render gold. Cosmetic only — it never changes any number.",
     "account": {
       "title": "A2 Tools Account",
+      "server": "Server",
+      "serverHint": "Leave empty for a2tools.app, or enter your own A2 Tools server. Changing it signs you out.",
+      "serverInvalid": "Enter an https:// address, or http:// on this computer or your local network.",
       "signedOut": "Not signed in",
       "signedIn": "Signed in as {name}",
       "hint": "Sign in to sync characters and settings with a2tools.app.",

@@ -93,7 +93,7 @@ pub async fn send(client: &reqwest::Client, app_data_dir: &Path) -> Result<SendR
     let response = register
         .send()
         .await
-        .map_err(|e| format!("Could not reach a2tools.app: {e}"))?;
+        .map_err(|e| format!("Could not reach {}: {e}", crate::account::site_name()))?;
     let status = response.status();
     let reply: serde_json::Value =
         serde_json::from_str(&response.text().await.unwrap_or_default()).unwrap_or_default();
@@ -103,7 +103,7 @@ pub async fn send(client: &reqwest::Client, app_data_dir: &Path) -> Result<SendR
     let code = reply["code"].as_str().unwrap_or_default().to_string();
     let upload_path = reply["uploadPath"].as_str().unwrap_or_default().to_string();
     if code.is_empty() || !is_upload_path(&upload_path) {
-        return Err("Unexpected reply from a2tools.app.".to_string());
+        return Err(format!("Unexpected reply from {}.", crate::account::site_name()));
     }
 
     let mut sent = 0;
@@ -143,7 +143,7 @@ fn server_message(reply: &serde_json::Value, status: reqwest::StatusCode) -> Str
     reply["message"]
         .as_str()
         .map(str::to_string)
-        .unwrap_or_else(|| format!("a2tools.app answered {status}."))
+        .unwrap_or_else(|| format!("{} answered {status}.", crate::account::site_name()))
 }
 
 #[cfg(test)]

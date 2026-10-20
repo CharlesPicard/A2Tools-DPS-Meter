@@ -1,0 +1,34 @@
+[package]
+name = "a2tools-server"
+version = "0.1.0"
+edition = "2024"
+description = "Self-hosted A2 Tools site: accounts, fight logs, leaderboards, class stats and field boss timers for the DPS meter"
+license = "GPL-3.0"
+publish = false
+
+[dependencies]
+# The meter itself, without Tauri: the parser, the combat aggregation and
+# rederive, as the log service uses it. Uploaded fights are re-derived here
+# from their Evidence Slice, never taken from what a client claims.
+a2tools-dps-meter = { path = "../src-tauri", default-features = false }
+axum = { version = "0.8", features = ["ws", "multipart"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "fs", "sync", "time", "signal"] }
+tower-http = { version = "0.6", features = ["fs", "limit", "trace"] }
+rusqlite = { version = "0.37", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+argon2 = "0.5"
+rand = "0.9"
+sha2 = "0.10"
+hex = "0.4"
+base64 = "0.22"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
+ruzstd = "0.7"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+futures-util = "0.3"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
+
+[profile.release]
+opt-level = 3
+lto = "thin"

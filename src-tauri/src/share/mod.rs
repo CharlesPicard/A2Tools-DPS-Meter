@@ -952,14 +952,14 @@ pub async fn upload_detailed(
         .body(body.to_string())
         .send()
         .await
-        .map_err(|e| UploadFailure::retry(format!("Could not reach a2tools.app: {e}")))?;
+        .map_err(|e| UploadFailure::retry(format!("Could not reach {}: {e}", crate::account::site_name())))?;
     let status = response.status();
     let text = response.text().await.unwrap_or_default();
     let reply: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
 
     if status.is_success() {
         let result: UploadResult = serde_json::from_value(reply)
-            .map_err(|_| UploadFailure::retry("Unexpected reply from a2tools.app."))?;
+            .map_err(|_| UploadFailure::retry(format!("Unexpected reply from {}.", crate::account::site_name())))?;
         let _ = std::fs::create_dir_all(slices_dir(app_data_dir));
         update_meta(app_data_dir, &record.id, |meta| {
             meta.url = Some(result.url.clone());

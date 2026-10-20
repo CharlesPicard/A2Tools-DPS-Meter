@@ -65,6 +65,12 @@ If OBS runs on a second PC, it cannot capture the meter's window on the game PC.
 
 The overlay shows the boss, the fight timer and the rows the meter shows (name, class, DPS, damage, share), and updates a few times a second. It is read-only and only reachable with the key; **New key** cuts off every link handed out before. Add `&lang=ko` (or `en`, `de`, `ja`, …) to the URL to change the language of its few labels. Add `&rows=5` to show at most five rows, so they always fit the height you gave the source (about 0.43 × its width for five rows, plus 0.07 × width for each more); you stay on it, in the last row if you are below the cut. **Your name on stream** sets the name the overlay shows for you; leave it blank to show your character name. Turn the setting off and the meter stops listening.
 
+## Self-hosting the site
+
+The [`server/`](server/README.md) folder is a self-hosted copy of a2tools.app: accounts and the meter's sign-in, fight logs re-derived by the meter's own parser, leaderboards, class stats, field boss timers, party presence and Send logs to dev. It runs as one program with a data folder, or with Docker (`cd server && docker compose up -d`).
+
+To use one, enter its address in the meter under **Settings → A2 Tools Account → Server** (for example `https://logs.example.org`) and sign in. Leave it empty for a2tools.app. See the [server guide](server/README.md).
+
 ## Building from Source
 
 ### Prerequisites

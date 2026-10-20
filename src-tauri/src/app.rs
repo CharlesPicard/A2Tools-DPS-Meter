@@ -761,13 +761,16 @@ async fn account_begin_link(
     if crate::account::is_site_url(&grant.verification_uri_complete) {
         open_url(grant.verification_uri_complete.clone());
     } else {
-        tracing::warn!("Not opening the sign-in page: the server sent a link outside a2tools.app");
+        tracing::warn!("Not opening the sign-in page: the server sent a link outside its own site");
     }
 
     let http = state.http.clone();
     let app_data_dir = state.app_data_dir.clone();
     tauri::async_runtime::spawn(async move {
         let outcome = crate::account::poll_until_decided(&http, &grant, &app_data_dir).await;
+        if let (Ok(()), Some(state)) = (&outcome, app.try_state::<AppState>()) {
+            state.settings.set(crate::account::TOKEN_SERVER_KEY, &crate::account::base_url());
+        }
         let payload = match &outcome {
             Ok(()) => serde_json::json!({ "connected": true }),
             Err(why) => serde_json::json!({ "connected": false, "error": why }),
@@ -1043,10 +1046,29 @@ fn update_settings(
         }
         let _ = app.emit("setting-changed", serde_json::json!({ "key": key, "value": value }));
         #[cfg(feature = "online")]
+        if key == crate::account::SERVER_SETTING_KEY {
+            apply_server_change(&app, &state, &value);
+        }
+        #[cfg(feature = "online")]
         if key.starts_with(crate::stream_overlay::ENABLED_KEY) {
             crate::stream_overlay::sync(&app);
         }
     }
+}
+
+#[cfg(feature = "online")]
+/// The player chose another server (Settings → A2 Tools Account → Server): use
+/// it from now on, and drop a sign-in made with the old one, whose token must
+/// never be sent to the new one.
+fn apply_server_change(app: &tauri::AppHandle, state: &AppState, value: &str) {
+    let base = crate::account::set_server(Some(value));
+    if state.settings.get(crate::account::TOKEN_SERVER_KEY).as_deref() != Some(base.as_str()) {
+        crate::account::secret::clear(&state.app_data_dir);
+        state.settings.remove(crate::account::TOKEN_SERVER_KEY);
+        *state.account_seen.lock() = Some(None);
+        let _ = app.emit("account-changed", serde_json::json!({ "connected": false }));
+    }
+    tracing::info!("Account server is now {base}");
 }
 
 #[tauri::command]
@@ -3223,6 +3245,20 @@ pub fn run() {
             );
 
             let settings = Settings::new(app_data_dir.clone());
+            // The server chosen under Settings → A2 Tools Account, and a
+            // sign-in kept only for the server that issued it.
+            #[cfg(feature = "online")]
+            {
+                let base = crate::account::set_server(settings.get(crate::account::SERVER_SETTING_KEY).as_deref());
+                let issued_by = settings.get(crate::account::TOKEN_SERVER_KEY);
+                let has_token = !matches!(crate::account::secret::load_stored(&app_data_dir), crate::account::secret::Stored::Missing);
+                // Tokens from before this setting existed came from a2tools.app.
+                if has_token && issued_by.as_deref().unwrap_or("https://a2tools.app") != base {
+                    tracing::info!("Dropping a sign-in made with another server");
+                    crate::account::secret::clear(&app_data_dir);
+                    settings.remove(crate::account::TOKEN_SERVER_KEY);
+                }
+            }
             if let Some(ms) = settings.get(ALL_TARGETS_WINDOW_KEY).and_then(|v| v.trim().parse::<i64>().ok()) {
                 dps_calculator.set_all_targets_window_ms(ms);
             }
